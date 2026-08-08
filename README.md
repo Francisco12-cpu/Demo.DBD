@@ -48,7 +48,7 @@ funcionando ao abrir `index.html` direto com duplo clique.
 2. ~~Mapa fixo com colisão~~ feito
 3. ~~Sistema de objetivo (ficar perto de um ponto, barra de progresso enche)~~ feito
 4. ~~Skill check (mini-jogo do círculo giratório)~~ feito
-5. Segundo personagem (Assassino) e sua diferenciação de gameplay
+5. ~~Segundo personagem (Assassino) e sua diferenciação de gameplay~~ feito (IA por enquanto, ver nota acima)
 6. Captura + barra de "struggle" (escapar sendo capturado)
 7. Habilidades/poderes de cada personagem
 8. Multiplayer local (vários controles no mesmo PC)
@@ -79,15 +79,23 @@ Não pular etapas: cada uma depende da anterior estar jogável.
 - [ ] Sobreviventes escolhem 1 habilidade adicional no menu antes de entrar
 
 ### Assassino (1 jogador por partida)
-- [ ] Mais rápido que os Sobreviventes (velocidade maior, configurável)
-- [ ] Ataque básico: espada curta — exige estar bem perto do alvo
-  - [ ] Cooldown pequeno entre ataques
-  - [ ] Hitbox/zona de colisão de dano
-  - [ ] Anima "matar" no alvo atingido
+- [x] Mais rápido que os Sobreviventes (velocidade maior, configurável)
+- [x] Ataque básico: espada curta — exige estar bem perto do alvo
+  - [x] Cooldown pequeno entre ataques
+  - [x] Hitbox/zona de colisão de dano
+  - [ ] Anima "matar" no alvo atingido — hoje só um flash visual de
+        "atingido" (placeholder); a animação de verdade acompanha o sistema
+        de captura do passo 6
 - [ ] Poder 1: "Sentido" — consegue ver a posição dos Sobreviventes
       (avaliar viabilidade; se complexo demais, pode virar Invisibilidade)
 - [ ] Poder 2: Dash / aumento de velocidade temporário
 - [ ] Habilidades têm cooldown visível na UI
+
+**Nota:** por enquanto o Assassino é controlado por uma IA simples (anda
+direto na direção do Sobrevivente, sem desvio de obstáculo, e ataca ao
+alcançar) — não existe jogador humano pra ele ainda, já que multiplayer é
+passo 8/9. Quando o multiplayer local existir, a IA sai e um 2º jogador
+assume o Assassino usando o mesmo `js/character.js`.
 
 ### Sobreviventes (até 3 jogadores por partida)
 - [ ] Velocidade base mais lenta que o Assassino

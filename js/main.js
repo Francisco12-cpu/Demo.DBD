@@ -5,11 +5,16 @@ window.Game = window.Game || {};
 
   const arena = document.getElementById('arena');
   const playerEl = document.getElementById('player');
+  const killerEl = document.getElementById('killer');
   const dummy = document.getElementById('dummy');
   const hpFill = document.getElementById('hp-fill');
 
   const MAP = Game.MAP;
   const player = Game.createCharacter('survivor', playerEl);
+  // Assassino ainda não tem jogador humano (multiplayer é passo 8/9), então
+  // por enquanto é uma IA simples só pra validar a diferenciação de
+  // gameplay e preparar o terreno pro sistema de captura do passo 6.
+  const killer = Game.createCharacter('killer', killerEl);
   const objectivesStatus = document.getElementById('objectives-status');
 
   let dummyHp = 100;
@@ -40,6 +45,8 @@ window.Game = window.Game || {};
 
     player.state.pos.x = MAP.player.x;
     player.state.pos.y = MAP.player.y;
+    killer.state.pos.x = MAP.killer.x;
+    killer.state.pos.y = MAP.killer.y;
 
     const objectiveCount = Game.CONFIG.survivorCount + 1;
     objectives = MAP.objectiveSpots.slice(0, objectiveCount).map((spot) => {
@@ -101,6 +108,53 @@ window.Game = window.Game || {};
     }
   }
 
+  function attemptKillerHit(){
+    const dx = player.state.pos.x - killer.state.pos.x;
+    const dy = player.state.pos.y - killer.state.pos.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= killer.characterConfig().attackRange){
+      playerEl.classList.add('hit-flash');
+      setTimeout(() => playerEl.classList.remove('hit-flash'), 200);
+    }
+  }
+
+  // IA bem simples: anda direto na direção do sobrevivente e ataca quando
+  // chega perto. Sem desvio de obstáculo (fica preso em parede às vezes) —
+  // suficiente só pra validar a diferenciação de gameplay por enquanto.
+  function updateKillerAI(delta){
+    if (killer.state.isAttacking){
+      killer.render();
+      return;
+    }
+
+    const cfg = killer.characterConfig();
+    const dx = player.state.pos.x - killer.state.pos.x;
+    const dy = player.state.pos.y - killer.state.pos.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist <= cfg.attackRange){
+      killer.tryAttack(attemptKillerHit);
+      killer.setMoving(false);
+    } else if (dist > 0.001){
+      const nx = dx / dist, ny = dy / dist;
+      const radius = Game.CONFIG.playerRadius;
+      let x = killer.state.pos.x + nx * cfg.speed * delta;
+      let y = killer.state.pos.y + ny * cfg.speed * delta;
+      x = Math.max(radius, Math.min(MAP.width - radius, x));
+      y = Math.max(radius, Math.min(MAP.height - radius, y));
+
+      const resolved = Game.mapCollision.resolvePosition({ x, y }, radius, allWalls());
+      killer.state.pos.x = resolved.x;
+      killer.state.pos.y = resolved.y;
+
+      if (nx > 0.01) killer.setFacing(true);
+      if (nx < -0.01) killer.setFacing(false);
+      killer.setMoving(true);
+    }
+
+    killer.render();
+  }
+
   // ---------- LOOP PRINCIPAL ----------
   let lastTime = performance.now();
 
@@ -156,6 +210,8 @@ window.Game = window.Game || {};
       player.setMoving(moving);
     }
 
+    updateKillerAI(delta);
+
     player.render();
     requestAnimationFrame(loop);
   }
@@ -205,6 +261,8 @@ window.Game = window.Game || {};
   // ---------- INIT ----------
   buildMap();
   player.applyVisuals();
+  killer.applyVisuals();
+  killer.render();
   syncPanel();
   Game.Input.init();
   if (Game.Input.isTouchDevice){
