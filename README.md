@@ -47,7 +47,7 @@ funcionando ao abrir `index.html` direto com duplo clique.
 1. ~~Movimento básico (teclado, depois gamepad)~~ feito (+ touch)
 2. ~~Mapa fixo com colisão~~ feito
 3. ~~Sistema de objetivo (ficar perto de um ponto, barra de progresso enche)~~ feito
-4. Skill check (mini-jogo do círculo giratório)
+4. ~~Skill check (mini-jogo do círculo giratório)~~ feito
 5. Segundo personagem (Assassino) e sua diferenciação de gameplay
 6. Captura + barra de "struggle" (escapar sendo capturado)
 7. Habilidades/poderes de cada personagem
@@ -117,8 +117,10 @@ Não pular etapas: cada uma depende da anterior estar jogável.
       fixo, já que multiplayer ainda não existe; vira dinâmico quando existir)
 - [x] Ao interagir com um objetivo, preencher uma barra de progresso ficando
       por perto (raio/duração configuráveis em `Game.CONFIG.objective`)
-- [ ] Skill check circular (estilo Dead by Daylight): um ponteiro giratório,
-      o jogador precisa clicar/apertar no momento certo pra não falhar
+- [x] Skill check circular (estilo Dead by Daylight): um ponteiro giratório,
+      o jogador precisa clicar/apertar no momento certo pra não falhar —
+      dispara sozinho de vez em quando enquanto o objetivo enche, reaproveita
+      o mesmo botão de ataque/interação (config em `Game.CONFIG.skillCheck`)
 
 ### Áudio
 - [ ] Som de "batimento cardíaco" que aumenta de intensidade quanto mais

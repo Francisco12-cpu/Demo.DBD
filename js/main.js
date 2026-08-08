@@ -45,7 +45,9 @@ window.Game = window.Game || {};
     objectives = MAP.objectiveSpots.slice(0, objectiveCount).map((spot) => {
       const div = document.createElement('div');
       div.className = 'objective';
-      div.innerHTML = '<div class="progress-bar"><div class="objective-fill"></div></div>';
+      div.innerHTML =
+        '<div class="progress-bar"><div class="objective-fill"></div></div>' +
+        '<div class="skillcheck-ring"><div class="skillcheck-needle"></div></div>';
       arena.appendChild(div);
       const objective = Game.createObjective(spot, div);
       objective.render(); // posição é fixa, só precisa desenhar uma vez
@@ -108,7 +110,23 @@ window.Game = window.Game || {};
 
     Game.Input.update();
 
-    if (Game.Input.consumeAttackRequest()){
+    // o botão de ataque também serve pra acertar o skill check: se algum
+    // objetivo já tinha um ponteiro girando neste frame, o clique vai pra
+    // ele em vez de disparar o ataque do personagem.
+    const attackRequested = Game.Input.consumeAttackRequest();
+    let consumedBySkillCheck = false;
+
+    let anyObjectiveChanged = false;
+    objectives.forEach((obj) => {
+      const wasDone = obj.state.done;
+      const hadSkillCheck = !!obj.state.skillCheck;
+      obj.update(delta, player.state.pos, hadSkillCheck && attackRequested);
+      if (hadSkillCheck && attackRequested) consumedBySkillCheck = true;
+      if (obj.state.done && !wasDone) anyObjectiveChanged = true;
+    });
+    if (anyObjectiveChanged) updateObjectivesStatus();
+
+    if (attackRequested && !consumedBySkillCheck){
       player.tryAttack(attemptHit);
     }
 
@@ -137,14 +155,6 @@ window.Game = window.Game || {};
 
       player.setMoving(moving);
     }
-
-    let anyObjectiveChanged = false;
-    objectives.forEach((obj) => {
-      const wasDone = obj.state.done;
-      obj.update(delta, player.state.pos);
-      if (obj.state.done && !wasDone) anyObjectiveChanged = true;
-    });
-    if (anyObjectiveChanged) updateObjectivesStatus();
 
     player.render();
     requestAnimationFrame(loop);
