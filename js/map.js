@@ -12,6 +12,13 @@ window.Game = window.Game || {};
     player: { x: 130, y: 280 },
     dummy: { x: 760, y: 280 },
     killer: { x: 820, y: 480 },
+    // pontos de spawn pra até 4 sobreviventes no modo online (índice = ordem de entrada)
+    survivorSpawns: [
+      { x: 130, y: 280 },
+      { x: 130, y: 460 },
+      { x: 130, y: 100 },
+      { x: 300, y: 100 },
+    ],
     walls: [
       { x: 440, y: 30, w: 20, h: 190 },   // parede central, segmento de cima
       { x: 440, y: 340, w: 20, h: 190 },  // parede central, segmento de baixo (deixa uma "porta" no meio)
@@ -25,6 +32,7 @@ window.Game = window.Game || {};
       { x: 650, y: 460 },
       { x: 300, y: 480 },
       { x: 780, y: 130 },
+      { x: 80, y: 480 },
     ],
   };
 

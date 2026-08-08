@@ -8,6 +8,45 @@
 </head>
 <body>
 
+<div id="menu">
+  <div class="menu-card" id="menu-start">
+    <h1>Assassino vs Sobreviventes</h1>
+    <label>Seu nome
+      <input id="menu-name" type="text" maxlength="16" placeholder="Jogador">
+    </label>
+    <button id="menu-solo" type="button">Jogar sozinho (teste vs IA)</button>
+    <button id="menu-online" type="button">Multiplayer LAN (beta)</button>
+  </div>
+
+  <div class="menu-card" id="menu-join" style="display:none">
+    <h2>Entrar numa sala</h2>
+    <label>IP do host <input id="join-host" type="text" placeholder="ex: 192.168.0.12"></label>
+    <label>Porta <input id="join-port" type="text" value="8787"></label>
+    <label>Senha <input id="join-password" type="text" placeholder="senha da sala"></label>
+    <div class="menu-error" id="join-error"></div>
+    <button id="join-connect" type="button">Entrar</button>
+    <button id="join-back" type="button" class="secondary">Voltar</button>
+  </div>
+
+  <div class="menu-card" id="menu-lobby" style="display:none">
+    <h2>Sala</h2>
+    <div id="lobby-players"></div>
+    <div class="row">
+      <button id="lobby-be-killer" type="button">Ser Assassino</button>
+      <button id="lobby-be-survivor" type="button">Ser Sobrevivente</button>
+    </div>
+    <div class="menu-error" id="lobby-error"></div>
+    <button id="lobby-start" type="button">Iniciar partida</button>
+    <p class="menu-hint">Mínimo 2 jogadores, sendo 1 Assassino. Até 4 Sobreviventes.</p>
+  </div>
+
+  <div class="menu-card" id="menu-result" style="display:none">
+    <h2 id="result-title"></h2>
+    <p id="result-detail"></p>
+    <button id="result-again" type="button">Jogar de novo</button>
+  </div>
+</div>
+
 <div id="stage">
   <div id="arena">
     <div id="hud">
@@ -39,27 +78,6 @@
       <div class="hp-bar"><div class="hp-fill" id="hp-fill"></div></div>
     </div>
 
-    <div class="char" id="player">
-      <div class="shadow"></div>
-      <div class="body">
-        <div class="torso" id="torso">
-          <div class="face"></div>
-        </div>
-        <div class="weapon"></div>
-      </div>
-      <div class="label" id="player-label">SOBREVIVENTE</div>
-    </div>
-
-    <div class="char" id="killer">
-      <div class="shadow"></div>
-      <div class="body">
-        <div class="torso">
-          <div class="face"></div>
-        </div>
-        <div class="weapon"></div>
-      </div>
-      <div class="label">ASSASSINO</div>
-    </div>
   </div>
 
   <div id="hint">
@@ -80,6 +98,9 @@
 <script defer src="js/input.js"></script>
 <script defer src="js/character.js"></script>
 <script defer src="js/objective.js"></script>
+<script defer src="js/capture.js"></script>
+<script defer src="js/net.js"></script>
+<script defer src="js/menu.js"></script>
 <script defer src="js/main.js"></script>
 
 </body>
