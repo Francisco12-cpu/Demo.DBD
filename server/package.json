@@ -1,0 +1,13 @@
+{
+  "name": "dbd-lan-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servidor leve pro modo online (mesma rede Wi-Fi) do Assassino vs Sobreviventes",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
