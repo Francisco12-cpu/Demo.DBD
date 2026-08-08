@@ -11,6 +11,7 @@ window.Game = window.Game || {};
     height: 560,
     player: { x: 130, y: 280 },
     dummy: { x: 760, y: 280 },
+    killer: { x: 820, y: 480 },
     walls: [
       { x: 440, y: 30, w: 20, h: 190 },   // parede central, segmento de cima
       { x: 440, y: 340, w: 20, h: 190 },  // parede central, segmento de baixo (deixa uma "porta" no meio)

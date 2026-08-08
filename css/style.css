@@ -132,6 +132,8 @@ html,body{
   50%{ transform: scaleY(1.02); }
 }
 .char.facing-left .body{ transform: scaleX(-1); }
+/* placeholder visual de "atingido" — vira o sistema de captura de verdade no passo 6 */
+.char.hit-flash .torso{ filter: brightness(2.5) saturate(1.4); }
 .shadow{
   position:absolute; bottom:-6px; left:50%;
   width:26px; height:8px;
