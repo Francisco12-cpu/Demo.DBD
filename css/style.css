@@ -179,6 +179,35 @@ html,body{
   height:100%; background: var(--gold); width:0%;
   transition: width .1s linear;
 }
+
+/* ---------- skill check circular ---------- */
+.skillcheck-ring{
+  position:absolute; left:50%; top:50%;
+  width:70px; height:70px;
+  transform: translate(-50%,-50%);
+  border-radius:50%;
+  background: conic-gradient(
+    var(--wall) 0deg, var(--wall) var(--zone-start,0deg),
+    var(--gold) var(--zone-start,0deg), var(--gold) var(--zone-end,0deg),
+    var(--wall) var(--zone-end,0deg)
+  );
+  display:none;
+  z-index: 5;
+}
+.skillcheck-ring::after{
+  content:'';
+  position:absolute; inset:9px;
+  border-radius:50%;
+  background: var(--bg-floor);
+}
+.skillcheck-needle{
+  position:absolute; left:50%; top:50%;
+  width:2px; height:26px;
+  background: var(--ink);
+  transform-origin: top center;
+  transform: translateX(-50%) rotate(0deg);
+  z-index: 6;
+}
 #hint{
   position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
   font-size:11px; color: var(--muted); text-align:center;

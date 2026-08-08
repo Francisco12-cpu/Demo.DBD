@@ -32,4 +32,16 @@ Game.CONFIG = {
     radius: 70,   // px — distância máxima do centro do objetivo pra progredir
     duration: 4,  // segundos parado por perto pra completar 0% -> 100%
   },
+
+  // skill check circular (estilo DBD): dispara de vez em quando enquanto o
+  // objetivo enche; jogador aperta o botão de ataque/interação na hora
+  // certa. Reaproveita o mesmo botão de ataque — não tem tecla extra.
+  skillCheck: {
+    minInterval: 2.5,      // segundos mínimos entre skill checks
+    maxInterval: 5,        // segundos máximos entre skill checks
+    zoneWidthDeg: 32,       // tamanho da zona de acerto, em graus
+    speedDegPerSec: 220,    // velocidade do ponteiro giratório
+    successBonus: 0.18,     // progresso ganho ao acertar
+    failPenalty: 0.12,      // progresso perdido ao errar/deixar passar
+  },
 };
