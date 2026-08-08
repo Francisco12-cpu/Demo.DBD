@@ -1,0 +1,221 @@
+:root{
+  --bg-deep: #0c0a10;
+  --bg-floor: #17131d;
+  --wall: #2a2233;
+  --blood: #8c1f28;
+  --gold: #c9a24b;
+  --survivor: #3f8f6f;
+  --killer: #7a1f2b;
+  --ink: #ece6da;
+  --muted: #8a8092;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0; height:100%;
+  background: var(--bg-deep);
+  color: var(--ink);
+  font-family: 'Courier New', ui-monospace, monospace;
+  overflow:hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+#stage{
+  position:relative;
+  width:100vw; height:100vh;
+  display:flex; align-items:center; justify-content:center;
+}
+#arena{
+  position:relative;
+  background: var(--bg-floor);
+  border: 3px solid var(--wall);
+  box-shadow: 0 0 0 8px var(--bg-deep), 0 0 40px rgba(0,0,0,.6) inset;
+  background-image:
+    linear-gradient(var(--wall) 1px, transparent 1px),
+    linear-gradient(90deg, var(--wall) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center;
+  transform-origin: center center;
+  flex-shrink: 0;
+}
+#hud{
+  position:absolute; top:16px; left:16px; right:16px;
+  display:flex; justify-content:space-between; align-items:flex-start;
+  pointer-events:none;
+  letter-spacing: 1px;
+}
+#title{
+  font-size: 12px; color: var(--muted); text-transform:uppercase;
+}
+#title b{ color: var(--gold); display:block; font-size:16px; letter-spacing:2px;}
+#panel{
+  background: rgba(12,10,16,.85);
+  border: 1px solid var(--wall);
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  pointer-events:all;
+}
+#panel b{ color: var(--gold); }
+#panel .row{ display:flex; align-items:center; gap:8px; margin-top:4px; }
+#panel button{
+  background: var(--wall); color: var(--ink); border: 1px solid var(--muted);
+  font-family: inherit; font-size: 11px; padding: 4px 8px; cursor:pointer;
+}
+#panel button.active{ background: var(--gold); color: #1a1420; border-color: var(--gold);}
+#panel input[type=range]{ width: 90px; vertical-align: middle; }
+
+/* ---------- paredes do mapa (geradas a partir de js/map.js) ---------- */
+.wall{
+  position:absolute;
+  background: var(--wall);
+  border: 1px solid var(--muted);
+  box-shadow: 0 2px 4px rgba(0,0,0,.4);
+}
+
+/* ---------- personagem ---------- */
+.char{
+  position:absolute;
+  width:42px; height:42px;
+  left:0; top:0;
+  transform: translate(-50%,-50%);
+  transition: none;
+}
+.body{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.torso{
+  width:26px; height:34px;
+  border-radius: 8px 8px 4px 4px;
+  position:relative;
+  box-shadow: 0 3px 6px rgba(0,0,0,.5);
+}
+.face{
+  position:absolute; top:2px; left:50%;
+  width:10px; height:10px;
+  background: #1a1420;
+  border-radius:50%;
+  transform: translateX(-50%);
+}
+.weapon{
+  position:absolute;
+  width: 22px; height: 4px;
+  background: var(--gold);
+  top: 12px; right: -14px;
+  border-radius: 2px;
+  transform-origin: left center;
+  opacity: 0;
+}
+.char.facing-left .weapon{ right:auto; left:-14px; transform-origin: right center; transform: scaleX(-1); }
+.char.attacking .weapon{ opacity:1; animation: swing .35s ease-out; }
+@keyframes swing{
+  0%{ transform: rotate(-70deg); opacity:1;}
+  60%{ transform: rotate(25deg); }
+  100%{ transform: rotate(0deg); opacity:0;}
+}
+.char.facing-left.attacking .weapon{ animation: swingL .35s ease-out; }
+@keyframes swingL{
+  0%{ transform: scaleX(-1) rotate(-70deg); opacity:1;}
+  60%{ transform: scaleX(-1) rotate(25deg); }
+  100%{ transform: scaleX(-1) rotate(0deg); opacity:0;}
+}
+.char.running .torso{ animation: bob .28s infinite ease-in-out; }
+@keyframes bob{
+  0%,100%{ transform: translateY(0) scaleY(1); }
+  50%{ transform: translateY(-3px) scaleY(1.04); }
+}
+.char:not(.running):not(.attacking) .torso{
+  animation: idleBreathe 2.4s ease-in-out infinite;
+}
+@keyframes idleBreathe{
+  0%,100%{ transform: scaleY(1); }
+  50%{ transform: scaleY(1.02); }
+}
+.char.facing-left .body{ transform: scaleX(-1); }
+.shadow{
+  position:absolute; bottom:-6px; left:50%;
+  width:26px; height:8px;
+  background: rgba(0,0,0,.5);
+  border-radius:50%;
+  transform: translateX(-50%);
+  filter: blur(1px);
+}
+.label{
+  position:absolute; bottom:-22px; left:50%; transform:translateX(-50%);
+  font-size:9px; color:var(--muted); white-space:nowrap; text-transform:uppercase; letter-spacing:1px;
+}
+#dummy{
+  position:absolute;
+  width:30px; height:38px;
+  background: var(--wall);
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+}
+#dummy .hp-bar{
+  position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+  width:34px; height:5px; background:#1a1420; border:1px solid var(--wall);
+}
+#dummy .hp-fill{
+  height:100%; background: var(--blood); width:100%;
+  transition: width .15s ease-out;
+}
+#hint{
+  position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
+  font-size:11px; color: var(--muted); text-align:center;
+  background: rgba(12,10,16,.85);
+  border: 1px solid var(--wall);
+  padding: 8px 14px;
+  letter-spacing: 0.5px;
+  max-width: 90vw;
+}
+#hint b{ color: var(--gold); }
+
+/* ---------- controles touch (celular) ---------- */
+#touch-controls{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: none; /* ativado via JS em telas touch */
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 20px;
+  pointer-events: none;
+  z-index: 20;
+}
+#touch-joystick{
+  position: relative;
+  width: 110px; height: 110px;
+  border-radius: 50%;
+  background: rgba(236,230,218,.08);
+  border: 2px solid rgba(236,230,218,.25);
+  pointer-events: all;
+  touch-action: none;
+}
+#touch-joystick-stick{
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 46px; height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: rgba(201,162,75,.6);
+  border: 2px solid var(--gold);
+}
+#touch-attack{
+  width: 84px; height: 84px;
+  border-radius: 50%;
+  background: rgba(122,31,43,.5);
+  border: 2px solid var(--killer);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  pointer-events: all;
+  touch-action: none;
+}
+
+@media (max-width: 520px){
+  #panel{ font-size: 11px; padding: 8px 10px; }
+  #panel input[type=range]{ width: 64px; }
+  #title{ font-size: 10px; }
+  #title b{ font-size: 13px; }
+  #hint{ font-size: 10px; padding: 6px 10px; }
+}
