@@ -10,10 +10,12 @@ window.Game = window.Game || {};
 
   const MAP = Game.MAP;
   const player = Game.createCharacter('survivor', playerEl);
+  const objectivesStatus = document.getElementById('objectives-status');
 
   let dummyHp = 100;
   const dummyMaxHp = 100;
   let dummyWall = null; // AABB do dummy, tratado como obstáculo sólido
+  let objectives = [];
 
   function buildMap(){
     arena.style.width = MAP.width + 'px';
@@ -38,6 +40,23 @@ window.Game = window.Game || {};
 
     player.state.pos.x = MAP.player.x;
     player.state.pos.y = MAP.player.y;
+
+    const objectiveCount = Game.CONFIG.survivorCount + 1;
+    objectives = MAP.objectiveSpots.slice(0, objectiveCount).map((spot) => {
+      const div = document.createElement('div');
+      div.className = 'objective';
+      div.innerHTML = '<div class="progress-bar"><div class="objective-fill"></div></div>';
+      arena.appendChild(div);
+      const objective = Game.createObjective(spot, div);
+      objective.render(); // posição é fixa, só precisa desenhar uma vez
+      return objective;
+    });
+    updateObjectivesStatus();
+  }
+
+  function updateObjectivesStatus(){
+    const done = objectives.filter((o) => o.state.done).length;
+    objectivesStatus.textContent = `Objetivos: ${done}/${objectives.length}`;
   }
 
   function allWalls(){
@@ -118,6 +137,14 @@ window.Game = window.Game || {};
 
       player.setMoving(moving);
     }
+
+    let anyObjectiveChanged = false;
+    objectives.forEach((obj) => {
+      const wasDone = obj.state.done;
+      obj.update(delta, player.state.pos);
+      if (obj.state.done && !wasDone) anyObjectiveChanged = true;
+    });
+    if (anyObjectiveChanged) updateObjectivesStatus();
 
     player.render();
     requestAnimationFrame(loop);

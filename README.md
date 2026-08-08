@@ -44,9 +44,9 @@ Tudo em `<script>` clássico (sem `type="module"`, sem bundler) pra continuar
 funcionando ao abrir `index.html` direto com duplo clique.
 
 ## Ordem de desenvolvimento (seguir esta prioridade)
-1. Movimento básico (teclado, depois gamepad)
-2. Mapa fixo com colisão
-3. Sistema de objetivo (ficar perto de um ponto, barra de progresso enche)
+1. ~~Movimento básico (teclado, depois gamepad)~~ feito (+ touch)
+2. ~~Mapa fixo com colisão~~ feito
+3. ~~Sistema de objetivo (ficar perto de um ponto, barra de progresso enche)~~ feito
 4. Skill check (mini-jogo do círculo giratório)
 5. Segundo personagem (Assassino) e sua diferenciação de gameplay
 6. Captura + barra de "struggle" (escapar sendo capturado)
@@ -110,11 +110,13 @@ Não pular etapas: cada uma depende da anterior estar jogável.
       X deve ser uma variável configurável)
 
 ### Objetivos e skill checks
-- [ ] Objetivos espalhados pelo mapa (pontos de interação)
-- [ ] Número de objetivos escala com a quantidade de jogadores:
-      `objetivos = sobreviventes + 1`
-- [ ] Ao interagir com um objetivo, preencher uma barra de progresso ficando
-      por perto
+- [x] Objetivos espalhados pelo mapa (pontos de interação) — `js/objective.js`
+      + `MAP.objectiveSpots` em `js/map.js`
+- [x] Número de objetivos escala com a quantidade de jogadores:
+      `objetivos = sobreviventes + 1` (hoje `Game.CONFIG.survivorCount = 1`
+      fixo, já que multiplayer ainda não existe; vira dinâmico quando existir)
+- [x] Ao interagir com um objetivo, preencher uma barra de progresso ficando
+      por perto (raio/duração configuráveis em `Game.CONFIG.objective`)
 - [ ] Skill check circular (estilo Dead by Daylight): um ponteiro giratório,
       o jogador precisa clicar/apertar no momento certo pra não falhar
 
@@ -127,7 +129,7 @@ Não pular etapas: cada uma depende da anterior estar jogável.
 ### UI/HUD
 - [ ] Indicador visual de cooldown de habilidades (barra ou ícone com número
       — solução simples, sem ícones customizados desenhados)
-- [ ] Barra de progresso dos objetivos
+- [x] Barra de progresso dos objetivos (por objetivo + contador geral no HUD)
 - [ ] Barra de vida (se aplicável ao personagem)
 - [ ] Indicador de estado (ex: "capturado", "struggle ativo")
 

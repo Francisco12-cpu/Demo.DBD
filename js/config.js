@@ -24,4 +24,12 @@ Game.CONFIG = {
     },
   },
   playerRadius: 21, // raio de colisão do personagem (metade do sprite de 42px)
+
+  // objetivos = sobreviventes + 1 (regra do README). Só existe 1 jogador
+  // local por enquanto, então isso vira variável assim que houver mais.
+  survivorCount: 1,
+  objective: {
+    radius: 70,   // px — distância máxima do centro do objetivo pra progredir
+    duration: 4,  // segundos parado por perto pra completar 0% -> 100%
+  },
 };

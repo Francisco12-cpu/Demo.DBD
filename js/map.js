@@ -17,6 +17,14 @@ window.Game = window.Game || {};
       { x: 150, y: 420, w: 110, h: 24 },  // obstáculo solto
       { x: 640, y: 70, w: 26, h: 130 },   // obstáculo solto
     ],
+    // pontos onde objetivos podem nascer; main.js usa os N primeiros,
+    // N = Game.CONFIG.survivorCount + 1
+    objectiveSpots: [
+      { x: 150, y: 150 },
+      { x: 650, y: 460 },
+      { x: 300, y: 480 },
+      { x: 780, y: 130 },
+    ],
   };
 
   function closestPointOnRect(px, py, rect){
