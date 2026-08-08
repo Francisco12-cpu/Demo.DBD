@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Assassino vs Sobreviventes — Demo</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="stage">
+  <div id="arena">
+    <div id="hud">
+      <div id="title"><b>Assassino vs Sobreviventes</b>protótipo — movimento e mapa</div>
+      <div id="panel">
+        <div><b>Configurar personagem</b></div>
+        <div class="row">
+          <span>Tipo:</span>
+          <button id="btn-survivor" class="active">Sobrevivente</button>
+          <button id="btn-killer">Assassino</button>
+        </div>
+        <div class="row">
+          <span>Velocidade:</span>
+          <input id="speed" type="range" min="60" max="360" value="180">
+          <span id="speed-val">180</span>
+        </div>
+        <div class="row">
+          <span>Dano do ataque:</span>
+          <input id="damage" type="range" min="5" max="100" value="25">
+          <span id="damage-val">25</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="dummy">
+      <div class="hp-bar"><div class="hp-fill" id="hp-fill"></div></div>
+    </div>
+
+    <div class="char" id="player">
+      <div class="shadow"></div>
+      <div class="body">
+        <div class="torso" id="torso">
+          <div class="face"></div>
+        </div>
+        <div class="weapon"></div>
+      </div>
+      <div class="label" id="player-label">SOBREVIVENTE</div>
+    </div>
+  </div>
+
+  <div id="hint">
+    <b>WASD</b>/<b>setas</b> ou joystick pra mover · <b>ESPAÇO</b>, botão de
+    ataque ou gamepad pra atacar · troque o tipo e a velocidade no painel acima
+  </div>
+</div>
+
+<div id="touch-controls">
+  <div id="touch-joystick">
+    <div id="touch-joystick-stick"></div>
+  </div>
+  <button id="touch-attack" type="button">Atacar</button>
+</div>
+
+<script defer src="js/config.js"></script>
+<script defer src="js/map.js"></script>
+<script defer src="js/input.js"></script>
+<script defer src="js/character.js"></script>
+<script defer src="js/main.js"></script>
+
+</body>
+</html>
