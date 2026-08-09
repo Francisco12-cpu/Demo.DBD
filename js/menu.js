@@ -7,6 +7,7 @@ window.Game = window.Game || {};
   const screens = {
     start: document.getElementById('menu-start'),
     join: document.getElementById('menu-join'),
+    p2pChoice: document.getElementById('menu-p2p-choice'),
     lobby: document.getElementById('menu-lobby'),
     result: document.getElementById('menu-result'),
   };
@@ -17,8 +18,10 @@ window.Game = window.Game || {};
   }
 
   const nameInput = document.getElementById('menu-name');
+  const abilitySelect = document.getElementById('menu-ability');
   const soloBtn = document.getElementById('menu-solo');
-  const onlineBtn = document.getElementById('menu-online');
+  const lanBtn = document.getElementById('menu-lan');
+  const p2pBtn = document.getElementById('menu-p2p');
 
   const joinHost = document.getElementById('join-host');
   const joinPort = document.getElementById('join-port');
@@ -27,9 +30,21 @@ window.Game = window.Game || {};
   const joinConnectBtn = document.getElementById('join-connect');
   const joinBackBtn = document.getElementById('join-back');
 
+  const p2pPassword = document.getElementById('p2p-password');
+  const p2pHostBtn = document.getElementById('p2p-host');
+  const p2pHostError = document.getElementById('p2p-host-error');
+  const p2pCode = document.getElementById('p2p-code');
+  const p2pJoinPassword = document.getElementById('p2p-join-password');
+  const p2pJoinBtn = document.getElementById('p2p-join');
+  const p2pJoinError = document.getElementById('p2p-join-error');
+  const p2pBackBtn = document.getElementById('p2p-back');
+
+  const lobbyRoomCode = document.getElementById('lobby-room-code');
   const lobbyPlayers = document.getElementById('lobby-players');
   const lobbyBeKiller = document.getElementById('lobby-be-killer');
   const lobbyBeSurvivor = document.getElementById('lobby-be-survivor');
+  const lobbyAbilityRow = document.getElementById('lobby-ability-row');
+  const lobbyAbility = document.getElementById('lobby-ability');
   const lobbyError = document.getElementById('lobby-error');
   const lobbyStart = document.getElementById('lobby-start');
 
@@ -43,59 +58,57 @@ window.Game = window.Game || {};
 
   soloBtn.addEventListener('click', () => {
     menu.style.display = 'none';
-    Game.startSolo(playerName());
+    Game.startSolo(playerName(), abilitySelect.value);
   });
 
-  onlineBtn.addEventListener('click', () => {
+  lanBtn.addEventListener('click', () => {
     joinError.textContent = '';
     showScreen('join');
   });
 
-  joinBackBtn.addEventListener('click', () => showScreen('start'));
+  p2pBtn.addEventListener('click', () => {
+    p2pHostError.textContent = '';
+    p2pJoinError.textContent = '';
+    showScreen('p2pChoice');
+  });
 
+  joinBackBtn.addEventListener('click', () => showScreen('start'));
+  p2pBackBtn.addEventListener('click', () => showScreen('start'));
+
+  // ---------- estado compartilhado entre os 3 jeitos de conectar ----------
   let net = null;
   let localId = null;
   let lastLobby = null;
   let lastServerErrorAt = 0;
+  let hostingRoomCode = null;
 
-  joinConnectBtn.addEventListener('click', () => {
-    const host = joinHost.value.trim();
-    const port = parseInt(joinPort.value, 10) || 8787;
-    const password = joinPassword.value;
-    if (!host){
-      joinError.textContent = 'Digita o IP do host.';
-      return;
-    }
-    joinError.textContent = 'Conectando...';
-    joinConnectBtn.disabled = true;
-
-    net = Game.Net.connect({ host, port, password, name: playerName() }, {
+  function makeHandlers(errorTarget){
+    return {
       onJoined(id){
         localId = id;
-        joinConnectBtn.disabled = false;
-        joinError.textContent = '';
+        errorTarget.textContent = '';
         showScreen('lobby');
+        lobbyRoomCode.style.display = hostingRoomCode ? 'block' : 'none';
+        if (hostingRoomCode) lobbyRoomCode.textContent = 'Código da sala: ' + hostingRoomCode;
       },
       onLobby(msg){
         lastLobby = msg;
         renderLobby(msg);
       },
       onServerError(message){
-        joinConnectBtn.disabled = false;
         lastServerErrorAt = Date.now();
         if (screens.lobby.style.display === 'flex') lobbyError.textContent = message;
-        else joinError.textContent = message;
+        else errorTarget.textContent = message;
       },
       onError(message){
-        joinConnectBtn.disabled = false;
-        joinError.textContent = message;
+        errorTarget.textContent = message;
       },
       onClose(){
-        // se um erro específico do servidor acabou de aparecer, não sobrescreve com a mensagem genérica
         if (Date.now() - lastServerErrorAt < 500) return;
         if (screens.result.style.display !== 'flex'){
-          joinError.textContent = 'A conexão com a sala caiu.';
-          showScreen('join');
+          errorTarget.textContent = 'A conexão com a sala caiu.';
+          hostingRoomCode = null;
+          showScreen(errorTarget === p2pHostError || errorTarget === p2pJoinError ? 'p2pChoice' : 'join');
         }
       },
       onMatchStart(players){
@@ -111,9 +124,42 @@ window.Game = window.Game || {};
       onPlayerLeft(id){
         if (Game.onlinePlayerLeftHandler) Game.onlinePlayerLeftHandler(id);
       },
-    });
+    };
+  }
+
+  // ---------- LAN (WebSocket, servidor num PC) ----------
+  joinConnectBtn.addEventListener('click', () => {
+    const hostIp = joinHost.value.trim();
+    const port = parseInt(joinPort.value, 10) || 8787;
+    const password = joinPassword.value;
+    if (!hostIp){
+      joinError.textContent = 'Digita o IP do host.';
+      return;
+    }
+    joinError.textContent = 'Conectando...';
+    hostingRoomCode = null;
+    net = Game.Net.connect({ host: hostIp, port, password, name: playerName() }, makeHandlers(joinError));
   });
 
+  // ---------- P2P (WebRTC, celular vira host) ----------
+  p2pHostBtn.addEventListener('click', () => {
+    p2pHostError.textContent = 'Criando sala...';
+    net = Game.NetWebRTC.host({ password: p2pPassword.value, name: playerName() }, makeHandlers(p2pHostError));
+    if (net) hostingRoomCode = net.roomCode;
+  });
+
+  p2pJoinBtn.addEventListener('click', () => {
+    const code = p2pCode.value.trim();
+    if (!code){
+      p2pJoinError.textContent = 'Digita o código da sala.';
+      return;
+    }
+    p2pJoinError.textContent = 'Conectando...';
+    hostingRoomCode = null;
+    net = Game.NetWebRTC.join({ code, password: p2pJoinPassword.value, name: playerName() }, makeHandlers(p2pJoinError));
+  });
+
+  // ---------- lobby (comum aos dois transportes online) ----------
   function renderLobby(msg){
     lobbyPlayers.innerHTML = '';
     msg.players.forEach((p) => {
@@ -127,6 +173,7 @@ window.Game = window.Game || {};
     const me = msg.players.find((p) => p.id === localId);
     lobbyBeKiller.classList.toggle('active', !!me && me.role === 'killer');
     lobbyBeSurvivor.classList.toggle('active', !!me && me.role === 'survivor');
+    lobbyAbilityRow.style.display = !!me && me.role === 'survivor' ? 'flex' : 'none';
   }
 
   function escapeHtml(str){
@@ -143,7 +190,11 @@ window.Game = window.Game || {};
   lobbyBeSurvivor.addEventListener('click', () => {
     lobbyError.textContent = '';
     const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
-    net.chooseRole(me && me.role === 'survivor' ? null : 'survivor');
+    net.chooseRole(me && me.role === 'survivor' ? null : 'survivor', lobbyAbility.value);
+  });
+  lobbyAbility.addEventListener('change', () => {
+    const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
+    if (me && me.role === 'survivor') net.chooseRole('survivor', lobbyAbility.value);
   });
   lobbyStart.addEventListener('click', () => {
     lobbyError.textContent = '';

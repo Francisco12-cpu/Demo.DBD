@@ -14,12 +14,22 @@
     <label>Seu nome
       <input id="menu-name" type="text" maxlength="16" placeholder="Jogador">
     </label>
+    <label>Se for jogar de Sobrevivente, escolha sua habilidade
+      <select id="menu-ability">
+        <option value="sprint">Sprint — corrida temporária</option>
+        <option value="camouflage">Camuflagem — some do Sentido do Assassino</option>
+        <option value="barricade">Barricar porta — bloqueia a passagem (2 usos)</option>
+        <option value="distract">Distrair — chama atenção pra um ponto falso</option>
+      </select>
+    </label>
     <button id="menu-solo" type="button">Jogar sozinho (teste vs IA)</button>
-    <button id="menu-online" type="button">Multiplayer LAN (beta)</button>
+    <button id="menu-lan" type="button">Multiplayer LAN (servidor num PC)</button>
+    <button id="menu-p2p" type="button">Multiplayer P2P (celular vira host, beta)</button>
+    <p class="menu-credits">Criado por Francisco Audir — @filho.af</p>
   </div>
 
   <div class="menu-card" id="menu-join" style="display:none">
-    <h2>Entrar numa sala</h2>
+    <h2>Entrar numa sala LAN</h2>
     <label>IP do host <input id="join-host" type="text" placeholder="ex: 192.168.0.12"></label>
     <label>Porta <input id="join-port" type="text" value="8787"></label>
     <label>Senha <input id="join-password" type="text" placeholder="senha da sala"></label>
@@ -28,13 +38,37 @@
     <button id="join-back" type="button" class="secondary">Voltar</button>
   </div>
 
+  <div class="menu-card" id="menu-p2p-choice" style="display:none">
+    <h2>Multiplayer P2P</h2>
+    <p class="menu-hint">Sem precisar de PC nenhum — mas precisa de internet só no
+      instante de conectar (o jogo em si roda direto celular-a-celular).</p>
+    <label>Senha da sala <input id="p2p-password" type="text" placeholder="crie uma senha"></label>
+    <button id="p2p-host" type="button">Criar sala (virar host)</button>
+    <div class="menu-error" id="p2p-host-error"></div>
+    <hr>
+    <label>Código da sala <input id="p2p-code" type="text" placeholder="código de quem criou"></label>
+    <label>Senha <input id="p2p-join-password" type="text" placeholder="senha da sala"></label>
+    <button id="p2p-join" type="button">Entrar com código</button>
+    <div class="menu-error" id="p2p-join-error"></div>
+    <button id="p2p-back" type="button" class="secondary">Voltar</button>
+  </div>
+
   <div class="menu-card" id="menu-lobby" style="display:none">
     <h2>Sala</h2>
+    <div id="lobby-room-code" class="room-code" style="display:none"></div>
     <div id="lobby-players"></div>
     <div class="row">
       <button id="lobby-be-killer" type="button">Ser Assassino</button>
       <button id="lobby-be-survivor" type="button">Ser Sobrevivente</button>
     </div>
+    <label id="lobby-ability-row" style="display:none">Habilidade
+      <select id="lobby-ability">
+        <option value="sprint">Sprint — corrida temporária</option>
+        <option value="camouflage">Camuflagem — some do Sentido do Assassino</option>
+        <option value="barricade">Barricar porta — bloqueia a passagem (2 usos)</option>
+        <option value="distract">Distrair — chama atenção pra um ponto falso</option>
+      </select>
+    </label>
     <div class="menu-error" id="lobby-error"></div>
     <button id="lobby-start" type="button">Iniciar partida</button>
     <p class="menu-hint">Mínimo 2 jogadores, sendo 1 Assassino. Até 4 Sobreviventes.</p>
@@ -53,6 +87,7 @@
       <div id="title">
         <b>Assassino vs Sobreviventes</b>protótipo — movimento, mapa e objetivos
         <div id="objectives-status">Objetivos: 0/0</div>
+        <div id="ability-hud"></div>
       </div>
       <div id="panel">
         <div><b>Configurar personagem</b></div>
@@ -90,16 +125,23 @@
   <div id="touch-joystick">
     <div id="touch-joystick-stick"></div>
   </div>
+  <div id="touch-abilities">
+    <button id="touch-ability2" type="button" style="display:none">Q</button>
+    <button id="touch-ability1" type="button" style="display:none">E</button>
+  </div>
   <button id="touch-attack" type="button">Atacar</button>
 </div>
 
+<script defer src="vendor/peerjs.min.js"></script>
 <script defer src="js/config.js"></script>
 <script defer src="js/map.js"></script>
 <script defer src="js/input.js"></script>
 <script defer src="js/character.js"></script>
+<script defer src="js/ability.js"></script>
 <script defer src="js/objective.js"></script>
 <script defer src="js/capture.js"></script>
 <script defer src="js/net.js"></script>
+<script defer src="js/net-webrtc.js"></script>
 <script defer src="js/menu.js"></script>
 <script defer src="js/main.js"></script>
 

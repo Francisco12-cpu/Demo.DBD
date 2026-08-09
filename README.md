@@ -2,6 +2,8 @@
 
 Este arquivo orienta o Claude Code ao trabalhar neste repositório.
 
+**Criado por Francisco Audir — @filho.af**
+
 ## Visão geral do projeto
 
 **Assassino vs Sobreviventes** — jogo assimétrico competitivo (estilo Dead by
@@ -37,10 +39,20 @@ da máquina host (`ipconfig`/`ifconfig`/Configurações de rede) e informe pros
 outros jogadores.
 
 Todo mundo (inclusive o host) abre `index.html` no navegador — do PC ou do
-celular, contanto que estejam na mesma rede — escolhe "Multiplayer LAN
-(beta)", digita o IP do host + porta + senha, entra na sala, escolhe o papel
+celular, contanto que estejam na mesma rede — escolhe "Multiplayer LAN",
+digita o IP do host + porta + senha, entra na sala, escolhe o papel
 (1 Assassino, até 4 Sobreviventes) e qualquer um pode apertar "Iniciar
 partida" quando tiver pelo menos 2 jogadores com 1 deles sendo o Assassino.
+
+**Multiplayer P2P (celular vira host, sem PC nenhum):** no menu, escolhe
+"Multiplayer P2P (beta)" → "Criar sala (virar host)" — funciona em
+qualquer navegador, inclusive celular, sem instalar nem rodar nada. Aparece
+um código curto (ex: `dbd-XK3F9`); passa esse código + a senha que você
+escolheu pros outros jogadores, que entram em "Entrar com código". Depois
+disso é o mesmo lobby de sempre. Só precisa de internet no instante de
+conectar (usa o broker público e gratuito da biblioteca PeerJS pra fazer as
+duas pontas se acharem); o jogo em si troca dados direto celular-a-celular
+depois disso.
 
 **Jogar pela web (sem instalar nada, só pro modo solo/teste):** existe um
 workflow (`.github/workflows/deploy-pages.yml`) que publica o site
@@ -61,20 +73,27 @@ sozinho e mandar o link pra alguém dar uma olhada.
 index.html              esqueleto HTML (menu + jogo) + tags <script>
 css/style.css             todo o CSS (visual, animações, menu, controles touch)
 js/config.js               config central de balanceamento por tipo de personagem
-js/map.js                   dados do mapa fixo (paredes, spawns, objetivos) + colisão
-js/input.js                 teclado + joystick touch + gamepad, unificados
+js/map.js                   dados do mapa fixo (paredes, spawns, objetivos, porta) + colisão
+js/input.js                 teclado + joystick touch + gamepad, unificados (movimento/ataque/habilidades)
 js/character.js             personagem único parametrizado (movimento/ataque/visual)
+js/ability.js                estado genérico de habilidade (duração/cooldown/usos)
 js/objective.js             objetivo com barra de progresso + skill check circular
 js/capture.js               estado "capturado" + barra de struggle
-js/net.js                   cliente WebSocket fino pro modo online
-js/menu.js                  telas de menu, lobby e resultado
-js/main.js                  monta o mundo, roda o modo solo ou o modo online
+js/net.js                   cliente WebSocket fino pro modo LAN
+js/net-webrtc.js            host e cliente P2P (WebRTC via PeerJS) pro modo sem PC
+js/menu.js                  telas de menu, lobby (LAN e P2P) e resultado
+js/main.js                  monta o mundo, roda o modo solo ou o modo online, habilidades
 server/server.js            servidor da sala (Node.js + ws) pro modo LAN
 server/package.json         dependência (ws) e script `npm start`
+vendor/peerjs.min.js        biblioteca PeerJS (MIT) vendorizada, só pro modo P2P
 ```
 Client em `<script>` clássico (sem `type="module"`, sem bundler) pra
 continuar funcionando ao abrir `index.html` direto com duplo clique. O
-servidor é a única parte que precisa de Node.js instalado.
+servidor Node.js só é necessário pro modo LAN — o modo P2P não precisa de
+nada rodando além do navegador. `js/net.js` e `js/net-webrtc.js` implementam
+exatamente a mesma interface (mesmos métodos, mesmos callbacks), então
+`js/main.js`/`js/menu.js` não sabem nem precisam saber qual transporte está
+em uso.
 
 ## Ordem de desenvolvimento (seguir esta prioridade)
 1. ~~Movimento básico (teclado, depois gamepad)~~ feito (+ touch)
@@ -84,14 +103,17 @@ servidor é a única parte que precisa de Node.js instalado.
 5. ~~Segundo personagem (Assassino) e sua diferenciação de gameplay~~ feito
    (IA no modo solo; jogador real no modo online)
 6. ~~Captura + barra de "struggle"~~ feito, com vitória/derrota de verdade
-7. Habilidades/poderes de cada personagem
-8. Multiplayer local (vários controles no mesmo PC) — ainda não feito
+7. ~~Habilidades/poderes de cada personagem~~ feito
+8. Multiplayer local (vários controles no mesmo PC) — **fora de escopo por
+   pedido do usuário** ("não tenho uso pra isso, quero focar só no online")
 9. ~~Multiplayer online~~ feito **fora de ordem**, a pedido explícito do
-   usuário: LAN (mesma rede) em vez de P2P pela internet — ver seção
-   Multiplayer abaixo. Local (passo 8) continua pendente.
+   usuário, e com 2 modalidades em vez de 1: LAN (servidor num PC) e P2P
+   (WebRTC, qualquer celular vira host) — ver seção Multiplayer abaixo.
 
 Pulamos o passo 8 por pedido direto — registrado aqui pra não parecer
-inconsistência com a regra "não pular etapas" de cima.
+inconsistência com a regra "não pular etapas" de cima. Diferente do passo 8,
+que só ficou pra trás na ordem, o multiplayer local em si foi descartado do
+escopo (não do jeito "ainda não fizemos", e sim "não vamos fazer por agora").
 
 ---
 
@@ -124,10 +146,18 @@ inconsistência com a regra "não pular etapas" de cima.
         Sobrevivente inicia a captura de verdade (struggle bar); no modo
         solo continua sendo um flash visual, já que lá o "alvo" é só a IA
         testando distância/cooldown
-- [ ] Poder 1: "Sentido" — consegue ver a posição dos Sobreviventes
-      (avaliar viabilidade; se complexo demais, pode virar Invisibilidade)
-- [ ] Poder 2: Dash / aumento de velocidade temporário
-- [ ] Habilidades têm cooldown visível na UI
+- [x] Poder 1: "Sentido" — revela todos os Sobreviventes por alguns
+      segundos, mesmo os que estariam escondidos (fora do alcance normal de
+      visão ou atrás de parede — o jogo não simula linha de visão de
+      verdade, só distância). Tecla **E**, `Game.CONFIG.abilities.killerSense`
+- [x] Poder 2: "Investida" — Dash, aumento de velocidade temporário. Tecla
+      **Q**, `Game.CONFIG.abilities.killerDash`
+- [x] Habilidades têm cooldown visível na UI (`#ability-hud`, texto simples
+      tipo "Sentido: 12s")
+
+**Modo solo:** a IA não usa Sentido (não faz sentido pra ela, já sabe onde
+o jogador está direto), mas usa Investida sozinha quando está longe do
+alvo, só pra dar um pouco mais de desafio.
 
 **Nota:** no modo solo o Assassino continua sendo uma IA simples (anda
 direto na direção do Sobrevivente, sem desvio de obstáculo, e ataca ao
@@ -135,15 +165,24 @@ alcançar) — é só um jeito de testar sozinho. No **modo online** o Assassino
 é um jogador de verdade, controlado por quem escolheu esse papel na sala.
 
 ### Sobreviventes (até 4 jogadores por partida)
-- [ ] Velocidade base mais lenta que o Assassino
-- [ ] Escolhem 1 habilidade no menu, entre:
-  - [ ] Sprint (corrida temporária)
-  - [ ] Camuflagem
-  - [ ] Barricar portas (usos limitados, não infinito)
-  - [ ] Chamar atenção (distrair o Assassino)
-- [ ] Ataque próprio (opcional/defensivo), com 2 variantes à escolha:
-  - [ ] Ataque rápido — cooldown curto, dano menor
-  - [ ] Ataque forte — cooldown longo, dano maior
+- [x] Velocidade base mais lenta que o Assassino (180 vs 220,
+      `Game.CONFIG.characters`)
+- [x] Escolhem 1 habilidade no menu (solo) ou no lobby (online), entre:
+  - [x] Sprint — corrida temporária (`speedMultiplier` em
+        `Game.CONFIG.abilities.survivor.sprint`)
+  - [x] Camuflagem — fica invisível pro Sentido do Assassino e pro alcance
+        normal de visão dele, mesmo perto (não afeta o modo solo, já que a
+        IA não usa visão restrita)
+  - [x] Barricar porta — spawna uma parede temporária no vão da parede
+        central, usos limitados (2 por padrão); precisa estar perto da
+        porta pra usar
+  - [x] Distrair — solta um "ping" visual; no modo solo, a IA vai atrás
+        desse ponto em vez do jogador de verdade por alguns segundos; no
+        modo online é só um chamariz visual (o Assassino é humano, não dá
+        pra forçar ele a ir lá — mas pode enganar)
+- [ ] Ataque próprio (opcional/defensivo), com 2 variantes à escolha —
+      ainda não feito (hoje o ataque do Sobrevivente só serve pra acertar o
+      boneco de treino, sem variantes)
 - [ ] Futuro: usar túneis/atalhos no mapa
 
 ### Sistema de captura
@@ -181,11 +220,14 @@ alcançar) — é só um jeito de testar sozinho. No **modo online** o Assassino
 - [ ] Efeito sonoro de dano/captura
 
 ### UI/HUD
-- [ ] Indicador visual de cooldown de habilidades (barra ou ícone com número
-      — solução simples, sem ícones customizados desenhados)
+- [x] Indicador visual de cooldown de habilidades — texto simples no HUD
+      (`#ability-hud`), sem ícone customizado desenhado
 - [x] Barra de progresso dos objetivos (por objetivo + contador geral no HUD)
-- [ ] Barra de vida (se aplicável ao personagem)
-- [ ] Indicador de estado (ex: "capturado", "struggle ativo")
+- [ ] Barra de vida (se aplicável ao personagem) — só o boneco de treino
+      tem barra de HP hoje; personagens não tomam dano numérico, só
+      capturam/são capturados
+- [x] Indicador de estado — classes visuais (`.captured`, `.eliminated`,
+      barra de struggle) mostram capturado/eliminado
 
 ### Mapa
 - [x] V1: mapa fixo com colisão — dados do mapa (paredes) vivem em `js/map.js`,
@@ -199,35 +241,54 @@ alcançar) — é só um jeito de testar sozinho. No **modo online** o Assassino
       manter o gerador de mapa desacoplado da lógica de jogo desde o início)
 
 ### Multiplayer
-Existem 3 modalidades — decisão registrada aqui pra não se perder:
-- [ ] Local: múltiplos jogadores no mesmo teclado/tela, cada um com seu
-      próprio conjunto de teclas (e/ou controles físicos) — ainda não feito
-- [x] **LAN (mesma rede Wi-Fi) — "beta":** um jogador roda `server/server.js`
-      (Node.js + `ws`) na própria máquina; os demais (PC ou celular) entram
-      pelo navegador digitando o IP local do host + porta + senha. Não
-      depende de internet nem de infraestrutura paga.
-  - [x] Sala única por servidor, protegida por senha
-  - [x] Lobby com lista de jogadores + escolha de papel (1 Assassino, até
-        4 Sobreviventes — `Game.CONFIG.maxSurvivors`)
-  - [x] Iniciar exige pelo menos 2 jogadores, exatamente 1 Assassino, e
-        todo mundo com um papel escolhido
-  - [x] Durante a partida: posição/animação de cada jogador é retransmitida
-        pelos outros (`state`); ataques, captura, struggle, objetivo
-        concluído e fim de partida são eventos (`event`) — ver mensagens
-        em `server/server.js`
-  - [x] Vitória/derrota sincronizada pra todo mundo na sala
-  - **Limitações conhecidas (simplificações de propósito, não bugs):** é um
-    relay simples sem validação/anti-cheat (confia nos clientes — ok pra
-    jogar com amigos, não pra torneio competitivo); cada objetivo só conta
-    o progresso de quem está fisicamente perto dele (sem "encher mais
-    rápido" cooperativamente com vários Sobreviventes no mesmo objetivo);
-    "Jogar de novo" recarrega a página, então quem estava numa sala online
-    precisa reentrar com IP/senha de novo; entrada só por IP + senha (sem
-    QR code ainda, ver Planos futuros); se o Assassino cair a partida trava
-    (sem tratamento de desconexão do papel principal ainda)
-- [ ] Online pela internet: P2P direto entre jogadores, sem servidor
-      dedicado pago (avaliar WebRTC ou solução equivalente) — ainda não
-      feito; o modo LAN acima cobre "jogar com quem está perto" por agora
+Local (mesmo teclado) foi cortado do escopo por pedido do usuário — o foco
+agora é só online, com **2 modalidades**, ambas com o mesmo lobby (papel,
+habilidade, início de partida) e a mesma sincronização de jogo por trás
+(`js/main.js` não diferencia uma da outra — só o transporte muda):
+
+- [x] **LAN (mesma rede Wi-Fi), via `server/server.js`:** um jogador roda o
+      servidor (Node.js + `ws`) na própria máquina; os demais (PC ou
+      celular) entram pelo navegador digitando o IP local do host + porta +
+      senha. Não depende de internet nem de infraestrutura paga.
+- [x] **P2P (WebRTC via PeerJS), via `js/net-webrtc.js` — "beta":**
+      qualquer navegador (inclusive celular) pode criar a sala sem rodar
+      nada além da própria página. O host roda, dentro do próprio
+      navegador, a mesma lógica de sala que o `server.js` roda em Node
+      (mesmas mensagens: join/chooseRole/startMatch/state/event/rematch),
+      só que trafegando por WebRTC em vez de WebSocket. Só depende de
+      internet no instante de conectar (usa o broker público e gratuito
+      `0.peerjs.com`, só pra o "aperto de mão" inicial); o jogo em si troca
+      dados direto celular-a-celular depois disso.
+  - **Não testado de ponta a ponta com dispositivos reais** — o ambiente
+    onde isso foi desenvolvido bloqueia conexão de saída com
+    `0.peerjs.com` (política de rede do sandbox, sem WebSocket pra fora da
+    lista liberada), então só deu pra validar por revisão de código
+    cuidadosa + o fato de reaproveitar a mesma lógica de sala já testada no
+    modo LAN. Recomendo testar com 2 celulares de verdade antes de confiar
+    nisso pra uma partida importante.
+
+Funcionalidades comuns aos dois modos (testadas de ponta a ponta com 2+
+clientes reais no modo LAN):
+- [x] Sala única por servidor/host, protegida por senha
+- [x] Lobby com lista de jogadores + escolha de papel (1 Assassino, até
+      4 Sobreviventes — `Game.CONFIG.maxSurvivors`) + escolha de habilidade
+- [x] Iniciar exige pelo menos 2 jogadores, exatamente 1 Assassino, e
+      todo mundo com um papel escolhido
+- [x] Durante a partida: posição/animação de cada jogador é retransmitida
+      pelos outros (`state`); ataques, captura, struggle, habilidades,
+      objetivo concluído e fim de partida são eventos (`event`)
+- [x] Vitória/derrota sincronizada pra todo mundo na sala
+
+**Limitações conhecidas (simplificações de propósito, não bugs):** é um
+relay simples sem validação/anti-cheat (confia nos clientes — ok pra jogar
+com amigos, não pra torneio competitivo); cada objetivo só conta o
+progresso de quem está fisicamente perto dele (sem "encher mais rápido"
+cooperativamente com vários Sobreviventes no mesmo objetivo); "Jogar de
+novo" recarrega a página, então quem estava numa sala online precisa
+reentrar de novo (com IP/senha ou código/senha); entrada sem QR code ainda
+(ver Planos futuros); se o Assassino cair a partida trava (sem tratamento
+de desconexão do papel principal ainda); no modo P2P, se o host fechar a
+aba, a sala inteira cai junto (ele é o servidor).
 
 ---
 
@@ -266,10 +327,12 @@ Existem 3 modalidades — decisão registrada aqui pra não se perder:
 
 ## Fora de escopo por agora
 - Servidor dedicado / infraestrutura paga (o servidor LAN roda na máquina
-  de um dos jogadores, não em nuvem)
+  de um dos jogadores, não em nuvem; o modo P2P nem isso precisa)
+- **Multiplayer local (mesmo teclado/tela)** — cortado do escopo por pedido
+  direto do usuário, não é só "ainda não fizemos"
 - Arte original desenhada do zero
 - Mapas aleatórios (fica pra depois do mapa fixo funcionar)
 - Eliminação permanente entre partidas (a eliminação por captura vale só
   pra partida atual — ver Sistema de captura)
-- Anti-cheat / validação de servidor no modo LAN (é um relay simples,
-  pensado pra jogar com amigos na mesma rede)
+- Anti-cheat / validação de servidor nos modos online (são relays simples,
+  pensados pra jogar com amigos, não pra competição séria)

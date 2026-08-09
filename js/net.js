@@ -40,7 +40,7 @@ window.Game = window.Game || {};
     });
 
     return {
-      chooseRole(role){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'chooseRole', role })); },
+      chooseRole(role, ability){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'chooseRole', role, ability })); },
       startMatch(){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'startMatch' })); },
       rematch(){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'rematch' })); },
       sendState(data){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'state', data })); },
