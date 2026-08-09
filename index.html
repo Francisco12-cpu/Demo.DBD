@@ -18,7 +18,7 @@
       <select id="menu-ability">
         <option value="sprint">Sprint — corrida temporária</option>
         <option value="camouflage">Camuflagem — some do Sentido do Assassino</option>
-        <option value="barricade">Barricar porta — bloqueia a passagem (2 usos)</option>
+        <option value="barricade">Trancar porta — tranca na hora a porta mais perto (2 usos)</option>
         <option value="distract">Distrair — chama atenção pra um ponto falso</option>
       </select>
     </label>
@@ -81,7 +81,7 @@
       <select id="lobby-ability">
         <option value="sprint">Sprint — corrida temporária</option>
         <option value="camouflage">Camuflagem — some do Sentido do Assassino</option>
-        <option value="barricade">Barricar porta — bloqueia a passagem (2 usos)</option>
+        <option value="barricade">Trancar porta — tranca na hora a porta mais perto (2 usos)</option>
         <option value="distract">Distrair — chama atenção pra um ponto falso</option>
       </select>
     </label>
@@ -125,8 +125,9 @@
 
   <div id="hint">
     <b>WASD</b>/<b>setas</b> ou joystick pra mover · <b>ESPAÇO</b>/botão de
-    ação pra interagir (skill check, escapar, atacar como Assassino) ·
-    <b>E</b>/<b>Q</b> pra usar habilidades
+    ação pra interagir (skill check, escapar, trancar/entrar no
+    esconderijo, atacar/arrombar como Assassino) · <b>E</b>/<b>Q</b> pra
+    usar habilidades
   </div>
 
   <div id="killer-compass"><div id="killer-compass-arrow"></div></div>
@@ -151,6 +152,8 @@
 <script defer src="js/character.js"></script>
 <script defer src="js/ability.js"></script>
 <script defer src="js/objective.js"></script>
+<script defer src="js/door.js"></script>
+<script defer src="js/hideout.js"></script>
 <script defer src="js/capture.js"></script>
 <script defer src="js/audio.js"></script>
 <script defer src="js/net.js"></script>

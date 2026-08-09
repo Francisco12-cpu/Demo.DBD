@@ -11,16 +11,15 @@ window.Game = window.Game || {};
   const panel = document.getElementById('panel');
   const MAP = Game.MAP;
 
-  let dynamicWalls = []; // paredes temporárias (ex: habilidade "Barricar porta")
   let objectives = [];
+  let doors = [];
   let currentLayoutWalls = [];
 
-  // ---------- mundo (mapa + objetivos), compartilhado entre solo e online ----------
+  // ---------- mundo (mapa + objetivos + portas + esconderijos), compartilhado entre solo e online ----------
   function buildWorld(objectiveCount, layoutIndex){
-    arena.querySelectorAll('.wall, .objective, .char, .ping-marker').forEach((n) => n.remove());
+    arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .door, .hideout-spot').forEach((n) => n.remove());
     arena.style.width = MAP.width + 'px';
     arena.style.height = MAP.height + 'px';
-    dynamicWalls = [];
 
     const layout = MAP.layouts[layoutIndex % MAP.layouts.length];
     currentLayoutWalls = layout.walls;
@@ -32,6 +31,25 @@ window.Game = window.Game || {};
       div.style.width = wall.w + 'px';
       div.style.height = wall.h + 'px';
       arena.insertBefore(div, arena.firstChild);
+    });
+
+    doors = layout.doors.map((rect) => {
+      const div = document.createElement('div');
+      div.className = 'door';
+      div.style.left = rect.x + 'px';
+      div.style.top = rect.y + 'px';
+      div.style.width = rect.w + 'px';
+      div.style.height = rect.h + 'px';
+      arena.appendChild(div);
+      return Game.createDoor(rect, div);
+    });
+
+    MAP.hideoutSpots.forEach((spot) => {
+      const div = document.createElement('div');
+      div.className = 'hideout-spot';
+      div.style.left = spot.x + 'px';
+      div.style.top = spot.y + 'px';
+      arena.appendChild(div);
     });
 
     const count = Math.min(objectiveCount, MAP.objectiveSpots.length);
@@ -50,7 +68,26 @@ window.Game = window.Game || {};
   }
 
   function allWalls(){
-    return dynamicWalls.length ? currentLayoutWalls.concat(dynamicWalls) : currentLayoutWalls;
+    const lockedDoorWalls = doors.filter((d) => d.state.locked).map((d) => d.state.rect);
+    return lockedDoorWalls.length ? currentLayoutWalls.concat(lockedDoorWalls) : currentLayoutWalls;
+  }
+
+  function nearestDoor(pos, maxDist){
+    let best = null, bestDist = Infinity;
+    doors.forEach((d) => {
+      const dist = Math.hypot(pos.x - d.center.x, pos.y - d.center.y);
+      if (dist <= maxDist && dist < bestDist){ best = d; bestDist = dist; }
+    });
+    return best;
+  }
+
+  function nearestHideoutSpot(pos, maxDist){
+    let best = null, bestDist = Infinity;
+    MAP.hideoutSpots.forEach((spot) => {
+      const dist = Math.hypot(pos.x - spot.x, pos.y - spot.y);
+      if (dist <= maxDist && dist < bestDist){ best = spot; bestDist = dist; }
+    });
+    return best;
   }
 
   function updateObjectivesStatus(){
@@ -92,28 +129,25 @@ window.Game = window.Game || {};
     }).join('');
   }
 
-  function doorCenter(){
-    const d = MAP.door;
-    return { x: d.x + d.w / 2, y: d.y + d.h / 2 };
+  // Habilidade "Trancar porta": tranca instantaneamente a porta mais perto
+  // (sem canalizar, ao contrário da mecânica base de trancar parado) por
+  // `duration` segundos, ou até o Assassino arrombar antes disso — o que
+  // vier primeiro. Retorna o índice da porta trancada (pra sincronizar
+  // pela rede) ou -1 se não achou nenhuma porta perto o bastante.
+  function instantLockNearestDoor(pos){
+    const cfg = Game.CONFIG.abilities.survivor.barricade;
+    const index = doors.findIndex((d) => d === nearestDoor(pos, cfg.radius));
+    if (index < 0) return -1;
+    lockDoorByIndex(index);
+    return index;
   }
 
-  // Adiciona a parede temporária da barricada (sem checar nada — quem
-  // chama já validou distância/usos). Usado tanto por quem ativou quanto
-  // por quem só recebeu o evento de rede.
-  function spawnBarricadeWall(){
-    const wall = { x: MAP.door.x, y: MAP.door.y, w: MAP.door.w, h: MAP.door.h };
-    dynamicWalls.push(wall);
-    const div = document.createElement('div');
-    div.className = 'wall temporary-wall';
-    div.style.left = wall.x + 'px';
-    div.style.top = wall.y + 'px';
-    div.style.width = wall.w + 'px';
-    div.style.height = wall.h + 'px';
-    arena.insertBefore(div, arena.firstChild);
+  function lockDoorByIndex(index){
+    const door = doors[index];
+    if (!door) return;
+    door.setLocked(true);
     setTimeout(() => {
-      const idx = dynamicWalls.indexOf(wall);
-      if (idx >= 0) dynamicWalls.splice(idx, 1);
-      div.remove();
+      if (door.state.locked) door.setLocked(false);
     }, Game.CONFIG.abilities.survivor.barricade.duration * 1000);
   }
 
@@ -280,12 +314,14 @@ window.Game = window.Game || {};
     stage.style.display = 'flex';
     Game.Input.init();
     Game.Audio.init();
+    Game.Audio.startAmbient();
     if (Game.Input.isTouchDevice) document.getElementById('hint').style.display = 'none';
   }
 
   function hideMatchUi(){
     stage.style.display = 'none';
     Game.Audio.stopHeartbeat();
+    Game.Audio.stopAmbient();
     killerCompassEl.classList.remove('active');
   }
 
@@ -316,6 +352,8 @@ window.Game = window.Game || {};
     const player = Game.createCharacter('survivor', playerEl);
     const killer = Game.createCharacter('killer', killerEl);
     const capture = Game.createCapture(playerEl);
+    const hideout = Game.createHideout();
+    let lastKnownPlayerPos = { x: MAP.player.x, y: MAP.player.y };
 
     const abilityCfg = Game.CONFIG.abilities.survivor[abilityKey] || Game.CONFIG.abilities.survivor.sprint;
     const survivorAbility = Game.createAbility(abilityCfg);
@@ -368,18 +406,34 @@ window.Game = window.Game || {};
 
     function updateKillerAI(delta){
       if (capture.state.captured || killer.state.isAttacking){ killer.render(); return; }
+      if (!hideout.state.hidden) lastKnownPlayerPos = { x: player.state.pos.x, y: player.state.pos.y };
       const cfg = killer.characterConfig();
-      const target = (distraction && performance.now() < distraction.until) ? distraction : player.state.pos;
+      // escondido = "invisível": a IA mira no último lugar visto em vez de
+      // seguir através do esconderijo, igual à Camuflagem faria se a IA
+      // usasse visão restrita
+      const targetingPlayer = !(distraction && performance.now() < distraction.until) && !hideout.state.hidden;
+      const target = (distraction && performance.now() < distraction.until) ? distraction
+        : (hideout.state.hidden ? lastKnownPlayerPos : player.state.pos);
       const dx = target.x - killer.state.pos.x;
       const dy = target.y - killer.state.pos.y;
       const dist = Math.hypot(dx, dy);
+
+      // porta trancada no caminho: arromba em vez de desviar (não faz
+      // sentido "evitar" uma parede que ele consegue derrubar)
+      let nearLockedDoor = false;
+      doors.forEach((d, index) => {
+        if (!d.state.locked) return;
+        const near = Math.hypot(killer.state.pos.x - d.center.x, killer.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
+        if (near) nearLockedDoor = true;
+        d.progressBreak(delta, near);
+      });
 
       if (killerDash.ready() && dist > 220) killerDash.trigger();
       const speed = killerDash.state.activeLeft > 0
         ? cfg.speed * Game.CONFIG.abilities.killerDash.speedMultiplier
         : cfg.speed;
 
-      if (target === player.state.pos && dist <= cfg.attackRange){
+      if (targetingPlayer && dist <= cfg.attackRange){
         Game.Audio.playAttackSwing();
         killer.tryAttack(attemptKillerHit);
         killer.setMoving(false);
@@ -387,7 +441,7 @@ window.Game = window.Game || {};
       } else {
         let moveDx = dx, moveDy = dy;
         const now = performance.now();
-        if (now < aiNudgeUntil){
+        if (now < aiNudgeUntil && !nearLockedDoor){
           const len = dist || 1;
           moveDx = dx + (-dy / len) * aiNudgeDir * len;
           moveDy = dy + (dx / len) * aiNudgeDir * len;
@@ -396,7 +450,7 @@ window.Game = window.Game || {};
         killer.setFacing(killer.state.facingRight);
         killer.setMoving(moved);
 
-        if (aiLastPos && now >= aiNudgeUntil){
+        if (aiLastPos && now >= aiNudgeUntil && !nearLockedDoor){
           const movedDist = Math.hypot(killer.state.pos.x - aiLastPos.x, killer.state.pos.y - aiLastPos.y);
           if (movedDist < speed * delta * 0.3 && dist > cfg.attackRange){
             aiStuckTimer += delta;
@@ -417,11 +471,8 @@ window.Game = window.Game || {};
     function triggerSurvivorAbility(){
       if (!survivorAbility.ready()) return;
       if (abilityKey === 'barricade'){
-        const d = doorCenter();
-        const dist = Math.hypot(player.state.pos.x - d.x, player.state.pos.y - d.y);
-        if (dist > abilityCfg.radius) return; // precisa estar perto da porta
+        if (instantLockNearestDoor(player.state.pos) < 0) return; // não tem porta perto o bastante
         survivorAbility.trigger();
-        spawnBarricadeWall();
         return;
       }
       survivorAbility.trigger();
@@ -446,24 +497,35 @@ window.Game = window.Game || {};
       updateKillerCompass(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
 
       const ability1Requested = Game.Input.consumeAbility1Request();
+      const attackPressed = Game.Input.consumeAttackRequest();
 
       if (capture.state.captured){
-        if (Game.Input.consumeAttackRequest()) capture.pulse();
+        if (attackPressed) capture.pulse();
+      } else if (!capture.state.eliminated && hideout.state.hidden){
+        if (attackPressed) hideout.exit(); // sai antes da hora, por vontade própria
+        hideout.update(delta);
       } else if (!capture.state.eliminated){
         if (ability1Requested) triggerSurvivorAbility();
 
-        const skillCheckPressed = Game.Input.consumeAttackRequest();
-        let anyObjectiveChanged = false;
-        objectives.forEach((obj) => {
-          const wasDone = obj.state.done;
-          const hadSkillCheck = !!obj.state.skillCheck;
-          obj.update(delta, player.state.pos, hadSkillCheck && skillCheckPressed);
-          if (obj.state.done && !wasDone) anyObjectiveChanged = true;
-        });
-        if (anyObjectiveChanged){
-          const done = updateObjectivesStatus();
-          if (done >= objectives.length) endMatch(true, 'Você completou todos os objetivos e escapou!');
+        const nearHideout = nearestHideoutSpot(player.state.pos, Game.CONFIG.hideout.radius);
+        if (attackPressed && nearHideout){
+          hideout.enter();
+        } else {
+          objectives.forEach((obj) => {
+            const wasDone = obj.state.done;
+            const hadSkillCheck = !!obj.state.skillCheck;
+            obj.update(delta, player.state.pos, hadSkillCheck && attackPressed);
+            if (obj.state.done && !wasDone){
+              const done = updateObjectivesStatus();
+              if (done >= objectives.length) endMatch(true, 'Você completou todos os objetivos e escapou!');
+            }
+          });
         }
+
+        doors.forEach((d) => {
+          const near = Math.hypot(player.state.pos.x - d.center.x, player.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
+          d.progressLock(delta, near);
+        });
 
         if (!player.state.isAttacking){
           const dir = Game.Input.readMovement();
@@ -482,6 +544,7 @@ window.Game = window.Game || {};
         }
       }
 
+      playerEl.classList.toggle('hidden-in-spot', hideout.state.hidden);
       updateKillerAI(delta);
       player.render();
       updateCamera(player.state.pos);
@@ -522,7 +585,10 @@ window.Game = window.Game || {};
       char.render();
 
       const entry = { info, char, el, eliminated: false, camouflaged: false };
-      if (info.role === 'survivor') entry.capture = Game.createCapture(el);
+      if (info.role === 'survivor'){
+        entry.capture = Game.createCapture(el);
+        entry.hideout = Game.createHideout();
+      }
       entries.set(info.id, entry);
     });
 
@@ -645,8 +711,18 @@ window.Game = window.Game || {};
         return;
       }
 
-      if (data.kind === 'barricade'){
-        spawnBarricadeWall();
+      if (data.kind === 'doorForceLock'){
+        lockDoorByIndex(data.index);
+        return;
+      }
+
+      if (data.kind === 'doorLocked'){
+        if (doors[data.index]) doors[data.index].setLocked(true);
+        return;
+      }
+
+      if (data.kind === 'doorBroken'){
+        if (doors[data.index]) doors[data.index].setLocked(false);
         return;
       }
 
@@ -677,12 +753,10 @@ window.Game = window.Game || {};
     function triggerLocalSurvivorAbility(){
       if (!localAbility1.ready()) return;
       if (localAbilityKey === 'barricade'){
-        const d = doorCenter();
-        const dist = Math.hypot(localEntry.char.state.pos.x - d.x, localEntry.char.state.pos.y - d.y);
-        if (dist > localAbilityCfg.radius) return;
+        const index = instantLockNearestDoor(localEntry.char.state.pos);
+        if (index < 0) return;
         localAbility1.trigger();
-        spawnBarricadeWall();
-        net.sendEvent({ kind: 'barricade' });
+        net.sendEvent({ kind: 'doorForceLock', index });
         return;
       }
       localAbility1.trigger();
@@ -740,22 +814,35 @@ window.Game = window.Game || {};
 
       if (captured){
         if (attackRequested) localEntry.capture.pulse();
+      } else if (!eliminated && isSurvivor && localEntry.hideout.state.hidden){
+        if (attackRequested) localEntry.hideout.exit(); // sai antes da hora, por vontade própria
+        localEntry.hideout.update(delta);
       } else if (!eliminated){
         if (isSurvivor){
           if (ability1Requested) triggerLocalSurvivorAbility();
 
-          objectives.forEach((obj, index) => {
-            const wasDone = obj.state.done;
-            const hadSkillCheck = !!obj.state.skillCheck;
-            // cooperação: cada Sobrevivente extra perto do mesmo objetivo
-            // (além de quem está preenchendo) acelera 50% o preenchimento
-            const helpers = activeSurvivors().filter((e) => e !== localEntry &&
-              Math.hypot(e.char.state.pos.x - obj.state.pos.x, e.char.state.pos.y - obj.state.pos.y) <= Game.CONFIG.objective.radius).length;
-            obj.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested, 1 + helpers * 0.5);
-            if (obj.state.done && !wasDone){
-              net.sendEvent({ kind: 'objectiveDone', index });
-              checkWinFromObjectives();
-            }
+          const nearHideout = nearestHideoutSpot(localEntry.char.state.pos, Game.CONFIG.hideout.radius);
+          if (attackRequested && nearHideout){
+            localEntry.hideout.enter();
+          } else {
+            objectives.forEach((obj, index) => {
+              const wasDone = obj.state.done;
+              const hadSkillCheck = !!obj.state.skillCheck;
+              // cooperação: cada Sobrevivente extra perto do mesmo objetivo
+              // (além de quem está preenchendo) acelera 50% o preenchimento
+              const helpers = activeSurvivors().filter((e) => e !== localEntry &&
+                Math.hypot(e.char.state.pos.x - obj.state.pos.x, e.char.state.pos.y - obj.state.pos.y) <= Game.CONFIG.objective.radius).length;
+              obj.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested, 1 + helpers * 0.5);
+              if (obj.state.done && !wasDone){
+                net.sendEvent({ kind: 'objectiveDone', index });
+                checkWinFromObjectives();
+              }
+            });
+          }
+
+          doors.forEach((d, index) => {
+            const near = Math.hypot(localEntry.char.state.pos.x - d.center.x, localEntry.char.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
+            if (d.progressLock(delta, near)) net.sendEvent({ kind: 'doorLocked', index });
           });
         } else {
           if (ability1Requested) localAbility1.trigger();
@@ -764,6 +851,10 @@ window.Game = window.Game || {};
             Game.Audio.playAttackSwing();
             localEntry.char.tryAttack(attemptKillerHit);
           }
+          doors.forEach((d, index) => {
+            const near = Math.hypot(localEntry.char.state.pos.x - d.center.x, localEntry.char.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
+            if (d.progressBreak(delta, near)) net.sendEvent({ kind: 'doorBroken', index });
+          });
         }
 
         if (!localEntry.char.state.isAttacking){
@@ -786,6 +877,7 @@ window.Game = window.Game || {};
         }
       }
 
+      if (isSurvivor) localEntry.el.classList.toggle('hidden-in-spot', localEntry.hideout.state.hidden);
       localEntry.char.render();
       updateCamera(localEntry.char.state.pos);
 
@@ -796,7 +888,7 @@ window.Game = window.Game || {};
           y: localEntry.char.state.pos.y,
           facingRight: localEntry.char.state.facingRight,
           moving: localEntry.el.classList.contains('running'),
-          camouflaged: isSurvivor && localAbilityKey === 'camouflage' && localAbility1.state.activeLeft > 0,
+          camouflaged: isSurvivor && ((localAbilityKey === 'camouflage' && localAbility1.state.activeLeft > 0) || localEntry.hideout.state.hidden),
         });
       }
 

@@ -63,6 +63,25 @@ Game.CONFIG = {
 
   maxSurvivors: 4, // limite de sobreviventes por partida (modo online)
 
+  // portas das salas (js/door.js): Sobrevivente tranca ficando perto (sem o
+  // Assassino por perto) por `lockDuration`; o Assassino sempre consegue
+  // arrombar ficando perto por `breakDuration` — mais rápido que trancar de
+  // propósito, pra nunca virar um bloqueio permanente
+  door: {
+    lockDuration: 3,
+    breakDuration: 2,
+    radius: 80,
+  },
+
+  // esconderijos (armário/mesa, js/hideout.js): Sobrevivente entra parado
+  // perto de um ponto de esconderijo; some da visão do Assassino igual
+  // Camuflagem, mas sem gastar habilidade — em troca, não pode se mexer
+  // enquanto escondido e é obrigado a sair sozinho depois de `maxDuration`
+  hideout: {
+    radius: 40,       // precisa estar bem perto pra entrar/sair
+    maxDuration: 14,   // segundos — depois disso sai forçado
+  },
+
   // ---------- habilidades (passo 7) ----------
   // Assassino tem sempre as duas; Sobrevivente escolhe 1 das 4 antes de
   // entrar. Todas seguem o mesmo objeto { duration, cooldown, ... } lido
@@ -92,11 +111,11 @@ Game.CONFIG = {
         cooldown: 16,
       },
       barricade: {
-        label: 'Barricar porta',
-        duration: 8,     // segundos que a barricada bloqueia a passagem
+        label: 'Trancar porta',
+        duration: 8,     // segundos que a porta fica trancada instantaneamente (sem canalizar)
         cooldown: 0,
         maxUses: 2,      // usos limitados por partida, não infinito
-        radius: 90,       // precisa estar perto da porta pra usar
+        radius: 90,       // precisa estar perto de alguma porta (a mais próxima) pra usar
       },
       distract: {
         label: 'Distrair',
