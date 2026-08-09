@@ -106,7 +106,7 @@ window.Game = window.Game || {};
 
     const proximity = 1 - Math.min(dist / maxDistance, 1); // 0 longe .. 1 grudado
     const intervalMs = 950 - proximity * 600; // 950ms longe -> 350ms bem perto
-    const volume = 0.12 + proximity * 0.35;
+    const volume = 0.22 + proximity * 0.5; // subido — o panner HRTF já atenua bastante sozinho
 
     if (c.currentTime * 1000 >= nextBeatAt){
       playThump(panX, panZ, volume, 68);
@@ -160,12 +160,85 @@ window.Game = window.Game || {};
     osc.frequency.setValueAtTime(90 + Math.random() * 20, c.currentTime);
 
     const gain = c.createGain();
-    gain.gain.setValueAtTime(0.05, c.currentTime);
+    gain.gain.setValueAtTime(0.12, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.08);
 
     osc.connect(gain).connect(masterGain);
     osc.start();
     osc.stop(c.currentTime + 0.09);
+  }
+
+  // ---------- sons de interface (clique/erro) ----------
+  // curtos e neutros — só pra dar retorno de "isso reagiu ao meu toque",
+  // pedido explícito do usuário porque o menu inteiro estava mudo
+  function playClick(){
+    const c = ensureContext();
+    if (!c) return;
+    const osc = c.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(520, c.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(680, c.currentTime + 0.05);
+
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.15, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.09);
+
+    osc.connect(gain).connect(masterGain);
+    osc.start();
+    osc.stop(c.currentTime + 0.1);
+  }
+
+  function playError(){
+    const c = ensureContext();
+    if (!c) return;
+    const osc = c.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(180, c.currentTime);
+
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.14, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.2);
+
+    osc.connect(gain).connect(masterGain);
+    osc.start();
+    osc.stop(c.currentTime + 0.22);
+  }
+
+  // aviso bem discreto pro Assassino de que um gerador começou a ser
+  // reparado em algum lugar (sem revelar posição — só uma pista de que
+  // "algo está acontecendo", diferente do alarme alto de errar skill check)
+  function playObjectiveStart(){
+    const c = ensureContext();
+    if (!c) return;
+    const osc = c.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 900;
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.06, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.5);
+    osc.connect(gain).connect(masterGain);
+    osc.start();
+    osc.stop(c.currentTime + 0.52);
+  }
+
+  // botão "Testar som" das Configurações — 3 bipes, pra quem não tem
+  // certeza se o áudio do celular está mesmo ativado
+  function playTestSound(){
+    const c = ensureContext();
+    if (!c) return;
+    [0, 0.18, 0.36].forEach((delay, i) => {
+      setTimeout(() => {
+        const osc = c.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = 440 + i * 110;
+        const gain = c.createGain();
+        gain.gain.setValueAtTime(0.2, c.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.15);
+        osc.connect(gain).connect(masterGain);
+        osc.start();
+        osc.stop(c.currentTime + 0.16);
+      }, delay * 1000);
+    });
   }
 
   // ---------- música ambiente de terror ----------
@@ -180,7 +253,7 @@ window.Game = window.Game || {};
     if (!c || ambientNodes) return;
 
     const gain = c.createGain();
-    gain.gain.value = 0.05;
+    gain.gain.value = 0.1;
     gain.connect(masterGain);
 
     const filter = c.createBiquadFilter();
@@ -201,7 +274,7 @@ window.Game = window.Game || {};
     const lfo = c.createOscillator();
     lfo.frequency.value = 0.07; // bem lento — uma "respiração" a cada ~14s
     const lfoGain = c.createGain();
-    lfoGain.gain.value = 0.025;
+    lfoGain.gain.value = 0.04;
     lfo.connect(lfoGain).connect(gain.gain);
 
     oscA.start();
@@ -220,6 +293,7 @@ window.Game = window.Game || {};
 
   Game.Audio = {
     init, updateHeartbeat, stopHeartbeat, playAttackSwing, playCaptureHit, playFootstep,
+    playClick, playError, playTestSound, playObjectiveStart,
     setMasterVolume, startAmbient, stopAmbient,
   };
 })();

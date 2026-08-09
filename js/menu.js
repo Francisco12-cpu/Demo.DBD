@@ -3,6 +3,13 @@ window.Game = window.Game || {};
 (function(){
   "use strict";
 
+  // destrava o áudio no primeiro toque em qualquer lugar da página. No
+  // modo online quem começa a partida às vezes é OUTRO jogador (mensagem
+  // de rede), não um clique seu — sem isso o AudioContext ficava
+  // 'suspended' pra sempre nesse caso e o jogo saía mudo (bug real
+  // reportado pelo usuário, com ou sem fone).
+  document.addEventListener('pointerdown', () => Game.Audio.init(), { once: true });
+
   const menu = document.getElementById('menu');
   const screens = {
     start: document.getElementById('menu-start'),
@@ -99,6 +106,17 @@ window.Game = window.Game || {};
   settingsBackBtn.addEventListener('click', () => showScreen('start'));
   loadSettings();
 
+  const settingsTestSound = document.getElementById('settings-test-sound');
+  if (settingsTestSound) settingsTestSound.addEventListener('click', () => Game.Audio.playTestSound());
+
+  // som de clique em qualquer botão do menu — retorno de toque, já que
+  // antes o menu inteiro era mudo (o teste de som tem o próprio som, não
+  // precisa dobrar aqui)
+  document.querySelectorAll('.menu-card button').forEach((btn) => {
+    if (btn.id === 'settings-test-sound') return;
+    btn.addEventListener('click', () => Game.Audio.playClick());
+  });
+
   // ---------- progressão leve entre partidas (só contador local, sem perks) ----------
   const menuProgressEl = document.getElementById('menu-progress');
   const resultProgressEl = document.getElementById('result-progress');
@@ -183,10 +201,12 @@ window.Game = window.Game || {};
       },
       onServerError(message){
         lastServerErrorAt = Date.now();
+        Game.Audio.playError();
         if (screens.lobby.style.display === 'flex') lobbyError.textContent = message;
         else errorTarget.textContent = message;
       },
       onError(message){
+        Game.Audio.playError();
         errorTarget.textContent = message;
       },
       onClose(){
@@ -238,8 +258,18 @@ window.Game = window.Game || {};
     if (net) hostingRoomCode = net.roomCode;
   });
 
+  // teclado de celular às vezes capitaliza a primeira letra sozinho — o
+  // código sempre é "dbd-XXXXX" (prefixo minúsculo, sufixo maiúsculo), então
+  // normaliza em vez de exigir que o usuário digite exatamente certo
+  function normalizeRoomCode(raw){
+    const trimmed = (raw || '').trim();
+    const dash = trimmed.indexOf('-');
+    if (dash === -1) return trimmed.toUpperCase();
+    return trimmed.slice(0, dash).toLowerCase() + '-' + trimmed.slice(dash + 1).toUpperCase();
+  }
+
   p2pJoinBtn.addEventListener('click', () => {
-    const code = p2pCode.value.trim();
+    const code = normalizeRoomCode(p2pCode.value);
     if (!code){
       p2pJoinError.textContent = 'Digita o código da sala.';
       return;

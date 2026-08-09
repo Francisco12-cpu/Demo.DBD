@@ -120,6 +120,38 @@ window.Game = window.Game || {};
 
   // ---------- gamepad ----------
   let gamepadState = { x: 0, y: 0, attack: false, ability1: false, ability2: false };
+  let gamepadConnected = false;
+
+  // nomes dos botões variam por fabricante — Xbox chama de A/X/Y, PlayStation
+  // de X/Quadrado/Triângulo. `pad.id` geralmente entrega uma pista (padrão
+  // do navegador: "<nome> (Vendor: 054c ...)" pra Sony, "Xbox" no nome pra
+  // Microsoft) — heurística simples só pra deixar a dica mais clara.
+  function buttonLabelsFor(pad){
+    const id = (pad && pad.id || '').toLowerCase();
+    if (id.includes('054c') || id.includes('playstation') || id.includes('dualshock') || id.includes('dualsense')){
+      return { attack: 'X', ability1: 'Quadrado', ability2: 'Triângulo' };
+    }
+    return { attack: 'A', ability1: 'X', ability2: 'Y' };
+  }
+
+  function showGamepadToast(text, holdMs){
+    const toast = document.getElementById('gamepad-toast');
+    if (!toast) return;
+    toast.textContent = text;
+    toast.classList.add('active');
+    clearTimeout(showGamepadToast._t);
+    showGamepadToast._t = setTimeout(() => toast.classList.remove('active'), holdMs || 3200);
+  }
+
+  window.addEventListener('gamepadconnected', (e) => {
+    gamepadConnected = true;
+    const labels = buttonLabelsFor(e.gamepad);
+    showGamepadToast(`🎮 Controle conectado — ${labels.attack} interage/ataca · ${labels.ability1} habilidade 1 · ${labels.ability2} habilidade 2`, 4500);
+  });
+  window.addEventListener('gamepaddisconnected', () => {
+    gamepadConnected = false;
+    showGamepadToast('🎮 Controle desconectado', 2000);
+  });
 
   function pollGamepad(){
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -197,5 +229,6 @@ window.Game = window.Game || {};
     setAbilityButtonsVisible,
     setJoystickSensitivity,
     isTouchDevice,
+    get gamepadConnected(){ return gamepadConnected; },
   };
 })();

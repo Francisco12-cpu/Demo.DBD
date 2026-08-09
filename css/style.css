@@ -457,3 +457,46 @@ html,body{
   #title b{ font-size: 13px; }
   #hint{ font-size: 10px; padding: 6px 10px; }
 }
+
+/* pede pra girar o celular — a maioria dos jogos joga deitado, e o joystick
+   + botões cabem bem melhor com mais largura. Só aparece em tela de toque
+   em retrato (pointer:coarse evita disparar em janela estreita de desktop) */
+#rotate-prompt{ display:none; }
+@media (orientation: portrait) and (pointer: coarse){
+  #rotate-prompt{
+    position:fixed; inset:0; z-index:100;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:16px; background: var(--bg-deep); color: var(--ink);
+    text-align:center; padding: 24px; font-family: inherit;
+  }
+  #rotate-icon{ font-size:48px; animation: rotateHint 1.6s ease-in-out infinite; }
+  @keyframes rotateHint{
+    0%,100%{ transform: rotate(0deg); }
+    50%{ transform: rotate(90deg); }
+  }
+  #menu, #stage, #touch-controls{ display:none !important; }
+}
+
+/* escurece/avermelha as bordas da tela quanto mais perto o Assassino está —
+   mesma proximidade já calculada pro batimento cardíaco (js/main.js), só
+   virando um reforço visual de tensão além do áudio */
+#danger-vignette{
+  position:fixed; inset:0; z-index:16; pointer-events:none;
+  --danger: 0;
+  opacity: var(--danger);
+  background: radial-gradient(ellipse at center,
+    transparent 35%,
+    rgba(90,10,16,.55) 100%);
+  transition: opacity .15s linear;
+}
+
+/* toast de conexão/desconexão de controle — some sozinho */
+#gamepad-toast{
+  position:fixed; z-index:25; top:16px; left:50%;
+  transform: translateX(-50%) translateY(-140%);
+  background: rgba(10,8,14,.92); border:1px solid var(--gold); color: var(--ink);
+  padding: 10px 16px; font-size:12px; max-width: 90vw; text-align:center;
+  pointer-events:none; opacity:0;
+  transition: transform .25s ease, opacity .25s ease;
+}
+#gamepad-toast.active{ transform: translateX(-50%) translateY(0); opacity:1; }
