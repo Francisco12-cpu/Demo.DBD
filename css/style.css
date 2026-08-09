@@ -100,13 +100,39 @@ html,body{
   position:fixed; inset:0;
   z-index: 15;
   pointer-events:none;
-  background: radial-gradient(
-    circle at var(--spot-x,50%) var(--spot-y,50%),
-    transparent 0,
-    transparent var(--spot-radius,150px),
-    rgba(4,3,6,.85) calc(var(--spot-radius,150px) + 60px),
-    rgba(4,3,6,.98) calc(var(--spot-radius,150px) + 200px)
-  );
+  width:100vw; height:100vh;
+  display:block;
+}
+/* bússola de direção do Assassino — complementa o áudio 3D com uma pista
+   visual, só aparece pro Sobrevivente e só dentro do alcance do batimento
+   cardíaco (mesma regra de Game.CONFIG.heartbeatRange) */
+#killer-compass{
+  position:fixed; z-index:18; right:16px; bottom:110px;
+  width:52px; height:52px; border-radius:50%;
+  background: rgba(10,8,14,.6); border:1px solid var(--wall);
+  display:none; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+#killer-compass.active{ display:flex; }
+#killer-compass-arrow{
+  width:0; height:0;
+  border-left:7px solid transparent;
+  border-right:7px solid transparent;
+  border-bottom:16px solid var(--killer);
+  transform-origin:50% 65%;
+}
+/* rastro de poeira ao correr — só CSS, sem imagem nenhuma */
+.dust{
+  position:absolute;
+  width:8px; height:8px;
+  border-radius:50%;
+  background: rgba(180,170,160,.45);
+  pointer-events:none;
+  animation: dustFade .5s ease-out forwards;
+}
+@keyframes dustFade{
+  from{ opacity:.6; transform:scale(1); }
+  to{ opacity:0; transform:scale(2.2); }
 }
 #hud{
   position:fixed; z-index: 18; top:16px; left:16px; right:16px;
@@ -192,6 +218,20 @@ html,body{
   mask-repeat: no-repeat;
   image-rendering: pixelated;
 }
+/* correndo: troca pro spritesheet de 4 frames (character-walk.png, também
+   gerado localmente) e alterna os quadros via mask-position animado —
+   técnica clássica de spritesheet em CSS puro, sem trocar de elemento */
+.char.running .torso{
+  -webkit-mask-image: url('../assets/character-walk.png');
+  mask-image: url('../assets/character-walk.png');
+  -webkit-mask-size: 400% 100%;
+  mask-size: 400% 100%;
+  animation: bob .28s infinite ease-in-out, walkFrames .5s steps(4) infinite;
+}
+@keyframes walkFrames{
+  from{ -webkit-mask-position: 0% 0; mask-position: 0% 0; }
+  to{ -webkit-mask-position: 100% 0; mask-position: 100% 0; }
+}
 .face{
   position:absolute; top:2px; left:50%;
   width:10px; height:10px;
@@ -221,7 +261,6 @@ html,body{
   60%{ transform: scaleX(-1) rotate(25deg); }
   100%{ transform: scaleX(-1) rotate(0deg); opacity:0;}
 }
-.char.running .torso{ animation: bob .28s infinite ease-in-out; }
 @keyframes bob{
   0%,100%{ transform: translateY(0) scaleY(1); }
   50%{ transform: translateY(-3px) scaleY(1.04); }

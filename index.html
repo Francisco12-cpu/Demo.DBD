@@ -25,7 +25,20 @@
     <button id="menu-solo" type="button">Jogar sozinho (teste vs IA)</button>
     <button id="menu-lan" type="button">Multiplayer LAN (servidor num PC)</button>
     <button id="menu-p2p" type="button">Multiplayer P2P (celular vira host, beta)</button>
+    <button id="menu-settings-open" type="button" class="secondary">Configurações</button>
+    <p id="menu-progress" class="menu-hint"></p>
     <p class="menu-credits">Criado por Francisco Audir — @filho.af</p>
+  </div>
+
+  <div class="menu-card" id="menu-settings" style="display:none">
+    <h2>Configurações</h2>
+    <label>Volume
+      <input id="settings-volume" type="range" min="0" max="100" value="100">
+    </label>
+    <label>Sensibilidade do joystick (celular)
+      <input id="settings-joystick" type="range" min="50" max="200" value="100">
+    </label>
+    <button id="settings-back" type="button" class="secondary">Voltar</button>
   </div>
 
   <div class="menu-card" id="menu-join" style="display:none">
@@ -80,13 +93,14 @@
   <div class="menu-card" id="menu-result" style="display:none">
     <h2 id="result-title"></h2>
     <p id="result-detail"></p>
+    <p id="result-progress" class="menu-hint"></p>
     <button id="result-again" type="button">Jogar de novo</button>
   </div>
 </div>
 
 <div id="stage">
   <div id="arena"></div>
-  <div id="lighting"></div>
+  <canvas id="lighting"></canvas>
 
   <div id="hud">
     <div id="title">
@@ -114,6 +128,8 @@
     ação pra interagir (skill check, escapar, atacar como Assassino) ·
     <b>E</b>/<b>Q</b> pra usar habilidades
   </div>
+
+  <div id="killer-compass"><div id="killer-compass-arrow"></div></div>
 </div>
 
 <div id="touch-controls">

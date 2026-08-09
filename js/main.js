@@ -126,6 +126,29 @@ window.Game = window.Game || {};
     setTimeout(() => div.remove(), durationSec * 1000);
   }
 
+  // rastro de poeira ao correr — puramente decorativo, some sozinho
+  function spawnDust(x, y){
+    const div = document.createElement('div');
+    div.className = 'dust';
+    div.style.left = x + 'px';
+    div.style.top = y + 'px';
+    arena.appendChild(div);
+    setTimeout(() => div.remove(), 550);
+  }
+
+  // bússola de direção do Assassino — complemento visual ao áudio 3D, só
+  // pro Sobrevivente e só dentro do alcance do batimento cardíaco
+  const killerCompassEl = document.getElementById('killer-compass');
+  const killerCompassArrowEl = document.getElementById('killer-compass-arrow');
+  function updateKillerCompass(localPos, killerPos, maxDistance){
+    if (!killerPos){ killerCompassEl.classList.remove('active'); return; }
+    const dx = killerPos.x - localPos.x, dy = killerPos.y - localPos.y;
+    if (Math.hypot(dx, dy) > maxDistance){ killerCompassEl.classList.remove('active'); return; }
+    killerCompassEl.classList.add('active');
+    const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI;
+    killerCompassArrowEl.style.transform = `rotate(${angleDeg + 90}deg)`;
+  }
+
   // ---------- câmera ----------
   // Em vez de encolher o mapa inteiro pra caber na tela (ficava minúsculo
   // no celular), a câmera segue o personagem local com um zoom fixo — o
@@ -159,9 +182,98 @@ window.Game = window.Game || {};
 
     const screenX = offsetX + followPos.x * zoom;
     const screenY = offsetY + followPos.y * zoom;
-    lightingEl.style.setProperty('--spot-x', screenX + 'px');
-    lightingEl.style.setProperty('--spot-y', screenY + 'px');
-    lightingEl.style.setProperty('--spot-radius', (Game.CONFIG.visionRadius * zoom) + 'px');
+    drawLighting(screenX, screenY, offsetX, offsetY, zoom);
+  }
+
+  // ---------- iluminação por linha de visão (paredes bloqueiam a luz) ----------
+  // Polígono de visibilidade calculado por raycasting em espaço de tela:
+  // um raio pra cada canto de parede (± uma fração de grau, pra pegar a
+  // sombra "colada" na quina) mais um leque de raios uniformes pra manter a
+  // borda arredondada onde não tem parede nenhuma por perto. Cada raio para
+  // na primeira parede que encontrar (ou no raio máximo de visão).
+  function wallSegmentsScreen(walls, offsetX, offsetY, zoom){
+    const segs = [];
+    walls.forEach((w) => {
+      const x1 = offsetX + w.x * zoom, y1 = offsetY + w.y * zoom;
+      const x2 = offsetX + (w.x + w.w) * zoom, y2 = offsetY + (w.y + w.h) * zoom;
+      segs.push({ x1, y1, x2, y2: y1 });
+      segs.push({ x1: x2, y1, x2, y2 });
+      segs.push({ x1: x2, y1: y2, x2: x1, y2 });
+      segs.push({ x1, y1: y2, x2: x1, y2: y1 });
+    });
+    return segs;
+  }
+
+  function raySegmentT(ox, oy, dx, dy, seg){
+    const sx = seg.x2 - seg.x1, sy = seg.y2 - seg.y1;
+    const denom = dx * sy - dy * sx;
+    if (Math.abs(denom) < 1e-10) return null;
+    const t = ((seg.x1 - ox) * sy - (seg.y1 - oy) * sx) / denom;
+    const u = ((seg.x1 - ox) * dy - (seg.y1 - oy) * dx) / denom;
+    if (t >= 0 && u >= 0 && u <= 1) return t;
+    return null;
+  }
+
+  function visibilityPolygon(originX, originY, segments, maxRadius){
+    const EPS = 0.00005;
+    const angles = new Set();
+    const RAYS = 60;
+    for (let i = 0; i < RAYS; i++) angles.add((i / RAYS) * Math.PI * 2);
+    segments.forEach((seg) => {
+      [[seg.x1, seg.y1], [seg.x2, seg.y2]].forEach(([px, py]) => {
+        const a = Math.atan2(py - originY, px - originX);
+        angles.add(a - EPS); angles.add(a); angles.add(a + EPS);
+      });
+    });
+
+    const points = [...angles].map((angle) => {
+      const dx = Math.cos(angle), dy = Math.sin(angle);
+      let minT = maxRadius;
+      segments.forEach((seg) => {
+        const t = raySegmentT(originX, originY, dx, dy, seg);
+        if (t !== null && t < minT) minT = t;
+      });
+      return { x: originX + dx * minT, y: originY + dy * minT, angle };
+    });
+    points.sort((a, b) => a.angle - b.angle);
+    return points;
+  }
+
+  let lightingCanvasW = 0, lightingCanvasH = 0;
+  const lightingCtx = lightingEl.getContext ? lightingEl.getContext('2d') : null;
+
+  function drawLighting(followScreenX, followScreenY, offsetX, offsetY, zoom){
+    if (!lightingCtx) return; // navegador sem canvas: fica sem o efeito, sem quebrar o jogo
+    const w = window.innerWidth, h = window.innerHeight;
+    if (w !== lightingCanvasW || h !== lightingCanvasH){
+      lightingEl.width = w; lightingEl.height = h;
+      lightingCanvasW = w; lightingCanvasH = h;
+    }
+    const ctx = lightingCtx;
+    const zoomPx = Game.CONFIG.visionRadius * zoom;
+    const maxRadius = zoomPx + 220;
+
+    const segs = wallSegmentsScreen(allWalls(), offsetX, offsetY, zoom);
+    const poly = visibilityPolygon(followScreenX, followScreenY, segs, maxRadius);
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(4,3,6,0.98)';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.beginPath();
+    poly.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.globalCompositeOperation = 'destination-out';
+    const grad = ctx.createRadialGradient(followScreenX, followScreenY, 0, followScreenX, followScreenY, zoomPx + 60);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(Math.min(1, zoomPx / (zoomPx + 60)), 'rgba(255,255,255,0.9)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   }
 
   function beginMatchUi(){
@@ -174,6 +286,7 @@ window.Game = window.Game || {};
   function hideMatchUi(){
     stage.style.display = 'none';
     Game.Audio.stopHeartbeat();
+    killerCompassEl.classList.remove('active');
   }
 
   function charDom(){
@@ -219,13 +332,18 @@ window.Game = window.Game || {};
     Game.Input.setAbilityButtonsVisible(true, false);
 
     let distraction = null; // { x, y, until } — pra onde a IA vai correr em vez do jogador
+    const matchStartAt = performance.now();
+    let lastStepAt = 0;
 
     let matchOver = false;
     function endMatch(won, detail){
       if (matchOver) return;
       matchOver = true;
       Game.Audio.stopHeartbeat();
-      Game.Menu.showResult(won, detail, () => startSolo(name, abilityKey));
+      const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
+      const doneCount = updateObjectivesStatus();
+      const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
+      Game.Menu.showResult(won, fullDetail, () => startSolo(name, abilityKey));
     }
 
     function attemptKillerHit(){
@@ -238,6 +356,15 @@ window.Game = window.Game || {};
         });
       }
     }
+
+    // desvio de obstáculo simples: quando a IA fica "colada" numa parede (mal
+    // se move na direção do alvo), desvia perpendicular por um tempo antes
+    // de voltar a mirar direto no alvo — sem pathfinding de verdade, só o
+    // suficiente pra não ficar travada burra numa quina
+    let aiStuckTimer = 0;
+    let aiLastPos = null;
+    let aiNudgeUntil = 0;
+    let aiNudgeDir = 1;
 
     function updateKillerAI(delta){
       if (capture.state.captured || killer.state.isAttacking){ killer.render(); return; }
@@ -256,11 +383,34 @@ window.Game = window.Game || {};
         Game.Audio.playAttackSwing();
         killer.tryAttack(attemptKillerHit);
         killer.setMoving(false);
+        aiStuckTimer = 0;
       } else {
-        const moved = moveTowards(killer.state, cfg, { x: dx, y: dy }, delta, speed);
+        let moveDx = dx, moveDy = dy;
+        const now = performance.now();
+        if (now < aiNudgeUntil){
+          const len = dist || 1;
+          moveDx = dx + (-dy / len) * aiNudgeDir * len;
+          moveDy = dy + (dx / len) * aiNudgeDir * len;
+        }
+        const moved = moveTowards(killer.state, cfg, { x: moveDx, y: moveDy }, delta, speed);
         killer.setFacing(killer.state.facingRight);
         killer.setMoving(moved);
+
+        if (aiLastPos && now >= aiNudgeUntil){
+          const movedDist = Math.hypot(killer.state.pos.x - aiLastPos.x, killer.state.pos.y - aiLastPos.y);
+          if (movedDist < speed * delta * 0.3 && dist > cfg.attackRange){
+            aiStuckTimer += delta;
+            if (aiStuckTimer > 0.3){
+              aiNudgeDir = Math.random() < 0.5 ? -1 : 1;
+              aiNudgeUntil = now + 650;
+              aiStuckTimer = 0;
+            }
+          } else {
+            aiStuckTimer = 0;
+          }
+        }
       }
+      aiLastPos = { x: killer.state.pos.x, y: killer.state.pos.y };
       killer.render();
     }
 
@@ -293,6 +443,7 @@ window.Game = window.Game || {};
       killerDash.update(delta);
       updateAbilityHud([{ label: abilityCfg.label, ability: survivorAbility }]);
       Game.Audio.updateHeartbeat(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
+      updateKillerCompass(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
 
       const ability1Requested = Game.Input.consumeAbility1Request();
 
@@ -323,6 +474,11 @@ window.Game = window.Game || {};
           const moved = moveTowards(player.state, player.characterConfig(), dir, delta, speed);
           player.setFacing(player.state.facingRight);
           player.setMoving(moved);
+          if (moved && now - lastStepAt > 300){
+            lastStepAt = now;
+            Game.Audio.playFootstep();
+            spawnDust(player.state.pos.x, player.state.pos.y + 14);
+          }
         }
       }
 
@@ -396,6 +552,8 @@ window.Game = window.Game || {};
 
     beginMatchUi();
     Game.Input.setAbilityButtonsVisible(true, !isSurvivor);
+    const matchStartAt = performance.now();
+    let lastStepAt = 0;
 
     let matchOver = false;
     function endMatch(won, detail, announce){
@@ -404,7 +562,11 @@ window.Game = window.Game || {};
       Game.Audio.stopHeartbeat();
       if (announce) net.sendEvent({ kind: 'matchEnd', result: won ? 'survivors' : 'killer' });
       const localWon = localEntry.info.role === 'killer' ? !won : won;
-      Game.Menu.showResult(localWon, detail, null); // "jogar de novo" online volta pro lobby (ver menu.js)
+      const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
+      const doneCount = updateObjectivesStatus();
+      const aliveCount = activeSurvivors().length;
+      const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length} · Sobreviventes vivos: ${aliveCount}/${survivors.length}`;
+      Game.Menu.showResult(localWon, fullDetail, null); // "jogar de novo" online volta pro lobby (ver menu.js)
     }
 
     function activeSurvivors(){
@@ -560,6 +722,7 @@ window.Game = window.Game || {};
         updateAbilityHud([{ label: localAbilityCfg.label, ability: localAbility1 }]);
         const killerPos = killerEntry && !killerEntry.eliminated ? killerEntry.char.state.pos : null;
         Game.Audio.updateHeartbeat(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
+        updateKillerCompass(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
       } else {
         updateAbilityHud([
           { label: Game.CONFIG.abilities.killerSense.label, ability: localAbility1 },
@@ -584,7 +747,11 @@ window.Game = window.Game || {};
           objectives.forEach((obj, index) => {
             const wasDone = obj.state.done;
             const hadSkillCheck = !!obj.state.skillCheck;
-            obj.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested);
+            // cooperação: cada Sobrevivente extra perto do mesmo objetivo
+            // (além de quem está preenchendo) acelera 50% o preenchimento
+            const helpers = activeSurvivors().filter((e) => e !== localEntry &&
+              Math.hypot(e.char.state.pos.x - obj.state.pos.x, e.char.state.pos.y - obj.state.pos.y) <= Game.CONFIG.objective.radius).length;
+            obj.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested, 1 + helpers * 0.5);
             if (obj.state.done && !wasDone){
               net.sendEvent({ kind: 'objectiveDone', index });
               checkWinFromObjectives();
@@ -611,6 +778,11 @@ window.Game = window.Game || {};
           const moved = moveTowards(localEntry.char.state, cfg, dir, delta, speed);
           localEntry.char.setFacing(localEntry.char.state.facingRight);
           localEntry.char.setMoving(moved);
+          if (moved && now - lastStepAt > 300){
+            lastStepAt = now;
+            Game.Audio.playFootstep();
+            spawnDust(localEntry.char.state.pos.x, localEntry.char.state.pos.y + 14);
+          }
         }
       }
 

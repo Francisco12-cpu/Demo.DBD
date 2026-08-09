@@ -136,9 +136,18 @@ escopo (não do jeito "ainda não fizemos", e sim "não vamos fazer por agora").
       celular sem depender de controle físico
 - [x] Sprite vira (flip horizontal) ao mudar de direção esquerda/direita
 - [x] Animação "parado" (idle)
-- [x] Animação "correr" (enquanto há input de movimento)
+- [x] Animação "correr" — agora com spritesheet de verdade (4 frames,
+      `assets/character-walk.png`, gerado localmente igual ao resto da arte),
+      trocando de quadro via `mask-position` animado em CSS puro (sem
+      trocar elemento nem depender de JS pra isso)
 - [x] Animação "matar"/ataque (trava movimento durante a execução)
 - [x] Velocidade como variável configurável por personagem (não hardcoded)
+- [x] Teclado, gamepad e joystick touch funcionam ao mesmo tempo sem
+      atrapalhar um ao outro (`js/input.js`): movimento usa o primeiro que
+      detectar input (teclado > touch > gamepad), e os botões de ação são
+      OR entre os três — testado que apertar tecla e usar gamepad junto não
+      trava nada
+- [x] Sensibilidade do joystick virtual configurável (menu Configurações)
 
 ### Menu e seleção de personagem
 - [ ] Menu inicial para escolher: Assassino ou Sobrevivente
@@ -171,9 +180,13 @@ o jogador está direto), mas usa Investida sozinha quando está longe do
 alvo, só pra dar um pouco mais de desafio.
 
 **Nota:** no modo solo o Assassino continua sendo uma IA simples (anda
-direto na direção do Sobrevivente, sem desvio de obstáculo, e ataca ao
-alcançar) — é só um jeito de testar sozinho. No **modo online** o Assassino
-é um jogador de verdade, controlado por quem escolheu esse papel na sala.
+direto na direção do Sobrevivente e ataca ao alcançar) — é só um jeito de
+testar sozinho. Agora com um desvio de obstáculo básico: se a IA fica
+"colada" numa parede por um instante (mal se move apesar de tentar), ela
+desvia perpendicular por um tempo antes de voltar a mirar direto no alvo —
+não é pathfinding de verdade, só o suficiente pra não ficar burra numa
+quina. No **modo online** o Assassino é um jogador de verdade, controlado
+por quem escolheu esse papel na sala.
 
 ### Sobreviventes (até 4 jogadores por partida)
 - [x] Velocidade base mais lenta que o Assassino (180 vs 220,
@@ -224,6 +237,10 @@ alcançar) — é só um jeito de testar sozinho. No **modo online** o Assassino
       o jogador precisa clicar/apertar no momento certo pra não falhar —
       dispara sozinho de vez em quando enquanto o objetivo enche, reaproveita
       o mesmo botão de ataque/interação (config em `Game.CONFIG.skillCheck`)
+- [x] Cooperação: no modo online, cada Sobreviventes extra perto do mesmo
+      objetivo (além de quem já está preenchendo) acelera o preenchimento em
+      +50% — só quem está fisicamente perto continua contando, igual antes,
+      só que junto acelera em vez de não fazer diferença
 
 ### Áudio
 - [x] Som de "batimento cardíaco" que aumenta de intensidade quanto mais
@@ -234,11 +251,18 @@ alcançar) — é só um jeito de testar sozinho. No **modo online** o Assassino
       Assassino estar visível na tela (`Game.CONFIG.heartbeatRange`)
 - [x] Efeito sonoro de ataque (golpe do Assassino)
 - [x] Efeito sonoro de dano/captura
+- [x] Som de passo (discreto, throttled a cada 300ms enquanto anda) — dá
+      presença sonora ao jogo mesmo fora de eventos de captura/ataque
+- [x] Volume master configurável (menu Configurações), persistido em
+      `localStorage`; todos os sons passam por um único `GainNode` central
 
 Todos os sons são **sintetizados na hora** via osciladores (sem arquivo de
 áudio, sem depender de internet) — ver `js/audio.js`. Só o Sobrevivente
 ouve o batimento cardíaco (é a "audição" dele do Assassino, o Assassino não
-ouve o próprio batimento).
+ouve o próprio batimento). Complementando o áudio, o Sobrevivente também
+tem uma bússola visual no HUD (`#killer-compass`) apontando a direção real
+do Assassino quando ele está dentro do alcance do batimento — útil pra quem
+joga sem fone/som ligado.
 
 ### UI/HUD
 - [x] Indicador visual de cooldown de habilidades — texto simples no HUD
@@ -257,14 +281,17 @@ ouve o próprio batimento).
       "criar um mapa e o jogo carregar e desenhar" que é objetivo futuro
       (ver `Planos futuros` abaixo) — só falta trocar o array de paredes
       escrito à mão por um formato de tileset/arquivo de mapa carregado.
-- [x] V2: variação de mapa — `MAP.layouts` tem 2 arranjos de obstáculos
-      (mesma parede central com porta nos dois, pra `js/main.js` não
+- [x] V2: variação de mapa — `MAP.layouts` tem **4 arranjos** de obstáculos
+      (mesma parede central com porta em todos, pra `js/main.js` não
       precisar saber qual layout está ativo na hora de barricar); sorteado
       no início de cada partida. No modo online, quem inicia sorteia e
       manda o índice escolhido no `matchStart`, pra todo mundo ficar no
-      mesmo mapa. Ainda não é aleatoriedade "de verdade" (só 2 opções
-      fixas) — mais variações é questão de adicionar mais entradas em
-      `MAP.layouts`, o motor de colisão não muda nada
+      mesmo mapa (`MAP_LAYOUT_COUNT` em `server/server.js` precisa bater com
+      `MAP.layouts.length` — já atualizado). Mais variações é só questão de
+      adicionar mais entradas em `MAP.layouts`, o motor de colisão não muda
+      nada — essa mesma estrutura de dados já está pronta pra um editor
+      visual carregar layouts de um arquivo em vez de escritos à mão (ver
+      `Planos futuros`, esse editor em si ainda não existe)
 - [x] Mapa dobrado de tamanho (1800×1120, era 900×560) pra caber mais
       variedade e não ficar apertado com câmera zoom
 
@@ -274,14 +301,33 @@ ouve o próprio batimento).
       ficava minúsculo e sobrava borda preta em cima/embaixo. Zoom maior no
       celular (1.7x) que no desktop (1.3x), travado nas bordas do mapa
       (`updateCamera` em `js/main.js`)
-- [x] Iluminação/raio de visão pra **todo mundo**, não só pro Assassino: um
-      overlay (`#lighting`, `radial-gradient` acompanhando a posição do
-      personagem local na tela) escurece tudo fora de um raio curto
-      (`Game.CONFIG.visionRadius`), então só dá pra ver o que está perto —
-      vale pro Assassino e pros Sobreviventes igual
+- [x] Iluminação/raio de visão pra **todo mundo**, não só pro Assassino, e
+      agora **bloqueada por parede de verdade** (não só um círculo): um
+      `<canvas id="lighting">` calcula por raycasting um polígono de
+      visibilidade a cada frame (um raio pra cada canto de parede + um
+      leque de raios uniformes pra manter a borda arredondada onde não tem
+      parede por perto), então uma parede entre você e uma área realmente
+      bloqueia a luz — a sombra "encosta" na parede — em vez de só
+      escurecer por distância. Vale igual pro Assassino e pros
+      Sobreviventes (`wallSegmentsScreen`/`visibilityPolygon`/`drawLighting`
+      em `js/main.js`)
 - [x] Legibilidade da fonte: rótulo do nome não força mais maiúsculas
       (`text-transform` removido), fonte maior e com contorno/sombra pra
       distinguir maiúscula de minúscula de longe
+- [x] Rastro de poeira ao correr — efeito visual simples via CSS
+      (`.dust`/`@keyframes dustFade`), sem imagem nenhuma, some sozinho
+
+### Configurações e progressão
+- [x] Menu de Configurações: volume master e sensibilidade do joystick
+      touch, persistidos em `localStorage` e aplicados na hora (não precisa
+      reiniciar o jogo pra sentir a mudança)
+- [x] Contador local de progressão (partidas jogadas / vitórias) — mostrado
+      no menu inicial e no resultado de cada partida, salvo em
+      `localStorage`. É só um contador simples, **não** é um sistema de
+      perks/desbloqueáveis (ver `Planos futuros`)
+- [x] Tela de resultado agora mostra estatísticas da partida: duração,
+      objetivos completos, e no modo online também quantos Sobreviventes
+      sobreviveram
 
 ### Multiplayer
 Local (mesmo teclado) foi cortado do escopo por pedido do usuário — o foco
@@ -335,12 +381,18 @@ clientes reais no modo LAN):
       Implementado igual nos dois transportes (`server/server.js` e
       `js/net-webrtc.js`), testado de ponta a ponta no modo LAN.
 
-**Limitações conhecidas (simplificações de propósito, não bugs):** é um
-relay simples sem validação/anti-cheat (confia nos clientes — ok pra jogar
-com amigos, não pra torneio competitivo); cada objetivo só conta o
-progresso de quem está fisicamente perto dele (sem "encher mais rápido"
-cooperativamente com vários Sobreviventes no mesmo objetivo); no modo P2P,
-se o host fechar a aba de vez, a sala inteira cai junto (ele é o servidor)
+- [x] Validação básica de posição: o relay (`server/server.js` e o host em
+      `js/net-webrtc.js`) clampa deslocamento implausível entre duas
+      mensagens de posição do mesmo jogador (acima de 700px/s — bem generoso
+      acima da maior velocidade possível no jogo, a Investida do Assassino a
+      ~484px/s) pra um "teletransporte" não se propagar pros outros
+      clientes. Não é anti-cheat de verdade (continua confiando no cliente
+      pra tudo mais — dano, captura, objetivo), só corta o caso mais óbvio.
+
+**Limitações conhecidas (simplificações de propósito, não bugs):** continua
+sendo um relay que confia nos clientes pra tudo além da checagem de
+velocidade acima (ok pra jogar com amigos, não pra torneio competitivo); no
+modo P2P, se o host fechar a aba de vez, a sala inteira cai junto (ele é o servidor)
 — não tem eleição automática de um novo host. O que existe é resiliência a
 quedas curtas de conexão com o broker de sinalização (`peer.on('disconnected',
 () => peer.reconnect())`), que mantém a mesma sala/código no ar sem precisar
@@ -349,14 +401,6 @@ trocar de host; ver `Planos futuros` pro failover completo.
 ---
 
 ## Planos futuros (fora de escopo agora, mas já anotado)
-- **Sprites com animação de verdade (spritesheet):** hoje é 1 sprite
-  estático (silhueta) tingido por CSS mask — dá pro personagem virar,
-  correr e "respirar" só com transform/animação CSS (sem trocar de frame).
-  Um spritesheet de verdade (frames de andar/atacar desenhados) é o próximo
-  passo, mas exige arte feita à mão ou baixada de algum lugar — esse
-  projeto não teve acesso à internet pra buscar arte pronta durante o
-  desenvolvimento, por isso o sprite atual foi gerado por script
-  (`assets/character-mask.png`, ver `Convenções de código`).
 - **Sistema de mapa "criar e carregar":** hoje `js/map.js` já é 100% dados
   (paredes por layout) separado da lógica de jogo — é a base certa pra
   evoluir pra: desenhar/exportar um mapa em uma ferramenta (ex: Tiled) e o
@@ -371,6 +415,16 @@ trocar de host; ver `Planos futuros` pro failover completo.
   partida; ficou de fora por ser bem mais complexo de fazer direito e
   impossível de testar de ponta a ponta neste ambiente (sem saída de rede
   pro broker WebRTC).
+- **Estado "pronto" no lobby, modo "2 Assassinos" e 2ª habilidade do
+  Sobrevivente:** essas três exigiriam mudar o protocolo de sala (novos
+  tipos de mensagem/campos) nos **três** lugares que implementam o lobby
+  (`server/server.js`, `js/net-webrtc.js` host **e** join) ao mesmo tempo —
+  justamente a parte já testada de ponta a ponta e mais delicada do
+  projeto. Nesta rodada já foi uma quantidade grande de mudança de uma vez
+  só (câmera, iluminação por raycasting, spritesheet, reconexão, etc.);
+  arriscar o núcleo de sala testado por mais 3 mudanças de protocolo no
+  mesmo lote não valeu a pena — ficam anotadas pra uma próxima rodada,
+  feitas (e testadas) uma de cada vez.
 
 ---
 
@@ -382,6 +436,16 @@ só define o "recorte" (transparência), e a cor de cada personagem continua
 vindo do JS (`character.js`/`Game.CONFIG`), igual antes. Pra gerar uma
 variante diferente, é só desenhar outra grade de pixels e trocar o arquivo
 — não precisa mudar nada em CSS/JS.
+
+`assets/character-walk.png` é um spritesheet de 4 frames (64×20px, também
+gerado por script, mesma técnica) usado só enquanto o personagem está
+correndo (`.char.running .torso`) — troca de quadro via `mask-position`
+animado com `steps(4)`, técnica clássica de spritesheet em CSS puro, sem
+nenhum JS controlando frame a frame. Continua sem acesso à internet pra
+buscar arte pronta, então a arte em si é minimalista de propósito (ver
+`Planos futuros` na rodada anterior — pedido de sprite "pronto" de algum
+banco de dados/GitHub foi tentado e bloqueado pela política de rede do
+ambiente onde isso foi desenvolvido, documentado então e continua valendo).
 
 ## Convenções de código
 - Toda variável de balanceamento (velocidade, dano, cooldowns, duração de

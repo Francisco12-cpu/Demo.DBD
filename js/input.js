@@ -28,6 +28,10 @@ window.Game = window.Game || {};
   let touchAttackRequested = false;
   let touchAbility1Requested = false;
   let touchAbility2Requested = false;
+  // sensibilidade do joystick virtual (1 = padrão) — configurável no menu
+  // de opções; maior = alcança velocidade máxima com um arrasto menor
+  let joystickSensitivity = 1;
+  function setJoystickSensitivity(v){ joystickSensitivity = Math.max(0.5, Math.min(2, v)); }
 
   function setupTouchControls(){
     if (!isTouchDevice) return;
@@ -55,8 +59,8 @@ window.Game = window.Game || {};
       const dist = Math.hypot(dx, dy);
       if (dist > maxRadius){ dx = (dx / dist) * maxRadius; dy = (dy / dist) * maxRadius; }
       joystickStick.style.transform = `translate(${dx}px, ${dy}px)`;
-      touchDir.x = dx / maxRadius;
-      touchDir.y = dy / maxRadius;
+      touchDir.x = Math.max(-1, Math.min(1, (dx / maxRadius) * joystickSensitivity));
+      touchDir.y = Math.max(-1, Math.min(1, (dy / maxRadius) * joystickSensitivity));
     }
 
     function endDrag(){
@@ -191,6 +195,7 @@ window.Game = window.Game || {};
     consumeAbility1Request,
     consumeAbility2Request,
     setAbilityButtonsVisible,
+    setJoystickSensitivity,
     isTouchDevice,
   };
 })();
