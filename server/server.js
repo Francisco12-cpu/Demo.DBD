@@ -18,6 +18,7 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
 const PASSWORD = process.env.ROOM_PASSWORD || 'dbd123';
 const MAX_SURVIVORS = 4;
 const MAP_LAYOUT_COUNT = 2; // precisa bater com Game.MAP.layouts.length em js/map.js
+const RECONNECT_GRACE_MS = 25000; // tempo pra quem caiu no meio da partida voltar antes de contar como saída de vez
 
 const wss = new WebSocketServer({ port: PORT });
 
@@ -26,9 +27,16 @@ console.log(`Porta: ${PORT}`);
 console.log(`Senha: ${PASSWORD}`);
 console.log('Os outros jogadores entram pelo navegador usando o IP desta máquina na rede local, essa porta e essa senha.');
 
-/** @type {Map<string, {id:string, ws:import('ws').WebSocket, name:string, role:'killer'|'survivor'|null, ability:string|null}>} */
+/** @type {Map<string, {id:string, ws:import('ws').WebSocket, name:string, role:'killer'|'survivor'|null, ability:string|null, token:string}>} */
 const players = new Map();
+// jogador que caiu no meio de uma partida em andamento — guardado aqui por
+// RECONNECT_GRACE_MS esperando o mesmo token voltar antes de desistir dele
+/** @type {Map<string, {id:string, name:string, role:string, ability:string, timer:NodeJS.Timeout}>} */
+const pendingReconnect = new Map();
 let matchState = 'lobby'; // 'lobby' | 'playing' | 'ended'
+let currentMapLayoutIndex = 0;
+let completedObjectives = new Set(); // índices, só durante a partida atual
+let eliminatedIds = new Set(); // ids de jogadores já eliminados/saídos na partida atual
 
 function send(ws, msg){
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
@@ -57,6 +65,19 @@ function survivorCount(){
   return [...players.values()].filter((p) => p.role === 'survivor').length;
 }
 
+function finalizeDeparture(id){
+  pendingReconnect.delete(id);
+  eliminatedIds.add(id);
+  broadcast({ type: 'playerLeft', id });
+  if (players.size === 0){
+    matchState = 'lobby';
+    completedObjectives = new Set();
+    eliminatedIds = new Set();
+  } else if (matchState !== 'playing'){
+    broadcastLobby();
+  }
+}
+
 wss.on('connection', (ws) => {
   let id = null;
 
@@ -70,6 +91,31 @@ wss.on('connection', (ws) => {
         ws.close();
         return;
       }
+
+      const token = typeof msg.token === 'string' && msg.token ? msg.token : null;
+      const pending = token ? pendingReconnect.get(token) : null;
+
+      if (pending){
+        clearTimeout(pending.timer);
+        pendingReconnect.delete(token);
+        id = pending.id;
+        const name = String(msg.name || pending.name).slice(0, 16) || pending.name;
+        players.set(id, { id, ws, name, role: pending.role, ability: pending.ability, token });
+        send(ws, { type: 'joined', id });
+        if (matchState === 'playing'){
+          send(ws, {
+            type: 'matchResume',
+            players: rosterSnapshot(),
+            mapLayoutIndex: currentMapLayoutIndex,
+            doneObjectives: [...completedObjectives],
+            eliminatedIds: [...eliminatedIds],
+          });
+        } else {
+          broadcastLobby();
+        }
+        return;
+      }
+
       if (matchState === 'playing'){
         send(ws, { type: 'error', message: 'Partida já em andamento, espera a próxima.' });
         ws.close();
@@ -77,7 +123,7 @@ wss.on('connection', (ws) => {
       }
       id = crypto.randomUUID();
       const name = String(msg.name || 'Jogador').slice(0, 16) || 'Jogador';
-      players.set(id, { id, ws, name, role: null, ability: null });
+      players.set(id, { id, ws, name, role: null, ability: null, token });
       send(ws, { type: 'joined', id });
       broadcastLobby();
       return;
@@ -116,8 +162,10 @@ wss.on('connection', (ws) => {
         return;
       }
       matchState = 'playing';
-      const mapLayoutIndex = Math.floor(Math.random() * MAP_LAYOUT_COUNT);
-      broadcast({ type: 'matchStart', players: rosterSnapshot(), mapLayoutIndex });
+      completedObjectives = new Set();
+      eliminatedIds = new Set();
+      currentMapLayoutIndex = Math.floor(Math.random() * MAP_LAYOUT_COUNT);
+      broadcast({ type: 'matchStart', players: rosterSnapshot(), mapLayoutIndex: currentMapLayoutIndex });
       return;
     }
 
@@ -128,16 +176,26 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.type === 'event'){
-      // eventos de jogo: ataque, captura, struggle, objetivo concluído, fim de partida
+      // eventos de jogo: ataque, captura, struggle, objetivo concluído, fim de partida.
+      // O servidor só espia kind pra guardar o mínimo necessário pra
+      // reconstituir o estado de quem reconectar no meio da partida.
       broadcast({ type: 'event', id, data: msg.data }, id);
       if (msg.data && msg.data.kind === 'matchEnd'){
         matchState = 'ended';
+      }
+      if (msg.data && msg.data.kind === 'objectiveDone' && typeof msg.data.index === 'number'){
+        completedObjectives.add(msg.data.index);
+      }
+      if (msg.data && msg.data.kind === 'struggleResult' && msg.data.result === 'eliminated' && msg.data.playerId){
+        eliminatedIds.add(msg.data.playerId);
       }
       return;
     }
 
     if (msg.type === 'rematch'){
       matchState = 'lobby';
+      completedObjectives = new Set();
+      eliminatedIds = new Set();
       for (const p of players.values()) p.role = null;
       broadcastLobby();
       return;
@@ -145,15 +203,18 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    if (id && players.has(id)){
-      players.delete(id);
-      broadcast({ type: 'playerLeft', id });
-      if (players.size === 0){
-        // sala esvaziou — reabre pra próxima rodada de jogadores
-        matchState = 'lobby';
-      } else {
-        broadcastLobby();
-      }
+    if (!id || !players.has(id)) return;
+    const me = players.get(id);
+    players.delete(id);
+
+    if (matchState === 'playing' && me.token){
+      // dá um tempo pra reconectar (rede caiu, celular travou etc.) antes
+      // de contar como saída de vez
+      const timer = setTimeout(() => finalizeDeparture(id), RECONNECT_GRACE_MS);
+      pendingReconnect.set(me.token, { id, name: me.name, role: me.role, ability: me.ability, timer });
+      return;
     }
+
+    finalizeDeparture(id);
   });
 });

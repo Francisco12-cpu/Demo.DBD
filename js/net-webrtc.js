@@ -16,8 +16,14 @@ window.Game = window.Game || {};
   // de WebSocket. Isso deixa `js/main.js` e `js/menu.js` completamente
   // alheios a qual dos dois transportes está em uso: os dois expõem a
   // mesma interface (chooseRole/startMatch/sendState/sendEvent/rematch/
-  // close + os mesmos callbacks onJoined/onLobby/onMatchStart/onState/
-  // onEvent/onServerError/onError/onClose/onPlayerLeft).
+  // close + os mesmos callbacks onJoined/onLobby/onMatchStart/onMatchResume/
+  // onState/onEvent/onServerError/onError/onClose/onPlayerLeft).
+  //
+  // Limitação conhecida: se a ABA do host fechar de vez, a sala cai (não
+  // tem failover de host de verdade — só reconexão ao broker de sinalização
+  // em quedas curtas de rede, ver peer.on('disconnected') abaixo).
+
+  const RECONNECT_GRACE_MS = 25000;
 
   function randomRoomCode(){
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem O/0/I/1 (confundem fácil)
@@ -26,7 +32,7 @@ window.Game = window.Game || {};
     return 'dbd-' + code;
   }
 
-  function host({ password, name }, handlers){
+  function host({ password, name, token }, handlers){
     if (typeof Peer === 'undefined'){
       handlers.onError && handlers.onError('Biblioteca P2P não carregou (sem internet?).');
       return null;
@@ -38,8 +44,13 @@ window.Game = window.Game || {};
 
     /** @type {Map<string, {id:string, name:string, role:string|null, ability:string|null, conn: any}>} */
     const players = new Map();
+    /** @type {Map<string, {id:string, name:string, role:string, ability:string, timer:number}>} */
+    const pendingReconnect = new Map();
     let matchState = 'lobby';
     let localId = null;
+    let currentMapLayoutIndex = 0;
+    let completedObjectives = new Set();
+    let eliminatedIds = new Set();
 
     function send(conn, msg){
       if (conn){ if (conn.open) conn.send(msg); }
@@ -50,6 +61,7 @@ window.Game = window.Game || {};
       if (msg.type === 'error' && handlers.onServerError) handlers.onServerError(msg.message);
       if (msg.type === 'lobby' && handlers.onLobby) handlers.onLobby(msg);
       if (msg.type === 'matchStart' && handlers.onMatchStart) handlers.onMatchStart(msg.players, msg.mapLayoutIndex);
+      if (msg.type === 'matchResume' && handlers.onMatchResume) handlers.onMatchResume(msg);
       if (msg.type === 'state' && handlers.onState) handlers.onState(msg.id, msg.data);
       if (msg.type === 'event' && handlers.onEvent) handlers.onEvent(msg.id, msg.data);
       if (msg.type === 'playerLeft' && handlers.onPlayerLeft) handlers.onPlayerLeft(msg.id);
@@ -72,6 +84,20 @@ window.Game = window.Game || {};
 
     function killerCount(){ return [...players.values()].filter((p) => p.role === 'killer').length; }
     function survivorCount(){ return [...players.values()].filter((p) => p.role === 'survivor').length; }
+
+    function finalizeDeparture(id){
+      pendingReconnect.delete(id);
+      eliminatedIds.add(id);
+      broadcast({ type: 'playerLeft', id });
+      handlers.onPlayerLeft && handlers.onPlayerLeft(id); // o próprio host também precisa saber
+      if (players.size === 0){
+        matchState = 'lobby';
+        completedObjectives = new Set();
+        eliminatedIds = new Set();
+      } else if (matchState !== 'playing'){
+        broadcastLobby();
+      }
+    }
 
     function processMessage(id, msg, conn){
       const p = players.get(id);
@@ -107,8 +133,10 @@ window.Game = window.Game || {};
           return;
         }
         matchState = 'playing';
-        const mapLayoutIndex = Math.floor(Math.random() * Game.MAP.layouts.length);
-        broadcast({ type: 'matchStart', players: rosterSnapshot(), mapLayoutIndex });
+        completedObjectives = new Set();
+        eliminatedIds = new Set();
+        currentMapLayoutIndex = Math.floor(Math.random() * Game.MAP.layouts.length);
+        broadcast({ type: 'matchStart', players: rosterSnapshot(), mapLayoutIndex: currentMapLayoutIndex });
         return;
       }
 
@@ -120,54 +148,99 @@ window.Game = window.Game || {};
       if (msg.type === 'event'){
         broadcast({ type: 'event', id, data: msg.data }, id);
         if (msg.data && msg.data.kind === 'matchEnd') matchState = 'ended';
+        if (msg.data && msg.data.kind === 'objectiveDone' && typeof msg.data.index === 'number'){
+          completedObjectives.add(msg.data.index);
+        }
+        if (msg.data && msg.data.kind === 'struggleResult' && msg.data.result === 'eliminated' && msg.data.playerId){
+          eliminatedIds.add(msg.data.playerId);
+        }
         return;
       }
 
       if (msg.type === 'rematch'){
         matchState = 'lobby';
+        completedObjectives = new Set();
+        eliminatedIds = new Set();
         for (const pp of players.values()) pp.role = null;
         broadcastLobby();
         return;
       }
     }
 
+    function handleJoin(msg, conn){
+      if (msg.password !== password){
+        send(conn, { type: 'error', message: 'Senha incorreta.' });
+        if (conn) conn.close();
+        return;
+      }
+
+      const token = typeof msg.token === 'string' && msg.token ? msg.token : null;
+      const pending = token ? pendingReconnect.get(token) : null;
+
+      if (pending){
+        clearTimeout(pending.timer);
+        pendingReconnect.delete(token);
+        const id = pending.id;
+        const playerName = String(msg.name || pending.name).slice(0, 16) || pending.name;
+        players.set(id, { id, name: playerName, role: pending.role, ability: pending.ability, conn, token });
+        if (conn) conn.__playerId = id;
+        send(conn, { type: 'joined', id });
+        if (matchState === 'playing'){
+          send(conn, {
+            type: 'matchResume',
+            players: rosterSnapshot(),
+            mapLayoutIndex: currentMapLayoutIndex,
+            doneObjectives: [...completedObjectives],
+            eliminatedIds: [...eliminatedIds],
+          });
+        } else {
+          broadcastLobby();
+        }
+        return;
+      }
+
+      if (matchState === 'playing'){
+        send(conn, { type: 'error', message: 'Partida já em andamento, espera a próxima.' });
+        if (conn) conn.close();
+        return;
+      }
+      const id = conn ? conn.peer : localId;
+      const playerName = String(msg.name || 'Jogador').slice(0, 16) || 'Jogador';
+      players.set(id, { id, name: playerName, role: null, ability: null, conn, token });
+      if (conn) conn.__playerId = id;
+      send(conn, { type: 'joined', id });
+      broadcastLobby();
+    }
+
     peer.on('open', (id) => {
       localId = id;
-      players.set(localId, { id: localId, name: name || 'Jogador', role: null, ability: null, conn: null });
+      players.set(localId, { id: localId, name: name || 'Jogador', role: null, ability: null, conn: null, token });
       handlers.onJoined && handlers.onJoined(localId);
       broadcastLobby();
     });
 
+    // queda curta no broker de sinalização (não é a aba fechando) — tenta
+    // reconectar sozinho e manter a mesma sala/código no ar
+    peer.on('disconnected', () => { peer.reconnect(); });
+
     peer.on('connection', (conn) => {
       conn.on('data', (msg) => {
-        if (msg.type === 'join'){
-          if (msg.password !== password){
-            send(conn, { type: 'error', message: 'Senha incorreta.' });
-            conn.close();
-            return;
-          }
-          if (matchState === 'playing'){
-            send(conn, { type: 'error', message: 'Partida já em andamento, espera a próxima.' });
-            conn.close();
-            return;
-          }
-          const id = conn.peer;
-          const playerName = String(msg.name || 'Jogador').slice(0, 16) || 'Jogador';
-          players.set(id, { id, name: playerName, role: null, ability: null, conn });
-          send(conn, { type: 'joined', id });
-          broadcastLobby();
-          return;
-        }
-        processMessage(conn.peer, msg, conn);
+        if (msg.type === 'join'){ handleJoin(msg, conn); return; }
+        const pid = conn.__playerId || conn.peer;
+        processMessage(pid, msg, conn);
       });
       conn.on('close', () => {
-        if (players.has(conn.peer)){
-          players.delete(conn.peer);
-          broadcast({ type: 'playerLeft', id: conn.peer });
-          handlers.onPlayerLeft && handlers.onPlayerLeft(conn.peer);
-          if (players.size <= 1) matchState = 'lobby';
-          else broadcastLobby();
+        const pid = conn.__playerId || conn.peer;
+        if (!players.has(pid)) return;
+        const p = players.get(pid);
+        players.delete(pid);
+
+        if (matchState === 'playing' && p.token){
+          const timer = setTimeout(() => finalizeDeparture(pid), RECONNECT_GRACE_MS);
+          pendingReconnect.set(p.token, { id: pid, name: p.name, role: p.role, ability: p.ability, timer });
+          return;
         }
+        finalizeDeparture(pid);
       });
     });
 
@@ -189,7 +262,7 @@ window.Game = window.Game || {};
     };
   }
 
-  function join({ code, password, name }, handlers){
+  function join({ code, password, name, token }, handlers){
     if (typeof Peer === 'undefined'){
       handlers.onError && handlers.onError('Biblioteca P2P não carregou (sem internet?).');
       return null;
@@ -203,6 +276,7 @@ window.Game = window.Game || {};
       if (msg.type === 'joined' && handlers.onJoined) handlers.onJoined(msg.id);
       if (msg.type === 'lobby' && handlers.onLobby) handlers.onLobby(msg);
       if (msg.type === 'matchStart' && handlers.onMatchStart) handlers.onMatchStart(msg.players, msg.mapLayoutIndex);
+      if (msg.type === 'matchResume' && handlers.onMatchResume) handlers.onMatchResume(msg);
       if (msg.type === 'state' && handlers.onState) handlers.onState(msg.id, msg.data);
       if (msg.type === 'event' && handlers.onEvent) handlers.onEvent(msg.id, msg.data);
       if (msg.type === 'playerLeft' && handlers.onPlayerLeft) handlers.onPlayerLeft(msg.id);
@@ -210,13 +284,15 @@ window.Game = window.Game || {};
 
     peer.on('open', () => {
       conn = peer.connect(code, { reliable: true });
-      conn.on('open', () => { conn.send({ type: 'join', password, name }); });
+      conn.on('open', () => { conn.send({ type: 'join', password, name, token }); });
       conn.on('data', dispatch);
       conn.on('close', () => { handlers.onClose && handlers.onClose(); });
       conn.on('error', (err) => {
         handlers.onError && handlers.onError('Erro P2P: ' + (err && err.type ? err.type : err));
       });
     });
+
+    peer.on('disconnected', () => { peer.reconnect(); });
 
     peer.on('error', (err) => {
       const type = err && err.type;

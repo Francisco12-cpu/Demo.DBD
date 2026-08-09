@@ -5,6 +5,7 @@ window.Game = window.Game || {};
 
   const stage = document.getElementById('stage');
   const arena = document.getElementById('arena');
+  const lightingEl = document.getElementById('lighting');
   const objectivesStatus = document.getElementById('objectives-status');
   const abilityHudEl = document.getElementById('ability-hud');
   const panel = document.getElementById('panel');
@@ -125,24 +126,49 @@ window.Game = window.Game || {};
     setTimeout(() => div.remove(), durationSec * 1000);
   }
 
-  function fitToViewport(){
-    const margin = 40;
-    const bottomSpace = Game.Input.isTouchDevice ? 170 : 90;
-    const scale = Math.min(
-      1,
-      (window.innerWidth - margin) / MAP.width,
-      (window.innerHeight - bottomSpace) / MAP.height
-    );
-    arena.style.transform = `scale(${scale})`;
+  // ---------- câmera ----------
+  // Em vez de encolher o mapa inteiro pra caber na tela (ficava minúsculo
+  // no celular), a câmera segue o personagem local com um zoom fixo — o
+  // mapa é maior que a tela de propósito, só uma janela ao redor do
+  // personagem fica visível (dá pra sobrar um "spotlight" de #lighting
+  // por cima, ver updateCamera).
+  const CAMERA_ZOOM_DESKTOP = 1.3;
+  const CAMERA_ZOOM_MOBILE = 1.7;
+
+  function currentZoom(){
+    return Game.Input.isTouchDevice ? CAMERA_ZOOM_MOBILE : CAMERA_ZOOM_DESKTOP;
   }
-  window.addEventListener('resize', fitToViewport);
+
+  function updateCamera(followPos){
+    const zoom = currentZoom();
+    const viewW = window.innerWidth;
+    const viewH = window.innerHeight;
+    const halfW = viewW / zoom / 2;
+    const halfH = viewH / zoom / 2;
+
+    const camX = MAP.width > halfW * 2
+      ? Math.max(halfW, Math.min(MAP.width - halfW, followPos.x))
+      : MAP.width / 2;
+    const camY = MAP.height > halfH * 2
+      ? Math.max(halfH, Math.min(MAP.height - halfH, followPos.y))
+      : MAP.height / 2;
+
+    const offsetX = viewW / 2 - camX * zoom;
+    const offsetY = viewH / 2 - camY * zoom;
+    arena.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
+
+    const screenX = offsetX + followPos.x * zoom;
+    const screenY = offsetY + followPos.y * zoom;
+    lightingEl.style.setProperty('--spot-x', screenX + 'px');
+    lightingEl.style.setProperty('--spot-y', screenY + 'px');
+    lightingEl.style.setProperty('--spot-radius', (Game.CONFIG.visionRadius * zoom) + 'px');
+  }
 
   function beginMatchUi(){
     stage.style.display = 'flex';
     Game.Input.init();
     Game.Audio.init();
     if (Game.Input.isTouchDevice) document.getElementById('hint').style.display = 'none';
-    fitToViewport();
   }
 
   function hideMatchUi(){
@@ -186,7 +212,7 @@ window.Game = window.Game || {};
     killer.state.pos.x = MAP.killer.x; killer.state.pos.y = MAP.killer.y;
     player.applyVisuals();
     killer.applyVisuals();
-    playerEl.querySelector('.label').textContent = (name || 'SOBREVIVENTE').toUpperCase();
+    playerEl.querySelector('.label').textContent = name || 'Sobrevivente';
     killer.render();
 
     beginMatchUi();
@@ -302,6 +328,7 @@ window.Game = window.Game || {};
 
       updateKillerAI(delta);
       player.render();
+      updateCamera(player.state.pos);
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
@@ -312,7 +339,7 @@ window.Game = window.Game || {};
   // =====================================================================
   // MODO ONLINE — N jogadores reais conectados via LAN ou P2P
   // =====================================================================
-  function startOnline(net, localId, roster, mapLayoutIndex){
+  function startOnline(net, localId, roster, mapLayoutIndex, resumeData){
     panel.style.display = 'none';
     const survivors = roster.filter((p) => p.role === 'survivor');
     buildWorld(survivors.length + 1, mapLayoutIndex || 0);
@@ -324,7 +351,7 @@ window.Game = window.Game || {};
       const el = charDom();
       const char = Game.createCharacter(info.role, el);
       char.applyVisuals();
-      el.querySelector('.label').textContent = info.name.toUpperCase() + (info.id === localId ? ' (você)' : '');
+      el.querySelector('.label').textContent = info.name + (info.id === localId ? ' (você)' : '');
 
       if (info.role === 'killer'){
         char.state.pos.x = MAP.killer.x;
@@ -342,6 +369,19 @@ window.Game = window.Game || {};
       if (info.role === 'survivor') entry.capture = Game.createCapture(el);
       entries.set(info.id, entry);
     });
+
+    // reconexão no meio da partida: reaplica objetivos já feitos e quem já
+    // tinha sido eliminado antes da queda, pra não voltar tudo do zero
+    if (resumeData){
+      (resumeData.doneObjectives || []).forEach((index) => {
+        const obj = objectives[index];
+        if (obj){ obj.state.done = true; obj.state.progress = 1; }
+      });
+      (resumeData.eliminatedIds || []).forEach((id) => {
+        const entry = entries.get(id);
+        if (entry){ entry.eliminated = true; entry.el.classList.add('eliminated'); }
+      });
+    }
 
     const localEntry = entries.get(localId);
     const isSurvivor = localEntry.info.role === 'survivor';
@@ -575,6 +615,7 @@ window.Game = window.Game || {};
       }
 
       localEntry.char.render();
+      updateCamera(localEntry.char.state.pos);
 
       if (now - lastStateSent > 70){
         lastStateSent = now;
@@ -590,6 +631,13 @@ window.Game = window.Game || {};
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
+  }
+
+  // reconexão: servidor manda o roster + progresso atual da partida em
+  // andamento (matchResume) em vez de matchStart — retoma de onde parou
+  // em vez de reconstruir a partida do zero.
+  function resumeOnline(net, localId, roster, mapLayoutIndex, doneObjectives, eliminatedIds){
+    startOnline(net, localId, roster, mapLayoutIndex, { doneObjectives, eliminatedIds });
   }
 
   // ---------- painel de configuração (só modo solo) ----------
@@ -628,5 +676,6 @@ window.Game = window.Game || {};
 
   Game.startSolo = startSolo;
   Game.startOnline = startOnline;
+  Game.resumeOnline = resumeOnline;
   Game.hideMatchUi = hideMatchUi;
 })();
