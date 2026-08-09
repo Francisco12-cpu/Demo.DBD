@@ -44,11 +44,14 @@ window.Game = window.Game || {};
 
     // interactPressed só deve ser passado como true quando ESTE objetivo já
     // tinha um skill check ativo antes deste frame (ver js/main.js).
-    function update(delta, playerPos, interactPressed){
+    // speedMultiplier: >1 quando há mais Sobreviventes ajudando perto do
+    // mesmo objetivo (cooperação) — 1 é o padrão (sozinho).
+    function update(delta, playerPos, interactPressed, speedMultiplier){
       if (state.done) return;
       const cfg = Game.CONFIG.objective;
       const dist = Math.hypot(playerPos.x - pos.x, playerPos.y - pos.y);
       const inRange = dist <= cfg.radius;
+      const mult = speedMultiplier || 1;
 
       if (state.skillCheck){
         const scCfg = Game.CONFIG.skillCheck;
@@ -63,7 +66,7 @@ window.Game = window.Game || {};
           }
         }
       } else if (inRange){
-        state.progress = Math.min(1, state.progress + delta / cfg.duration);
+        state.progress = Math.min(1, state.progress + (delta / cfg.duration) * mult);
         nextCheckIn -= delta;
         if (nextCheckIn <= 0 && state.progress < 1) spawnSkillCheck();
         if (state.progress >= 1) state.done = true;

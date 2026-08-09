@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
 const PASSWORD = process.env.ROOM_PASSWORD || 'dbd123';
 const MAX_SURVIVORS = 4;
-const MAP_LAYOUT_COUNT = 2; // precisa bater com Game.MAP.layouts.length em js/map.js
+const MAP_LAYOUT_COUNT = 4; // precisa bater com Game.MAP.layouts.length em js/map.js
 const RECONNECT_GRACE_MS = 25000; // tempo pra quem caiu no meio da partida voltar antes de contar como saída de vez
 
 const wss = new WebSocketServer({ port: PORT });
@@ -170,7 +170,24 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.type === 'state'){
-      // relay de posição/animação — sem validação, é um relay simples
+      // relay de posição/animação — continua confiando no cliente (não é
+      // anti-cheat de verdade), só clampa deslocamento implausível (ex:
+      // teletransporte) pra um valor generoso acima da maior velocidade
+      // possível no jogo (Investida do Assassino: 220*2.2 ≈ 484px/s)
+      const now = Date.now();
+      if (me.lastStateAt !== undefined && typeof msg.data.x === 'number' && typeof msg.data.y === 'number'){
+        const dt = Math.max((now - me.lastStateAt) / 1000, 0.03);
+        const dx = msg.data.x - me.lastX, dy = msg.data.y - me.lastY;
+        const dist = Math.hypot(dx, dy);
+        const maxDist = 700 * dt;
+        if (dist > maxDist && dist > 0){
+          const ratio = maxDist / dist;
+          msg.data = { ...msg.data, x: me.lastX + dx * ratio, y: me.lastY + dy * ratio };
+        }
+      }
+      me.lastStateAt = now;
+      me.lastX = msg.data.x;
+      me.lastY = msg.data.y;
       broadcast({ type: 'state', id, data: msg.data }, id);
       return;
     }

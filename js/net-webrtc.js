@@ -141,6 +141,22 @@ window.Game = window.Game || {};
       }
 
       if (msg.type === 'state'){
+        // mesmo clamp de deslocamento implausível do server.js (ver lá pro
+        // motivo) — aqui é o host (dentro do próprio navegador) fazendo o relay
+        const now = Date.now();
+        if (p.lastStateAt !== undefined && typeof msg.data.x === 'number' && typeof msg.data.y === 'number'){
+          const dt = Math.max((now - p.lastStateAt) / 1000, 0.03);
+          const dx = msg.data.x - p.lastX, dy = msg.data.y - p.lastY;
+          const dist = Math.hypot(dx, dy);
+          const maxDist = 700 * dt;
+          if (dist > maxDist && dist > 0){
+            const ratio = maxDist / dist;
+            msg.data = { ...msg.data, x: p.lastX + dx * ratio, y: p.lastY + dy * ratio };
+          }
+        }
+        p.lastStateAt = now;
+        p.lastX = msg.data.x;
+        p.lastY = msg.data.y;
         broadcast({ type: 'state', id, data: msg.data }, id);
         return;
       }

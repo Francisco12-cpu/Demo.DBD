@@ -12,13 +12,27 @@ window.Game = window.Game || {};
   // Assassino, funciona mesmo sem ele estar visível na tela.
 
   let ctx = null;
+  let masterGain = null;
+  let masterVolume = 1;
 
   function ensureContext(){
     if (ctx) return ctx;
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return null;
     ctx = new AudioContextClass();
+    masterGain = ctx.createGain();
+    masterGain.gain.value = masterVolume;
+    masterGain.connect(ctx.destination);
     return ctx;
+  }
+
+  // Volume master (0..1), configurável no menu de opções — persiste entre
+  // partidas via localStorage (ver js/menu.js). Afeta todos os sons daqui
+  // pra frente (todo som passa pelo masterGain em vez de ir direto pro
+  // destino final).
+  function setMasterVolume(v){
+    masterVolume = Math.max(0, Math.min(1, v));
+    if (masterGain) masterGain.gain.value = masterVolume;
   }
 
   // Precisa ser chamado a partir de um gesto do usuário (clique/toque) —
@@ -60,7 +74,7 @@ window.Game = window.Game || {};
 
     const panner = makePanner(c, panX, panZ);
 
-    osc.connect(gain).connect(panner).connect(c.destination);
+    osc.connect(gain).connect(panner).connect(masterGain);
     osc.start();
     osc.stop(c.currentTime + 0.26);
   }
@@ -114,7 +128,7 @@ window.Game = window.Game || {};
     gain.gain.setValueAtTime(0.18, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.16);
 
-    osc.connect(gain).connect(c.destination);
+    osc.connect(gain).connect(masterGain);
     osc.start();
     osc.stop(c.currentTime + 0.18);
   }
@@ -131,10 +145,28 @@ window.Game = window.Game || {};
     gain.gain.setValueAtTime(0.22, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.32);
 
-    osc.connect(gain).connect(c.destination);
+    osc.connect(gain).connect(masterGain);
     osc.start();
     osc.stop(c.currentTime + 0.34);
   }
 
-  Game.Audio = { init, updateHeartbeat, stopHeartbeat, playAttackSwing, playCaptureHit };
+  // passo curto e discreto — dá presença sonora ao jogo mesmo longe de
+  // qualquer evento (captura, ataque, batimento), sem ficar irritante
+  function playFootstep(){
+    const c = ensureContext();
+    if (!c) return;
+    const osc = c.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(90 + Math.random() * 20, c.currentTime);
+
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.05, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.08);
+
+    osc.connect(gain).connect(masterGain);
+    osc.start();
+    osc.stop(c.currentTime + 0.09);
+  }
+
+  Game.Audio = { init, updateHeartbeat, stopHeartbeat, playAttackSwing, playCaptureHit, playFootstep, setMasterVolume };
 })();

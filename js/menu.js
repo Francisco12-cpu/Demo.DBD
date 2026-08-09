@@ -10,6 +10,7 @@ window.Game = window.Game || {};
     p2pChoice: document.getElementById('menu-p2p-choice'),
     lobby: document.getElementById('menu-lobby'),
     result: document.getElementById('menu-result'),
+    settings: document.getElementById('menu-settings'),
   };
 
   function showScreen(name){
@@ -68,6 +69,58 @@ window.Game = window.Game || {};
     }
     return token;
   }
+
+  // ---------- configurações (volume + sensibilidade do joystick), persistidas ----------
+  const settingsOpenBtn = document.getElementById('menu-settings-open');
+  const settingsBackBtn = document.getElementById('settings-back');
+  const settingsVolume = document.getElementById('settings-volume');
+  const settingsJoystick = document.getElementById('settings-joystick');
+
+  function loadSettings(){
+    const volume = parseInt(localStorage.getItem('dbd_volume'), 10);
+    const joystick = parseInt(localStorage.getItem('dbd_joystick'), 10);
+    settingsVolume.value = isNaN(volume) ? 100 : volume;
+    settingsJoystick.value = isNaN(joystick) ? 100 : joystick;
+    applySettings();
+  }
+  function applySettings(){
+    Game.Audio.setMasterVolume(parseInt(settingsVolume.value, 10) / 100);
+    Game.Input.setJoystickSensitivity(parseInt(settingsJoystick.value, 10) / 100);
+  }
+  settingsVolume.addEventListener('input', () => {
+    localStorage.setItem('dbd_volume', settingsVolume.value);
+    applySettings();
+  });
+  settingsJoystick.addEventListener('input', () => {
+    localStorage.setItem('dbd_joystick', settingsJoystick.value);
+    applySettings();
+  });
+  settingsOpenBtn.addEventListener('click', () => showScreen('settings'));
+  settingsBackBtn.addEventListener('click', () => showScreen('start'));
+  loadSettings();
+
+  // ---------- progressão leve entre partidas (só contador local, sem perks) ----------
+  const menuProgressEl = document.getElementById('menu-progress');
+  const resultProgressEl = document.getElementById('result-progress');
+  function readStats(){
+    try {
+      return JSON.parse(localStorage.getItem('dbd_stats')) || { played: 0, won: 0 };
+    } catch { return { played: 0, won: 0 }; }
+  }
+  function renderStats(){
+    const stats = readStats();
+    const text = `Partidas jogadas: ${stats.played} · Vitórias: ${stats.won}`;
+    menuProgressEl.textContent = text;
+    return text;
+  }
+  function recordMatchResult(won){
+    const stats = readStats();
+    stats.played += 1;
+    if (won) stats.won += 1;
+    localStorage.setItem('dbd_stats', JSON.stringify(stats));
+    resultProgressEl.textContent = renderStats();
+  }
+  renderStats();
 
   soloBtn.addEventListener('click', () => {
     menu.style.display = 'none';
@@ -261,6 +314,7 @@ window.Game = window.Game || {};
     resultTitle.textContent = won ? 'Vitória!' : 'Derrota';
     resultTitle.className = won ? 'won' : 'lost';
     resultDetail.textContent = detail || '';
+    recordMatchResult(won);
   }
 
   resultAgain.addEventListener('click', () => {
