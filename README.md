@@ -197,9 +197,10 @@ por quem escolheu esse papel na sala.
   - [x] Camuflagem — fica invisível pro Sentido do Assassino e pro alcance
         normal de visão dele, mesmo perto (não afeta o modo solo, já que a
         IA não usa visão restrita)
-  - [x] Barricar porta — spawna uma parede temporária no vão da parede
-        central, usos limitados (2 por padrão); precisa estar perto da
-        porta pra usar
+  - [x] Trancar porta — tranca instantaneamente a porta mais perto (das
+        salas do mapa V3, ver seção `Mapa` abaixo), sem precisar canalizar
+        feito a mecânica base; usos limitados (2 por padrão); precisa estar
+        perto de alguma porta pra usar
   - [x] Distrair — solta um "ping" visual; no modo solo, a IA vai atrás
         desse ponto em vez do jogador de verdade por alguns segundos; no
         modo online é só um chamariz visual (o Assassino é humano, não dá
@@ -255,6 +256,10 @@ por quem escolheu esse papel na sala.
       presença sonora ao jogo mesmo fora de eventos de captura/ataque
 - [x] Volume master configurável (menu Configurações), persistido em
       `localStorage`; todos os sons passam por um único `GainNode` central
+- [x] Música ambiente de terror — drone grave com 2 osciladores levemente
+      destonados entre si (bate um zumbido tenso) e um LFO bem lento
+      modulando o volume tipo uma "respiração"; toca baixinho a partida
+      inteira, começa/para junto com `beginMatchUi`/`hideMatchUi`
 
 Todos os sons são **sintetizados na hora** via osciladores (sem arquivo de
 áudio, sem depender de internet) — ver `js/audio.js`. Só o Sobrevivente
@@ -281,19 +286,55 @@ joga sem fone/som ligado.
       "criar um mapa e o jogo carregar e desenhar" que é objetivo futuro
       (ver `Planos futuros` abaixo) — só falta trocar o array de paredes
       escrito à mão por um formato de tileset/arquivo de mapa carregado.
-- [x] V2: variação de mapa — `MAP.layouts` tem **4 arranjos** de obstáculos
-      (mesma parede central com porta em todos, pra `js/main.js` não
-      precisar saber qual layout está ativo na hora de barricar); sorteado
-      no início de cada partida. No modo online, quem inicia sorteia e
-      manda o índice escolhido no `matchStart`, pra todo mundo ficar no
-      mesmo mapa (`MAP_LAYOUT_COUNT` em `server/server.js` precisa bater com
-      `MAP.layouts.length` — já atualizado). Mais variações é só questão de
-      adicionar mais entradas em `MAP.layouts`, o motor de colisão não muda
-      nada — essa mesma estrutura de dados já está pronta pra um editor
-      visual carregar layouts de um arquivo em vez de escritos à mão (ver
-      `Planos futuros`, esse editor em si ainda não existe)
-- [x] Mapa dobrado de tamanho (1800×1120, era 900×560) pra caber mais
-      variedade e não ficar apertado com câmera zoom
+- [x] **V3: mapa com salas de verdade**, bem maior (3000×2000, era
+      1800×1120) — 6 "prédios" fechados (480×360 cada, 1 porta cada) num
+      campo aberto, no estilo do jogo oficial que inspirou o projeto (áreas
+      fechadas de risco/recompensa entre corredores abertos pra correr). As
+      paredes de cada sala são geradas a partir de retângulos + posição da
+      porta (`roomsToWalls` em `js/map.js`) em vez de escritas parede por
+      parede à mão — bem menos chance de errar a aritmética, e cada porta já
+      sai com o retângulo exato do vão, reaproveitado tanto pra colisão
+      (trancada vira parede de verdade) quanto pra saber quem está perto o
+      bastante pra interagir. 2 layouts (lado da porta de cada sala + os
+      obstáculos soltos do campo aberto variam; a planta das salas em si é
+      fixa) sorteados por partida, mesmo esquema de sempre pro modo online
+      (`MAP_LAYOUT_COUNT` em `server/server.js` batendo com
+      `MAP.layouts.length`)
+- [x] 8 pontos de objetivo (era 5): 4 "arriscados" dentro de sala (atrás de
+      porta) + 4 "seguros" no campo aberto — a mesma tensão risco/recompensa
+      do jogo oficial
+- [x] Essa estrutura de dados (retângulo de sala + lado da porta) já está
+      pronta pra um editor visual carregar layouts de um arquivo em vez de
+      escritos à mão (ver `Planos futuros`, esse editor em si ainda não existe)
+
+### Salas, portas e esconderijo
+- [x] **Porta trancável/arrombável** (`js/door.js`, novo): parada perto de
+      uma porta destrancada por `Game.CONFIG.door.lockDuration` segundos
+      (3s por padrão) tranca ela — vira uma parede de verdade, ninguém
+      atravessa. O Assassino **sempre** consegue arrombar ficando perto por
+      `breakDuration` segundos (2s, de propósito mais rápido que trancar,
+      pra nunca virar bloqueio permanente — só custa um tempo da
+      perseguição). No modo online, cada cliente só simula o lado que o
+      jogador local dele pode influenciar (Sobrevivente tranca, Assassino
+      arromba) e sincroniza a transição por evento de rede, mesmo padrão já
+      usado pra objetivo concluído
+- [x] A habilidade "Barricar porta" virou **"Trancar porta"**: em vez de
+      spawnar uma parede num ponto fixo do mapa, agora tranca
+      instantaneamente (sem canalizar) a porta mais próxima — usos
+      limitados continuam (2 por padrão)
+- [x] **Esconderijo** (`js/hideout.js`, novo): 1 por sala, num canto —
+      Sobrevivente entra (botão de ação) e some da visão do Assassino igual
+      à Camuflagem, de graça (sem gastar habilidade), mas não pode se mexer
+      enquanto escondido e é obrigado a sair sozinho depois de
+      `Game.CONFIG.hideout.maxDuration` segundos (14s por padrão) — ou sai
+      antes por vontade própria apertando o botão de ação de novo. No modo
+      solo, a IA do Assassino esquece a posição exata do Sobrevivente
+      escondido (mira no último lugar visto em vez de atravessar o
+      esconderijo), senão a mecânica seria inútil sozinho
+- [x] IA do Assassino no modo solo agora **arromba porta trancada** em vez
+      de só desviar dela feito qualquer parede — reaproveita o mesmo desvio
+      de obstáculo, só que prioriza arrombar quando a parede na frente é
+      uma porta
 
 ### Câmera e iluminação
 - [x] Câmera segue o jogador local em vez de encolher o mapa inteiro pra
@@ -380,6 +421,9 @@ clientes reais no modo LAN):
       voltar, conta como saída definitiva (mesmo comportamento de antes).
       Implementado igual nos dois transportes (`server/server.js` e
       `js/net-webrtc.js`), testado de ponta a ponta no modo LAN.
+      **Limitação conhecida:** o `matchResume` não carrega o estado de
+      portas trancadas/esconderijo — quem reconecta vê as portas todas
+      destrancadas de novo (cosmético, não trava nem quebra a partida).
 
 - [x] Validação básica de posição: o relay (`server/server.js` e o host em
       `js/net-webrtc.js`) clampa deslocamento implausível entre duas
@@ -415,16 +459,35 @@ trocar de host; ver `Planos futuros` pro failover completo.
   partida; ficou de fora por ser bem mais complexo de fazer direito e
   impossível de testar de ponta a ponta neste ambiente (sem saída de rede
   pro broker WebRTC).
-- **Estado "pronto" no lobby, modo "2 Assassinos" e 2ª habilidade do
-  Sobrevivente:** essas três exigiriam mudar o protocolo de sala (novos
-  tipos de mensagem/campos) nos **três** lugares que implementam o lobby
-  (`server/server.js`, `js/net-webrtc.js` host **e** join) ao mesmo tempo —
-  justamente a parte já testada de ponta a ponta e mais delicada do
-  projeto. Nesta rodada já foi uma quantidade grande de mudança de uma vez
-  só (câmera, iluminação por raycasting, spritesheet, reconexão, etc.);
-  arriscar o núcleo de sala testado por mais 3 mudanças de protocolo no
-  mesmo lote não valeu a pena — ficam anotadas pra uma próxima rodada,
-  feitas (e testadas) uma de cada vez.
+- **Estado "pronto" no lobby e 2ª habilidade do Sobrevivente:** as duas
+  exigiriam mudar o protocolo de sala (novos tipos de mensagem/campos) nos
+  **três** lugares que implementam o lobby (`server/server.js`,
+  `js/net-webrtc.js` host **e** join) ao mesmo tempo — justamente a parte
+  já testada de ponta a ponta e mais delicada do projeto. Ficam anotadas
+  pra uma próxima rodada, feitas (e testadas) uma de cada vez, em vez de
+  arriscar o núcleo de sala testado no mesmo lote de outra mudança grande.
+  **Modo "2 Assassinos"**, que eu tinha sugerido antes, foi descartado a
+  pedido direto do usuário — só 1 Assassino por partida, sempre.
+- **Armadilha e invisibilidade do Assassino:** duas habilidades novas
+  pedidas pelo usuário — a Armadilha (planta, dispara por proximidade,
+  reaproveitando o mesmo padrão client-autoritativo de porta/objetivo) e a
+  Invisibilidade (esconde o Assassino da bússola/batimento/HUD dos
+  Sobreviventes, o oposto da Camuflagem que já existe). Ficaram de fora
+  desta rodada — que já trouxe o mapa com salas/portas/esconderijo — junto
+  com a decisão de design de como o Assassino escolheria uma 3ª habilidade
+  (proposta: escolher 1 de 2 no lobby, no mesmo padrão que o Sobrevivente já
+  usa pra escolher 1 de 4).
+- **Modo espectador:** quando o Sobrevivente é eliminado e a partida ainda
+  não acabou, poder assistir a câmera de quem continua vivo em vez de só
+  travar a tela. Só faz sentido no modo online (no solo, ser capturado já
+  vai direto pro resultado).
+- **Sistema de tileset customizável:** o usuário quer poder subir o próprio
+  sprite (PNG + um arquivo de config dizendo tamanho de quadro e qual
+  animação é qual, formato já decidido com ele) em vez do sprite gerado
+  local de hoje, caindo pro gerado automaticamente se não subir nada
+  válido. É o item mais diferente dos outros (pipeline de asset novo, não
+  só mais uma habilidade) — fica pra quando os outros itens desta lista
+  estiverem prontos.
 
 ---
 

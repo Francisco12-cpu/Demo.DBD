@@ -3,79 +3,125 @@ window.Game = window.Game || {};
 (function(){
   "use strict";
 
-  // Mapa fixo V1. Puramente dados + colisão — sem referência a personagem
-  // nem ao DOM, pra não travar uma futura migração pra mapas em tileset/
-  // gerados (V2). x/y de walls é o canto superior-esquerdo (AABB).
-  // Mapa 2x maior que a V1 original (mesma planta, coordenadas dobradas) —
-  // com a câmera seguindo o personagem (ver js/main.js), não precisa mais
-  // caber inteiro na tela, então dá pra ser bem maior sem ficar tudo
-  // minúsculo no celular.
+  // Mapa V3: bem maior, com "salas" de verdade (estruturas fechadas com uma
+  // porta cada) espalhadas por um campo aberto, em vez de só obstáculos
+  // soltos — parecido com o jogo oficial que inspirou o projeto (prédios
+  // isolados + área aberta pra correr entre eles). Continua sendo só
+  // dados + colisão, sem referência a personagem/DOM (js/main.js que lê e
+  // desenha) — mesma convenção de sempre.
+  //
+  // As paredes de cada sala são geradas a partir de retângulos (ver
+  // `roomsToWalls` abaixo) em vez de escritas à mão feche-a-feche: bem
+  // menos chance de errar a aritmética de onde cada parede começa/termina,
+  // e cada porta já sai com o retângulo exato do vão, reaproveitado tanto
+  // pra colisão (quando trancada vira uma parede temporária) quanto pra
+  // saber quando um jogador está perto o bastante pra interagir com ela.
+  const THICK = 36;   // espessura das paredes das salas
+  const DOOR_SIZE = 96; // largura do vão da porta
+
+  function edgeWithGaps(walls, doors, vertical, fixedCoord, start, end, gapPositions){
+    const length = end - start;
+    const gaps = gapPositions.map((p) => start + p * length).sort((a, b) => a - b);
+    let cursor = start;
+    gaps.forEach((g) => {
+      const gapStart = g - DOOR_SIZE / 2, gapEnd = g + DOOR_SIZE / 2;
+      if (gapStart > cursor){
+        walls.push(vertical
+          ? { x: fixedCoord, y: cursor, w: THICK, h: gapStart - cursor }
+          : { x: cursor, y: fixedCoord, w: gapStart - cursor, h: THICK });
+      }
+      doors.push(vertical
+        ? { x: fixedCoord, y: gapStart, w: THICK, h: DOOR_SIZE }
+        : { x: gapStart, y: fixedCoord, w: DOOR_SIZE, h: THICK });
+      cursor = gapEnd;
+    });
+    if (cursor < end){
+      walls.push(vertical
+        ? { x: fixedCoord, y: cursor, w: THICK, h: end - cursor }
+        : { x: cursor, y: fixedCoord, w: end - cursor, h: THICK });
+    }
+  }
+
+  // rooms: [{ x, y, w, h, doors: [{ side: 'top'|'bottom'|'left'|'right', at: 0..1 }] }]
+  function roomsToWalls(rooms){
+    const walls = [];
+    const doors = [];
+    rooms.forEach((room) => {
+      const { x, y, w, h } = room;
+      const bySide = { top: [], bottom: [], left: [], right: [] };
+      room.doors.forEach((d) => bySide[d.side].push(d.at));
+      edgeWithGaps(walls, doors, false, y, x, x + w, bySide.top);
+      edgeWithGaps(walls, doors, false, y + h - THICK, x, x + w, bySide.bottom);
+      edgeWithGaps(walls, doors, true, x, y, y + h, bySide.left);
+      edgeWithGaps(walls, doors, true, x + w - THICK, y, y + h, bySide.right);
+    });
+    return { walls, doors };
+  }
+
+  // 6 salas de 480x360, em 2 fileiras de 3 — o "prédio" de cada sala é
+  // fixo entre layouts, só o lado da porta (e uns obstáculos soltos no
+  // campo aberto) muda, igual a convenção antiga de variar só as paredes.
+  const ROOM_DEF = [
+    { x: 280, y: 260, w: 480, h: 360 },   // sala 0 (topo-esquerda)
+    { x: 1180, y: 260, w: 480, h: 360 },  // sala 1 (topo-centro)
+    { x: 2080, y: 260, w: 480, h: 360 },  // sala 2 (topo-direita)
+    { x: 280, y: 1140, w: 480, h: 360 },  // sala 3 (baixo-esquerda)
+    { x: 1180, y: 1140, w: 480, h: 360 }, // sala 4 (baixo-centro)
+    { x: 2080, y: 1140, w: 480, h: 360 }, // sala 5 (baixo-direita)
+  ];
+
+  const DOOR_SIDES_BY_LAYOUT = [
+    ['right', 'bottom', 'left', 'top', 'right', 'top'],
+    ['bottom', 'left', 'bottom', 'right', 'top', 'left'],
+  ];
+
+  const LOOSE_OBSTACLES_BY_LAYOUT = [
+    [{ x: 900, y: 900, w: 200, h: 50 }, { x: 1700, y: 1650, w: 50, h: 200 }],
+    [{ x: 1900, y: 900, w: 200, h: 50 }, { x: 700, y: 1650, w: 50, h: 200 }],
+  ];
+
+  function buildRoomLayout(doorSides, looseObstacles){
+    const rooms = ROOM_DEF.map((r, i) => ({ ...r, doors: [{ side: doorSides[i], at: 0.5 }] }));
+    const { walls, doors } = roomsToWalls(rooms);
+    return { walls: walls.concat(looseObstacles), doors };
+  }
+
   const MAP = {
-    width: 1800,
-    height: 1120,
-    player: { x: 260, y: 560 },
-    killer: { x: 1640, y: 960 },
+    width: 3000,
+    height: 2000,
+    player: { x: 140, y: 140 },
+    killer: { x: 1500, y: 1000 },
     // pontos de spawn pra até 4 sobreviventes no modo online (índice = ordem de entrada)
     survivorSpawns: [
-      { x: 260, y: 560 },
-      { x: 260, y: 920 },
-      { x: 260, y: 200 },
-      { x: 600, y: 200 },
+      { x: 140, y: 140 },
+      { x: 140, y: 1860 },
+      { x: 2860, y: 140 },
+      { x: 2860, y: 1860 },
     ],
-    // vão entre os dois segmentos da parede central — onde a habilidade
-    // "Barricar porta" spawna uma parede temporária. Igual nos dois
-    // layouts (só os obstáculos soltos mudam), então não precisa de dado
-    // por layout.
-    door: { x: 880, y: 440, w: 40, h: 240 },
-    // pontos onde objetivos podem nascer; main.js usa os N primeiros,
-    // N = Game.CONFIG.survivorCount + 1
+    // 4 objetivos "arriscados" (dentro de uma sala, atrás de porta) + 4
+    // "seguros" (campo aberto) — mesma tensão do jogo oficial: objetivo
+    // dentro de prédio rende mais rápido de fazer sem ser visto, mas com
+    // só uma porta de fuga se o Assassino arrombar
     objectiveSpots: [
-      { x: 300, y: 300 },
-      { x: 1300, y: 920 },
-      { x: 600, y: 960 },
-      { x: 1560, y: 260 },
-      { x: 160, y: 960 },
+      { x: 520, y: 440 },   // sala 0
+      { x: 2320, y: 440 },  // sala 2
+      { x: 520, y: 1320 },  // sala 3
+      { x: 2320, y: 1320 }, // sala 5
+      { x: 970, y: 440 },
+      { x: 1900, y: 440 },
+      { x: 970, y: 1320 },
+      { x: 1900, y: 1320 },
     ],
-    // V2 do mapa: mais de 1 layout de obstáculos. Escolhido aleatoriamente
-    // no início de cada partida (no modo online, quem inicia sorteia e
-    // manda o índice pra todo mundo, pra ficar igual pra todo mundo — ver
-    // matchStart em server.js/net-webrtc.js).
+    // 1 esconderijo (armário/mesa) por sala, num canto — ver js/hideout.js
+    hideoutSpots: ROOM_DEF.map((r) => ({ x: r.x + 60, y: r.y + 60 })),
+    // V3 do mapa: layouts com salas de verdade. Escolhido aleatoriamente no
+    // início de cada partida (no modo online, quem inicia sorteia e manda
+    // o índice pra todo mundo — ver matchStart em server.js/net-webrtc.js).
+    // Cada layout expõe `walls` (colisão) e `doors` (retângulo do vão de
+    // cada porta — ver js/door.js pro estado de trancada/arrombada).
     layouts: [
-      {
-        walls: [
-          { x: 880, y: 60, w: 40, h: 380 },   // parede central, segmento de cima
-          { x: 880, y: 680, w: 40, h: 380 },  // parede central, segmento de baixo
-          { x: 300, y: 840, w: 220, h: 48 },  // obstáculo solto
-          { x: 1280, y: 140, w: 52, h: 260 }, // obstáculo solto
-        ],
-      },
-      {
-        walls: [
-          { x: 880, y: 60, w: 40, h: 380 },
-          { x: 880, y: 680, w: 40, h: 380 },
-          { x: 1280, y: 840, w: 220, h: 48 }, // mesmos obstáculos soltos, espelhados
-          { x: 468, y: 140, w: 52, h: 260 },
-        ],
-      },
-      {
-        walls: [
-          { x: 880, y: 60, w: 40, h: 380 },
-          { x: 880, y: 680, w: 40, h: 380 },
-          { x: 140, y: 460, w: 260, h: 44 },
-          { x: 1000, y: 200, w: 44, h: 300 },
-          { x: 1400, y: 700, w: 260, h: 44 },
-        ],
-      },
-      {
-        walls: [
-          { x: 880, y: 60, w: 40, h: 380 },
-          { x: 880, y: 680, w: 40, h: 380 },
-          { x: 500, y: 640, w: 44, h: 300 },
-          { x: 1500, y: 340, w: 44, h: 300 },
-          { x: 260, y: 120, w: 300, h: 44 },
-          { x: 1240, y: 980, w: 300, h: 44 },
-        ],
-      },
+      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[0], LOOSE_OBSTACLES_BY_LAYOUT[0]),
+      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[1], LOOSE_OBSTACLES_BY_LAYOUT[1]),
     ],
   };
 

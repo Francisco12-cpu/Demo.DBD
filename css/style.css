@@ -176,6 +176,39 @@ html,body{
   background: rgba(201,162,75,.35);
   border: 2px dashed var(--gold);
 }
+/* porta de sala (mapa V3, ver js/map.js): vão destrancado por padrão
+   (dá pra atravessar), vira uma parede de verdade quando trancada —
+   Sobrevivente tranca ficando por perto, Assassino sempre arromba de
+   volta (só custa um tempo, ver js/door.js) */
+.door{
+  position:absolute;
+  background: rgba(90,70,40,.35);
+  border: 1px dashed var(--muted);
+  box-sizing: border-box;
+}
+.door.locked{
+  background: var(--blood);
+  border: 1px solid var(--ink);
+  box-shadow: 0 2px 6px rgba(0,0,0,.5);
+}
+.door.channeling::after{
+  content:'';
+  position:absolute; inset: -6px;
+  border: 2px solid var(--gold);
+  opacity: .8;
+  clip-path: inset(0 calc(100% - var(--door-progress, 0%)) 0 0);
+}
+/* esconderijo (armário/mesa, ver js/hideout.js): só um marcador visual —
+   a interação é por proximidade + botão de ação, sem hitbox de colisão */
+.hideout-spot{
+  position:absolute;
+  width:26px; height:26px;
+  transform: translate(-50%,-50%);
+  border-radius: 4px;
+  background: rgba(60,50,70,.55);
+  border: 1px dashed var(--muted);
+}
+.char.hidden-in-spot{ opacity: .35; }
 .ping-marker{
   position:absolute;
   left:0; top:0;

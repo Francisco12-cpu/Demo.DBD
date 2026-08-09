@@ -168,5 +168,58 @@ window.Game = window.Game || {};
     osc.stop(c.currentTime + 0.09);
   }
 
-  Game.Audio = { init, updateHeartbeat, stopHeartbeat, playAttackSwing, playCaptureHit, playFootstep, setMasterVolume };
+  // ---------- música ambiente de terror ----------
+  // Drone grave e levemente destonado (2 osciladores quase na mesma nota
+  // batem entre si, criando aquele zumbido tenso) com um LFO bem lento
+  // modulando o volume, tipo uma "respiração". Sintetizado igual o resto,
+  // sem arquivo de música nenhum — toca baixinho o jogo inteiro.
+  let ambientNodes = null;
+
+  function startAmbient(){
+    const c = ensureContext();
+    if (!c || ambientNodes) return;
+
+    const gain = c.createGain();
+    gain.gain.value = 0.05;
+    gain.connect(masterGain);
+
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 260;
+    filter.connect(gain);
+
+    const oscA = c.createOscillator();
+    oscA.type = 'sawtooth';
+    oscA.frequency.value = 55;
+    oscA.connect(filter);
+
+    const oscB = c.createOscillator();
+    oscB.type = 'sawtooth';
+    oscB.frequency.value = 58; // levemente destonado de propósito, dá o clima tenso
+    oscB.connect(filter);
+
+    const lfo = c.createOscillator();
+    lfo.frequency.value = 0.07; // bem lento — uma "respiração" a cada ~14s
+    const lfoGain = c.createGain();
+    lfoGain.gain.value = 0.025;
+    lfo.connect(lfoGain).connect(gain.gain);
+
+    oscA.start();
+    oscB.start();
+    lfo.start();
+    ambientNodes = { gain, oscA, oscB, lfo };
+  }
+
+  function stopAmbient(){
+    if (!ambientNodes || !ctx) return;
+    const { gain, oscA, oscB, lfo } = ambientNodes;
+    gain.gain.setTargetAtTime(0, ctx.currentTime, 0.3);
+    setTimeout(() => { oscA.stop(); oscB.stop(); lfo.stop(); }, 500);
+    ambientNodes = null;
+  }
+
+  Game.Audio = {
+    init, updateHeartbeat, stopHeartbeat, playAttackSwing, playCaptureHit, playFootstep,
+    setMasterVolume, startAmbient, stopAmbient,
+  };
 })();
