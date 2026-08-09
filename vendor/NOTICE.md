@@ -8,3 +8,10 @@
   WebRTC direto entre navegadores sem precisar de servidor próprio rodando
   o relay — só usa o broker público gratuito da PeerJS pra fazer a conexão
   inicial entre os jogadores.
+
+## qrcode-generator (`qrcode.min.js`)
+- Versão: 2.0.4
+- Licença: MIT
+- Repositório: https://github.com/kazuhikoarase/qrcode-generator
+- Usada só pra desenhar o QR code do código da sala P2P (`js/menu.js`), pra
+  não precisar digitar o código manualmente.

@@ -34,6 +34,12 @@ window.Game = window.Game || {};
       label.textContent = cfg.label;
     }
 
+    // Sobrescreve só a cor (usado pra diferenciar vários Sobreviventes na
+    // mesma partida — não muda tipo/config, só o visual).
+    function setColorOverride(color){
+      torso.style.background = color;
+    }
+
     function setFacing(right){
       state.facingRight = right;
       el.classList.toggle('facing-left', !right);
@@ -69,7 +75,7 @@ window.Game = window.Game || {};
       el.style.top = state.pos.y + 'px';
     }
 
-    return { state, characterConfig, setType, applyVisuals, setFacing, setMoving, tryAttack, render };
+    return { state, characterConfig, setType, applyVisuals, setColorOverride, setFacing, setMoving, tryAttack, render };
   }
 
   Game.createCharacter = createCharacter;
