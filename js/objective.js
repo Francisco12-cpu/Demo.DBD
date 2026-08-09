@@ -13,7 +13,7 @@ window.Game = window.Game || {};
     const scRing = el.querySelector('.skillcheck-ring');
     const scNeedle = el.querySelector('.skillcheck-needle');
 
-    const state = { pos, progress: 0, done: false, skillCheck: null };
+    const state = { pos, progress: 0, done: false, skillCheck: null, active: false };
     let nextCheckIn = randomCheckDelay();
 
     function randomCheckDelay(){
@@ -46,35 +46,46 @@ window.Game = window.Game || {};
     // tinha um skill check ativo antes deste frame (ver js/main.js).
     // speedMultiplier: >1 quando há mais Sobreviventes ajudando perto do
     // mesmo objetivo (cooperação) — 1 é o padrão (sozinho).
+    // Retorna { justStarted, justFailed } pra quem chama avisar o Assassino
+    // (evento de rede no online, ou distrair a IA no solo) — igual ao jogo
+    // original, errar um skill check faz barulho alto e entrega a posição.
     function update(delta, playerPos, interactPressed, speedMultiplier){
-      if (state.done) return;
+      const result = { justStarted: false, justFailed: false };
+      if (state.done) return result;
       const cfg = Game.CONFIG.objective;
       const dist = Math.hypot(playerPos.x - pos.x, playerPos.y - pos.y);
       const inRange = dist <= cfg.radius;
       const mult = speedMultiplier || 1;
+      const wasActive = state.active;
 
       if (state.skillCheck){
         const scCfg = Game.CONFIG.skillCheck;
         state.skillCheck.angle += scCfg.speedDegPerSec * delta;
         if (state.skillCheck.angle >= 360){
           resolveSkillCheck(false); // deu a volta sem apertar = falhou
+          result.justFailed = true;
         } else {
           scNeedle.style.transform = `translateX(-50%) rotate(${state.skillCheck.angle}deg)`;
           if (interactPressed){
             const { angle, zoneStart, zoneEnd } = state.skillCheck;
-            resolveSkillCheck(angle >= zoneStart && angle <= zoneEnd);
+            const hit = angle >= zoneStart && angle <= zoneEnd;
+            resolveSkillCheck(hit);
+            if (!hit) result.justFailed = true;
           }
         }
       } else if (inRange){
+        if (!wasActive) result.justStarted = true;
         state.progress = Math.min(1, state.progress + (delta / cfg.duration) * mult);
         nextCheckIn -= delta;
         if (nextCheckIn <= 0 && state.progress < 1) spawnSkillCheck();
         if (state.progress >= 1) state.done = true;
       }
 
+      state.active = inRange && !state.done;
       fill.style.width = (state.progress * 100) + '%';
-      el.classList.toggle('active', inRange && !state.done);
+      el.classList.toggle('active', state.active);
       el.classList.toggle('done', state.done);
+      return result;
     }
 
     function render(){

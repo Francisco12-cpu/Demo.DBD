@@ -27,7 +27,7 @@
     <button id="menu-p2p" type="button">Multiplayer P2P (celular vira host, beta)</button>
     <button id="menu-settings-open" type="button" class="secondary">Configurações</button>
     <p id="menu-progress" class="menu-hint"></p>
-    <p class="menu-credits">Criado por Francisco Audir — @filho.af</p>
+    <p class="menu-credits">Criado por Francisco Audir — <a href="https://instagram.com/filho.af" target="_blank" rel="noopener">@filho.af</a></p>
   </div>
 
   <div class="menu-card" id="menu-settings" style="display:none">
@@ -38,6 +38,7 @@
     <label>Sensibilidade do joystick (celular)
       <input id="settings-joystick" type="range" min="50" max="200" value="100">
     </label>
+    <button id="settings-test-sound" type="button" class="secondary">🔊 Testar som</button>
     <button id="settings-back" type="button" class="secondary">Voltar</button>
   </div>
 
@@ -59,7 +60,8 @@
     <button id="p2p-host" type="button">Criar sala (virar host)</button>
     <div class="menu-error" id="p2p-host-error"></div>
     <hr>
-    <label>Código da sala <input id="p2p-code" type="text" placeholder="código de quem criou"></label>
+    <label>Código da sala <input id="p2p-code" type="text" placeholder="código de quem criou"
+      autocapitalize="off" autocorrect="off" spellcheck="false"></label>
     <label>Senha <input id="p2p-join-password" type="text" placeholder="senha da sala"></label>
     <button id="p2p-join" type="button">Entrar com código</button>
     <div class="menu-error" id="p2p-join-error"></div>
@@ -101,6 +103,7 @@
 <div id="stage">
   <div id="arena"></div>
   <canvas id="lighting"></canvas>
+  <div id="danger-vignette"></div>
 
   <div id="hud">
     <div id="title">
@@ -131,6 +134,13 @@
   </div>
 
   <div id="killer-compass"><div id="killer-compass-arrow"></div></div>
+
+  <div id="gamepad-toast"></div>
+</div>
+
+<div id="rotate-prompt">
+  <div id="rotate-icon">📱</div>
+  <p>Gire o celular pra jogar<br>— fica bem melhor deitado</p>
 </div>
 
 <div id="touch-controls">

@@ -6,6 +6,7 @@ window.Game = window.Game || {};
   const stage = document.getElementById('stage');
   const arena = document.getElementById('arena');
   const lightingEl = document.getElementById('lighting');
+  const dangerVignetteEl = document.getElementById('danger-vignette');
   const objectivesStatus = document.getElementById('objectives-status');
   const abilityHudEl = document.getElementById('ability-hud');
   const panel = document.getElementById('panel');
@@ -183,6 +184,16 @@ window.Game = window.Game || {};
     killerCompassArrowEl.style.transform = `rotate(${angleDeg + 90}deg)`;
   }
 
+  // vinheta vermelha nas bordas — reforço visual de tensão junto com o
+  // batimento cardíaco, mesma proximidade, só que sempre visível mesmo
+  // sem fone/som ligado
+  function updateDangerVignette(localPos, killerPos, maxDistance){
+    if (!killerPos){ dangerVignetteEl.style.setProperty('--danger', 0); return; }
+    const dist = Math.hypot(killerPos.x - localPos.x, killerPos.y - localPos.y);
+    const proximity = Math.max(0, 1 - dist / maxDistance);
+    dangerVignetteEl.style.setProperty('--danger', (proximity * proximity).toFixed(2));
+  }
+
   // ---------- câmera ----------
   // Em vez de encolher o mapa inteiro pra caber na tela (ficava minúsculo
   // no celular), a câmera segue o personagem local com um zoom fixo — o
@@ -216,7 +227,7 @@ window.Game = window.Game || {};
 
     const screenX = offsetX + followPos.x * zoom;
     const screenY = offsetY + followPos.y * zoom;
-    drawLighting(screenX, screenY, offsetX, offsetY, zoom);
+    drawLighting(followPos, screenX, screenY, offsetX, offsetY, zoom);
   }
 
   // ---------- iluminação por linha de visão (paredes bloqueiam a luz) ----------
@@ -276,7 +287,7 @@ window.Game = window.Game || {};
   let lightingCanvasW = 0, lightingCanvasH = 0;
   const lightingCtx = lightingEl.getContext ? lightingEl.getContext('2d') : null;
 
-  function drawLighting(followScreenX, followScreenY, offsetX, offsetY, zoom){
+  function drawLighting(followWorldPos, followScreenX, followScreenY, offsetX, offsetY, zoom){
     if (!lightingCtx) return; // navegador sem canvas: fica sem o efeito, sem quebrar o jogo
     const w = window.innerWidth, h = window.innerHeight;
     if (w !== lightingCanvasW || h !== lightingCanvasH){
@@ -287,7 +298,18 @@ window.Game = window.Game || {};
     const zoomPx = Game.CONFIG.visionRadius * zoom;
     const maxRadius = zoomPx + 220;
 
-    const segs = wallSegmentsScreen(allWalls(), offsetX, offsetY, zoom);
+    // otimização: só considera paredes que realmente podem tocar o raio
+    // máximo de visão — evita gastar tempo com paredes do outro lado do
+    // mapa (importante com mapas grandes/muitas salas) e deixa a
+    // iluminação mais leve em celulares fracos
+    const maxRadiusWorld = maxRadius / zoom;
+    const nearbyWalls = allWalls().filter((wl) => {
+      const cx = Math.max(wl.x, Math.min(followWorldPos.x, wl.x + wl.w));
+      const cy = Math.max(wl.y, Math.min(followWorldPos.y, wl.y + wl.h));
+      return Math.hypot(followWorldPos.x - cx, followWorldPos.y - cy) <= maxRadiusWorld;
+    });
+
+    const segs = wallSegmentsScreen(nearbyWalls, offsetX, offsetY, zoom);
     const poly = visibilityPolygon(followScreenX, followScreenY, segs, maxRadius);
 
     ctx.clearRect(0, 0, w, h);
@@ -323,6 +345,7 @@ window.Game = window.Game || {};
     Game.Audio.stopHeartbeat();
     Game.Audio.stopAmbient();
     killerCompassEl.classList.remove('active');
+    dangerVignetteEl.style.setProperty('--danger', 0);
   }
 
   function charDom(){
@@ -495,6 +518,7 @@ window.Game = window.Game || {};
       updateAbilityHud([{ label: abilityCfg.label, ability: survivorAbility }]);
       Game.Audio.updateHeartbeat(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
       updateKillerCompass(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
+      updateDangerVignette(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
 
       const ability1Requested = Game.Input.consumeAbility1Request();
       const attackPressed = Game.Input.consumeAttackRequest();
@@ -514,10 +538,16 @@ window.Game = window.Game || {};
           objectives.forEach((obj) => {
             const wasDone = obj.state.done;
             const hadSkillCheck = !!obj.state.skillCheck;
-            obj.update(delta, player.state.pos, hadSkillCheck && attackPressed);
+            const result = obj.update(delta, player.state.pos, hadSkillCheck && attackPressed);
             if (obj.state.done && !wasDone){
               const done = updateObjectivesStatus();
               if (done >= objectives.length) endMatch(true, 'Você completou todos os objetivos e escapou!');
+            }
+            // igual ao original: errar o skill check faz barulho alto e
+            // entrega a posição — a IA vai investigar por um tempinho
+            if (result.justFailed){
+              Game.Audio.playError();
+              distraction = { x: obj.state.pos.x, y: obj.state.pos.y, until: performance.now() + 3000 };
             }
           });
         }
@@ -731,6 +761,17 @@ window.Game = window.Game || {};
         return;
       }
 
+      if (data.kind === 'objectiveFailed'){
+        spawnPingMarker(data.x, data.y, 2.5);
+        if (!isSurvivor) Game.Audio.playError(); // o Assassino ouve o barulho alto de verdade
+        return;
+      }
+
+      if (data.kind === 'objectiveStarted'){
+        if (!isSurvivor) Game.Audio.playObjectiveStart(); // aviso discreto, sem posição
+        return;
+      }
+
       if (data.kind === 'matchEnd' && !matchOver){
         endMatch(data.result === 'survivors', data.result === 'survivors'
           ? 'Os Sobreviventes completaram os objetivos e escaparam!'
@@ -797,6 +838,7 @@ window.Game = window.Game || {};
         const killerPos = killerEntry && !killerEntry.eliminated ? killerEntry.char.state.pos : null;
         Game.Audio.updateHeartbeat(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
         updateKillerCompass(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
+        updateDangerVignette(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
       } else {
         updateAbilityHud([
           { label: Game.CONFIG.abilities.killerSense.label, ability: localAbility1 },
@@ -832,11 +874,21 @@ window.Game = window.Game || {};
               // (além de quem está preenchendo) acelera 50% o preenchimento
               const helpers = activeSurvivors().filter((e) => e !== localEntry &&
                 Math.hypot(e.char.state.pos.x - obj.state.pos.x, e.char.state.pos.y - obj.state.pos.y) <= Game.CONFIG.objective.radius).length;
-              obj.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested, 1 + helpers * 0.5);
+              const result = obj.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested, 1 + helpers * 0.5);
               if (obj.state.done && !wasDone){
                 net.sendEvent({ kind: 'objectiveDone', index });
                 checkWinFromObjectives();
               }
+              // igual ao original: errar o skill check faz barulho alto e
+              // entrega a posição pro Assassino (e marca o ponto pra
+              // todo mundo, mesma técnica do ping de Distrair)
+              if (result.justFailed){
+                spawnPingMarker(obj.state.pos.x, obj.state.pos.y, 2.5);
+                net.sendEvent({ kind: 'objectiveFailed', x: obj.state.pos.x, y: obj.state.pos.y });
+              }
+              // aviso discreto sem posição — só avisa que "algo está
+              // acontecendo em algum gerador", pedido do usuário
+              if (result.justStarted) net.sendEvent({ kind: 'objectiveStarted' });
             });
           }
 
