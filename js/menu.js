@@ -58,6 +58,17 @@ window.Game = window.Game || {};
     return (nameInput.value || '').trim().slice(0, 16) || 'Jogador';
   }
 
+  // token persistido: permite ao servidor reconhecer o mesmo jogador
+  // se a conexão cair no meio de uma partida e ele reconectar depois.
+  function reconnectToken(){
+    let token = localStorage.getItem('dbd_token');
+    if (!token){
+      token = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+      localStorage.setItem('dbd_token', token);
+    }
+    return token;
+  }
+
   soloBtn.addEventListener('click', () => {
     menu.style.display = 'none';
     Game.startSolo(playerName(), abilitySelect.value);
@@ -137,6 +148,10 @@ window.Game = window.Game || {};
         menu.style.display = 'none';
         Game.startOnline(net, localId, players, mapLayoutIndex);
       },
+      onMatchResume(msg){
+        menu.style.display = 'none';
+        Game.resumeOnline(net, localId, msg.players, msg.mapLayoutIndex, msg.doneObjectives, msg.eliminatedIds);
+      },
       onEvent(fromId, data){
         if (Game.onlineEventHandler) Game.onlineEventHandler(fromId, data);
       },
@@ -160,13 +175,13 @@ window.Game = window.Game || {};
     }
     joinError.textContent = 'Conectando...';
     hostingRoomCode = null;
-    net = Game.Net.connect({ host: hostIp, port, password, name: playerName() }, makeHandlers(joinError));
+    net = Game.Net.connect({ host: hostIp, port, password, name: playerName(), token: reconnectToken() }, makeHandlers(joinError));
   });
 
   // ---------- P2P (WebRTC, celular vira host) ----------
   p2pHostBtn.addEventListener('click', () => {
     p2pHostError.textContent = 'Criando sala...';
-    net = Game.NetWebRTC.host({ password: p2pPassword.value, name: playerName() }, makeHandlers(p2pHostError));
+    net = Game.NetWebRTC.host({ password: p2pPassword.value, name: playerName(), token: reconnectToken() }, makeHandlers(p2pHostError));
     if (net) hostingRoomCode = net.roomCode;
   });
 
@@ -178,7 +193,7 @@ window.Game = window.Game || {};
     }
     p2pJoinError.textContent = 'Conectando...';
     hostingRoomCode = null;
-    net = Game.NetWebRTC.join({ code, password: p2pJoinPassword.value, name: playerName() }, makeHandlers(p2pJoinError));
+    net = Game.NetWebRTC.join({ code, password: p2pJoinPassword.value, name: playerName(), token: reconnectToken() }, makeHandlers(p2pJoinError));
   });
 
   // Se chegou aqui por um QR code (link com ?p2p=codigo), já abre direto

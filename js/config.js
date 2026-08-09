@@ -25,6 +25,7 @@ Game.CONFIG = {
   playerRadius: 21, // raio de colisão do personagem (metade do sprite de 42px)
   killerVisionRange: 240, // px — modo online: distância normal que o Assassino enxerga um Sobrevivente sem usar Sentido
   heartbeatRange: 340, // px — modo online/solo: distância máxima em que o Sobrevivente ouve o batimento cardíaco do Assassino (funciona mesmo sem ele estar visível)
+  visionRadius: 150, // px (mundo) — raio do "spotlight" ao redor do próprio personagem; na tela vira visionRadius*zoom, então precisa ser bem menor que o alcance de câmera pra sobrar área escura
 
   // cor de cada "vaga" de Sobrevivente na partida (índice = ordem de
   // entrada/spawn) — só pra diferenciar visualmente, sem nenhuma outra

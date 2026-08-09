@@ -5,7 +5,7 @@ window.Game = window.Game || {};
 
   // Cliente WebSocket fino pro modo online. Não guarda estado de jogo —
   // só entrega mensagens recebidas via callback e expõe métodos pra mandar.
-  function connect({ host, port, password, name }, handlers){
+  function connect({ host, port, password, name, token }, handlers){
     const url = `ws://${host}:${port}`;
     let socket;
     try {
@@ -16,7 +16,7 @@ window.Game = window.Game || {};
     }
 
     socket.addEventListener('open', () => {
-      socket.send(JSON.stringify({ type: 'join', password, name }));
+      socket.send(JSON.stringify({ type: 'join', password, name, token }));
     });
 
     socket.addEventListener('message', (ev) => {
@@ -26,6 +26,7 @@ window.Game = window.Game || {};
       if (msg.type === 'joined' && handlers.onJoined) handlers.onJoined(msg.id);
       if (msg.type === 'lobby' && handlers.onLobby) handlers.onLobby(msg);
       if (msg.type === 'matchStart' && handlers.onMatchStart) handlers.onMatchStart(msg.players, msg.mapLayoutIndex);
+      if (msg.type === 'matchResume' && handlers.onMatchResume) handlers.onMatchResume(msg);
       if (msg.type === 'state' && handlers.onState) handlers.onState(msg.id, msg.data);
       if (msg.type === 'event' && handlers.onEvent) handlers.onEvent(msg.id, msg.data);
       if (msg.type === 'playerLeft' && handlers.onPlayerLeft) handlers.onPlayerLeft(msg.id);

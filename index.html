@@ -85,25 +85,26 @@
 </div>
 
 <div id="stage">
-  <div id="arena">
-    <div id="hud">
-      <div id="title">
-        <b>Assassino vs Sobreviventes</b>protótipo — movimento, mapa e objetivos
-        <div id="objectives-status">Objetivos: 0/0</div>
-        <div id="ability-hud"></div>
+  <div id="arena"></div>
+  <div id="lighting"></div>
+
+  <div id="hud">
+    <div id="title">
+      <b>Assassino vs Sobreviventes</b>protótipo — movimento, mapa e objetivos
+      <div id="objectives-status">Objetivos: 0/0</div>
+      <div id="ability-hud"></div>
+    </div>
+    <div id="panel">
+      <div><b>Configurar personagem</b></div>
+      <div class="row">
+        <span>Tipo:</span>
+        <button id="btn-survivor" class="active">Sobrevivente</button>
+        <button id="btn-killer">Assassino</button>
       </div>
-      <div id="panel">
-        <div><b>Configurar personagem</b></div>
-        <div class="row">
-          <span>Tipo:</span>
-          <button id="btn-survivor" class="active">Sobrevivente</button>
-          <button id="btn-killer">Assassino</button>
-        </div>
-        <div class="row">
-          <span>Velocidade:</span>
-          <input id="speed" type="range" min="60" max="360" value="180">
-          <span id="speed-val">180</span>
-        </div>
+      <div class="row">
+        <span>Velocidade:</span>
+        <input id="speed" type="range" min="60" max="360" value="180">
+        <span id="speed-val">180</span>
       </div>
     </div>
   </div>

@@ -265,6 +265,23 @@ ouve o próprio batimento).
       mesmo mapa. Ainda não é aleatoriedade "de verdade" (só 2 opções
       fixas) — mais variações é questão de adicionar mais entradas em
       `MAP.layouts`, o motor de colisão não muda nada
+- [x] Mapa dobrado de tamanho (1800×1120, era 900×560) pra caber mais
+      variedade e não ficar apertado com câmera zoom
+
+### Câmera e iluminação
+- [x] Câmera segue o jogador local em vez de encolher o mapa inteiro pra
+      caber na tela — resolve o bug do celular em retrato onde o personagem
+      ficava minúsculo e sobrava borda preta em cima/embaixo. Zoom maior no
+      celular (1.7x) que no desktop (1.3x), travado nas bordas do mapa
+      (`updateCamera` em `js/main.js`)
+- [x] Iluminação/raio de visão pra **todo mundo**, não só pro Assassino: um
+      overlay (`#lighting`, `radial-gradient` acompanhando a posição do
+      personagem local na tela) escurece tudo fora de um raio curto
+      (`Game.CONFIG.visionRadius`), então só dá pra ver o que está perto —
+      vale pro Assassino e pros Sobreviventes igual
+- [x] Legibilidade da fonte: rótulo do nome não força mais maiúsculas
+      (`text-transform` removido), fonte maior e com contorno/sombra pra
+      distinguir maiúscula de minúscula de longe
 
 ### Multiplayer
 Local (mesmo teclado) foi cortado do escopo por pedido do usuário — o foco
@@ -285,13 +302,11 @@ habilidade, início de partida) e a mesma sincronização de jogo por trás
       internet no instante de conectar (usa o broker público e gratuito
       `0.peerjs.com`, só pra o "aperto de mão" inicial); o jogo em si troca
       dados direto celular-a-celular depois disso.
-  - **Não testado de ponta a ponta com dispositivos reais** — o ambiente
-    onde isso foi desenvolvido bloqueia conexão de saída com
-    `0.peerjs.com` (política de rede do sandbox, sem WebSocket pra fora da
-    lista liberada), então só deu pra validar por revisão de código
-    cuidadosa + o fato de reaproveitar a mesma lógica de sala já testada no
-    modo LAN. Recomendo testar com 2 celulares de verdade antes de confiar
-    nisso pra uma partida importante.
+  - O ambiente onde isso foi desenvolvido bloqueia conexão de saída com
+    `0.peerjs.com` (política de rede do sandbox), então aqui só deu pra
+    validar por revisão de código + reaproveitamento da mesma lógica de
+    sala já testada no modo LAN — mas já foi **testado com celulares reais
+    pelo usuário** e confirmado funcionando.
 
 Funcionalidades comuns aos dois modos (testadas de ponta a ponta com 2+
 clientes reais no modo LAN):
@@ -309,14 +324,27 @@ clientes reais no modo LAN):
       página nem precisar reentrar com IP/código/senha (`net.rematch()`)
 - [x] Se o Assassino sair no meio da partida, os Sobreviventes vencem por
       desistência em vez da partida travar
+- [x] Reconexão no meio da partida: cada cliente guarda um token
+      (`localStorage`) e reenvia no `join`; se a conexão cair durante uma
+      partida em andamento, o host/servidor guarda o lugar desse jogador por
+      25s (`RECONNECT_GRACE_MS`) esperando o mesmo token voltar — aí manda
+      `matchResume` com o progresso atual (objetivos já feitos, quem já foi
+      eliminado) em vez de `matchStart`, e quem reconectou volta pro
+      **mesmo personagem/cor**, não pra estaca zero. Passado esse tempo sem
+      voltar, conta como saída definitiva (mesmo comportamento de antes).
+      Implementado igual nos dois transportes (`server/server.js` e
+      `js/net-webrtc.js`), testado de ponta a ponta no modo LAN.
 
 **Limitações conhecidas (simplificações de propósito, não bugs):** é um
 relay simples sem validação/anti-cheat (confia nos clientes — ok pra jogar
 com amigos, não pra torneio competitivo); cada objetivo só conta o
 progresso de quem está fisicamente perto dele (sem "encher mais rápido"
 cooperativamente com vários Sobreviventes no mesmo objetivo); no modo P2P,
-se o host fechar a aba, a sala inteira cai junto (ele é o servidor) — não
-tem um "trocar de host" automático.
+se o host fechar a aba de vez, a sala inteira cai junto (ele é o servidor)
+— não tem eleição automática de um novo host. O que existe é resiliência a
+quedas curtas de conexão com o broker de sinalização (`peer.on('disconnected',
+() => peer.reconnect())`), que mantém a mesma sala/código no ar sem precisar
+trocar de host; ver `Planos futuros` pro failover completo.
 
 ---
 
@@ -329,18 +357,20 @@ tem um "trocar de host" automático.
   projeto não teve acesso à internet pra buscar arte pronta durante o
   desenvolvimento, por isso o sprite atual foi gerado por script
   (`assets/character-mask.png`, ver `Convenções de código`).
-- **Reconexão de jogador (não só o Assassino):** hoje quem cai não volta —
-  fica marcado como eliminado/saiu. Reconectar no meio da partida (mesmo
-  papel, mesma posição) é mais complexo e ficou de fora.
 - **Sistema de mapa "criar e carregar":** hoje `js/map.js` já é 100% dados
   (paredes por layout) separado da lógica de jogo — é a base certa pra
   evoluir pra: desenhar/exportar um mapa em uma ferramenta (ex: Tiled) e o
   jogo só carregar esse arquivo e desenhar em cima, em vez de ter os
   arrays de paredes escritos à mão como hoje (só 2 layouts fixos). Trocar o
   "conteúdo" do mapa sem mexer no motor de colisão/jogo.
-- **Failover de host no modo P2P:** se quem hospedou a sala cair, hoje a
-  sala inteira cai; eleger outro jogador como novo host automaticamente
-  seria o próximo passo, mas é bem mais complexo de fazer direito.
+- **Failover de host de verdade no modo P2P:** hoje só existe reconexão ao
+  broker de sinalização em quedas curtas (a sala/código continuam os
+  mesmos). Se a aba de quem hospedou fechar de vez, a sala cai — eleger
+  outro jogador como novo host automaticamente exigiria replicar todo o
+  estado da sala em mais de um cliente e sincronizar a troca no meio da
+  partida; ficou de fora por ser bem mais complexo de fazer direito e
+  impossível de testar de ponta a ponta neste ambiente (sem saída de rede
+  pro broker WebRTC).
 
 ---
 

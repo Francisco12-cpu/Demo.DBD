@@ -6,31 +6,35 @@ window.Game = window.Game || {};
   // Mapa fixo V1. Puramente dados + colisão — sem referência a personagem
   // nem ao DOM, pra não travar uma futura migração pra mapas em tileset/
   // gerados (V2). x/y de walls é o canto superior-esquerdo (AABB).
+  // Mapa 2x maior que a V1 original (mesma planta, coordenadas dobradas) —
+  // com a câmera seguindo o personagem (ver js/main.js), não precisa mais
+  // caber inteiro na tela, então dá pra ser bem maior sem ficar tudo
+  // minúsculo no celular.
   const MAP = {
-    width: 900,
-    height: 560,
-    player: { x: 130, y: 280 },
-    killer: { x: 820, y: 480 },
+    width: 1800,
+    height: 1120,
+    player: { x: 260, y: 560 },
+    killer: { x: 1640, y: 960 },
     // pontos de spawn pra até 4 sobreviventes no modo online (índice = ordem de entrada)
     survivorSpawns: [
-      { x: 130, y: 280 },
-      { x: 130, y: 460 },
-      { x: 130, y: 100 },
-      { x: 300, y: 100 },
+      { x: 260, y: 560 },
+      { x: 260, y: 920 },
+      { x: 260, y: 200 },
+      { x: 600, y: 200 },
     ],
     // vão entre os dois segmentos da parede central — onde a habilidade
     // "Barricar porta" spawna uma parede temporária. Igual nos dois
     // layouts (só os obstáculos soltos mudam), então não precisa de dado
     // por layout.
-    door: { x: 440, y: 220, w: 20, h: 120 },
+    door: { x: 880, y: 440, w: 40, h: 240 },
     // pontos onde objetivos podem nascer; main.js usa os N primeiros,
     // N = Game.CONFIG.survivorCount + 1
     objectiveSpots: [
-      { x: 150, y: 150 },
-      { x: 650, y: 460 },
-      { x: 300, y: 480 },
-      { x: 780, y: 130 },
-      { x: 80, y: 480 },
+      { x: 300, y: 300 },
+      { x: 1300, y: 920 },
+      { x: 600, y: 960 },
+      { x: 1560, y: 260 },
+      { x: 160, y: 960 },
     ],
     // V2 do mapa: mais de 1 layout de obstáculos. Escolhido aleatoriamente
     // no início de cada partida (no modo online, quem inicia sorteia e
@@ -39,18 +43,18 @@ window.Game = window.Game || {};
     layouts: [
       {
         walls: [
-          { x: 440, y: 30, w: 20, h: 190 },   // parede central, segmento de cima
-          { x: 440, y: 340, w: 20, h: 190 },  // parede central, segmento de baixo
-          { x: 150, y: 420, w: 110, h: 24 },  // obstáculo solto
-          { x: 640, y: 70, w: 26, h: 130 },   // obstáculo solto
+          { x: 880, y: 60, w: 40, h: 380 },   // parede central, segmento de cima
+          { x: 880, y: 680, w: 40, h: 380 },  // parede central, segmento de baixo
+          { x: 300, y: 840, w: 220, h: 48 },  // obstáculo solto
+          { x: 1280, y: 140, w: 52, h: 260 }, // obstáculo solto
         ],
       },
       {
         walls: [
-          { x: 440, y: 30, w: 20, h: 190 },
-          { x: 440, y: 340, w: 20, h: 190 },
-          { x: 640, y: 420, w: 110, h: 24 },  // mesmos obstáculos soltos, espelhados
-          { x: 234, y: 70, w: 26, h: 130 },
+          { x: 880, y: 60, w: 40, h: 380 },
+          { x: 880, y: 680, w: 40, h: 380 },
+          { x: 1280, y: 840, w: 220, h: 48 }, // mesmos obstáculos soltos, espelhados
+          { x: 468, y: 140, w: 52, h: 260 },
         ],
       },
     ],
