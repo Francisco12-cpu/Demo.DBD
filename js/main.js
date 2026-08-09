@@ -14,11 +14,12 @@ window.Game = window.Game || {};
 
   let objectives = [];
   let doors = [];
+  let gates = [];
   let currentLayoutWalls = [];
 
-  // ---------- mundo (mapa + objetivos + portas + esconderijos), compartilhado entre solo e online ----------
+  // ---------- mundo (mapa + objetivos + portas + esconderijos + portões), compartilhado entre solo e online ----------
   function buildWorld(objectiveCount, layoutIndex){
-    arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .door, .hideout-spot').forEach((n) => n.remove());
+    arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .door, .hideout-spot, .gate').forEach((n) => n.remove());
     arena.style.width = MAP.width + 'px';
     arena.style.height = MAP.height + 'px';
 
@@ -51,6 +52,16 @@ window.Game = window.Game || {};
       div.style.left = spot.x + 'px';
       div.style.top = spot.y + 'px';
       arena.appendChild(div);
+    });
+
+    gates = MAP.gateSpots.map((spot) => {
+      const div = document.createElement('div');
+      div.className = 'gate';
+      div.style.left = spot.x + 'px';
+      div.style.top = spot.y + 'px';
+      div.innerHTML = '<div class="gate-progress"></div>';
+      arena.appendChild(div);
+      return Game.createGate(spot, div);
     });
 
     const count = Math.min(objectiveCount, MAP.objectiveSpots.length);
@@ -89,6 +100,12 @@ window.Game = window.Game || {};
       if (dist <= maxDist && dist < bestDist){ best = spot; bestDist = dist; }
     });
     return best;
+  }
+
+  // true se pos está perto o bastante de um portão JÁ ABERTO pra escapar
+  // por ele (raio menor que o de canalizar — precisa realmente chegar lá)
+  function nearOpenGate(pos){
+    return gates.some((g) => g.state.open && Math.hypot(pos.x - g.state.pos.x, pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius * 0.5);
   }
 
   function updateObjectivesStatus(){
@@ -368,7 +385,7 @@ window.Game = window.Game || {};
   // =====================================================================
   function startSolo(name, abilityKey){
     panel.style.display = '';
-    buildWorld(Game.CONFIG.survivorCount + 1, randomLayoutIndex());
+    buildWorld(Game.CONFIG.generatorCount, randomLayoutIndex());
 
     const playerEl = charDom();
     const killerEl = charDom();
@@ -376,7 +393,9 @@ window.Game = window.Game || {};
     const killer = Game.createCharacter('killer', killerEl);
     const capture = Game.createCapture(playerEl);
     const hideout = Game.createHideout();
+    const health = Game.createHealth(playerEl);
     let lastKnownPlayerPos = { x: MAP.player.x, y: MAP.player.y };
+    let gatesActive = false; // vira true quando os 5 geradores terminam
 
     const abilityCfg = Game.CONFIG.abilities.survivor[abilityKey] || Game.CONFIG.abilities.survivor.sprint;
     const survivorAbility = Game.createAbility(abilityCfg);
@@ -410,12 +429,24 @@ window.Game = window.Game || {};
     function attemptKillerHit(){
       const dx = player.state.pos.x - killer.state.pos.x;
       const dy = player.state.pos.y - killer.state.pos.y;
-      if (Math.hypot(dx, dy) <= killer.characterConfig().attackRange){
-        Game.Audio.playCaptureHit();
-        capture.start((result) => {
-          if (result === 'eliminated') endMatch(false, 'Você foi capturado pelo Assassino.');
-        });
+      if (Math.hypot(dx, dy) > killer.characterConfig().attackRange) return;
+      if (capture.state.captured || capture.state.eliminated) return; // já caído, o golpe não faz mais nada
+
+      // 1º golpe machuca (fica ferido, mais lento, dá pra curar sozinho);
+      // só o 2º derruba de vez (aí sim entra a struggle bar de sempre) —
+      // igual ao jogo original em vez de cair capturado de primeira
+      if (!health.state.injured){
+        Game.Audio.playAttackSwing();
+        health.hit();
+        playerEl.classList.add('hit-flash');
+        setTimeout(() => playerEl.classList.remove('hit-flash'), 200);
+        return;
       }
+
+      Game.Audio.playCaptureHit();
+      capture.start((result) => {
+        if (result === 'eliminated') endMatch(false, 'Você foi capturado pelo Assassino.');
+      });
     }
 
     // desvio de obstáculo simples: quando a IA fica "colada" numa parede (mal
@@ -541,7 +572,10 @@ window.Game = window.Game || {};
             const result = obj.update(delta, player.state.pos, hadSkillCheck && attackPressed);
             if (obj.state.done && !wasDone){
               const done = updateObjectivesStatus();
-              if (done >= objectives.length) endMatch(true, 'Você completou todos os objetivos e escapou!');
+              if (done >= objectives.length && !gatesActive){
+                gatesActive = true;
+                objectivesStatus.textContent = 'Geradores prontos! Ache um portão pra escapar.';
+              }
             }
             // igual ao original: errar o skill check faz barulho alto e
             // entrega a posição — a IA vai investigar por um tempinho
@@ -552,6 +586,14 @@ window.Game = window.Game || {};
           });
         }
 
+        gates.forEach((g) => {
+          const near = Math.hypot(player.state.pos.x - g.state.pos.x, player.state.pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius;
+          g.progressOpen(delta, near, gatesActive);
+        });
+        if (gatesActive && nearOpenGate(player.state.pos)){
+          endMatch(true, 'Você escapou pelo portão!');
+        }
+
         doors.forEach((d) => {
           const near = Math.hypot(player.state.pos.x - d.center.x, player.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
           d.progressLock(delta, near);
@@ -559,10 +601,13 @@ window.Game = window.Game || {};
 
         if (!player.state.isAttacking){
           const dir = Game.Input.readMovement();
+          const standingStill = Math.hypot(dir.x, dir.y) <= 0.05;
+          health.update(delta, standingStill);
+
           const sprintActive = abilityKey === 'sprint' && survivorAbility.state.activeLeft > 0;
-          const speed = sprintActive
-            ? player.characterConfig().speed * Game.CONFIG.abilities.survivor.sprint.speedMultiplier
-            : undefined;
+          let speed = player.characterConfig().speed;
+          if (health.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
+          if (sprintActive) speed *= Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
           const moved = moveTowards(player.state, player.characterConfig(), dir, delta, speed);
           player.setFacing(player.state.facingRight);
           player.setMoving(moved);
@@ -591,7 +636,7 @@ window.Game = window.Game || {};
   function startOnline(net, localId, roster, mapLayoutIndex, resumeData){
     panel.style.display = 'none';
     const survivors = roster.filter((p) => p.role === 'survivor');
-    buildWorld(survivors.length + 1, mapLayoutIndex || 0);
+    buildWorld(Game.CONFIG.generatorCount, mapLayoutIndex || 0);
 
     const entries = new Map(); // id -> { info, char, el, capture?, eliminated, camouflaged }
     let survivorIndex = 0;
@@ -614,10 +659,11 @@ window.Game = window.Game || {};
       }
       char.render();
 
-      const entry = { info, char, el, eliminated: false, camouflaged: false };
+      const entry = { info, char, el, eliminated: false, escaped: false, camouflaged: false };
       if (info.role === 'survivor'){
         entry.capture = Game.createCapture(el);
         entry.hideout = Game.createHideout();
+        entry.health = Game.createHealth(el);
       }
       entries.set(info.id, entry);
     });
@@ -650,6 +696,7 @@ window.Game = window.Game || {};
     Game.Input.setAbilityButtonsVisible(true, !isSurvivor);
     const matchStartAt = performance.now();
     let lastStepAt = 0;
+    let gatesActive = false; // vira true quando os 5 geradores terminam (todo mundo calcula igual, é só olhar objectives.state.done, já sincronizado)
 
     let matchOver = false;
     function endMatch(won, detail, announce){
@@ -661,23 +708,33 @@ window.Game = window.Game || {};
       const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
       const doneCount = updateObjectivesStatus();
       const aliveCount = activeSurvivors().length;
-      const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length} · Sobreviventes vivos: ${aliveCount}/${survivors.length}`;
+      const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length} · Sobreviventes restantes: ${aliveCount}/${survivors.length}`;
       Game.Menu.showResult(localWon, fullDetail, null); // "jogar de novo" online volta pro lobby (ver menu.js)
     }
 
+    // "ativos" = ainda em jogo (não eliminados nem já escaparam) — só esses
+    // continuam sendo perseguidos/capturáveis
     function activeSurvivors(){
-      return [...entries.values()].filter((e) => e.info.role === 'survivor' && !e.eliminated);
+      return [...entries.values()].filter((e) => e.info.role === 'survivor' && !e.eliminated && !e.escaped);
     }
 
     function checkWinFromObjectives(){
       const done = updateObjectivesStatus();
-      if (done >= objectives.length){
-        endMatch(true, 'Os Sobreviventes completaram os objetivos e escaparam!', true);
+      if (done >= objectives.length && !gatesActive){
+        gatesActive = true;
+        if (isSurvivor) objectivesStatus.textContent = 'Geradores prontos! Ache um portão pra escapar.';
       }
     }
 
-    function checkWinFromCaptures(){
-      if (survivors.length > 0 && activeSurvivors().length === 0){
+    // partida resolve quando não sobra ninguém "ativo" — ou todo mundo foi
+    // capturado (Assassino vence) ou o resto escapou (Sobreviventes vencem,
+    // mesmo que nem todos tenham conseguido)
+    function checkMatchResolution(){
+      if (survivors.length === 0 || activeSurvivors().length > 0) return;
+      const escapedCount = [...entries.values()].filter((e) => e.info.role === 'survivor' && e.escaped).length;
+      if (escapedCount > 0){
+        endMatch(true, `Os Sobreviventes escaparam! (${escapedCount}/${survivors.length})`, true);
+      } else {
         endMatch(false, 'O Assassino capturou todos os Sobreviventes.', true);
       }
     }
@@ -692,6 +749,7 @@ window.Game = window.Game || {};
       entry.char.setMoving(data.moving);
       entry.char.render();
       entry.camouflaged = !!data.camouflaged;
+      entry.el.classList.toggle('injured', !!data.injured);
     };
 
     Game.onlinePlayerLeftHandler = function(id){
@@ -699,7 +757,7 @@ window.Game = window.Game || {};
       if (!entry) return;
       entry.eliminated = true;
       entry.el.classList.add('eliminated');
-      if (entry.info.role === 'survivor') checkWinFromCaptures();
+      if (entry.info.role === 'survivor') checkMatchResolution();
       if (entry.info.role === 'killer'){
         endMatch(true, 'O Assassino saiu da partida — Sobreviventes vencem por desistência.', true);
       }
@@ -708,13 +766,23 @@ window.Game = window.Game || {};
     Game.onlineEventHandler = function(fromId, data){
       if (!data) return;
 
+      // 1º golpe machuca (fica ferido, mais lento, dá pra curar sozinho);
+      // só o 2º derruba de vez — decidido no cliente de quem foi atingido,
+      // já que só ele sabe seu próprio estado de vida sem atraso de rede
       if (data.kind === 'captureStart' && data.targetId === localId && localEntry.capture){
+        if (localEntry.health && !localEntry.health.state.injured){
+          Game.Audio.playAttackSwing();
+          localEntry.health.hit();
+          localEntry.el.classList.add('hit-flash');
+          setTimeout(() => localEntry.el.classList.remove('hit-flash'), 200);
+          return;
+        }
         Game.Audio.playCaptureHit();
         localEntry.capture.start((result) => {
           net.sendEvent({ kind: 'struggleResult', playerId: localId, result });
           if (result === 'eliminated'){
             localEntry.eliminated = true;
-            checkWinFromCaptures();
+            checkMatchResolution();
           }
         });
         return;
@@ -726,8 +794,22 @@ window.Game = window.Game || {};
         if (data.result === 'eliminated'){
           entry.eliminated = true;
           entry.el.classList.add('eliminated');
-          checkWinFromCaptures();
+          checkMatchResolution();
         }
+        return;
+      }
+
+      if (data.kind === 'gateOpened'){
+        if (gates[data.index]) gates[data.index].setOpen(true);
+        return;
+      }
+
+      if (data.kind === 'survivorEscaped'){
+        const entry = entries.get(data.playerId);
+        if (!entry || entry.escaped) return;
+        entry.escaped = true;
+        entry.el.classList.add('escaped');
+        checkMatchResolution();
         return;
       }
 
@@ -774,7 +856,7 @@ window.Game = window.Game || {};
 
       if (data.kind === 'matchEnd' && !matchOver){
         endMatch(data.result === 'survivors', data.result === 'survivors'
-          ? 'Os Sobreviventes completaram os objetivos e escaparam!'
+          ? 'Os Sobreviventes escaparam!'
           : 'O Assassino capturou todos os Sobreviventes.', false);
       }
     };
@@ -852,7 +934,7 @@ window.Game = window.Game || {};
       const ability2Requested = !isSurvivor && Game.Input.consumeAbility2Request();
 
       const captured = isSurvivor && localEntry.capture.state.captured;
-      const eliminated = isSurvivor && localEntry.capture.state.eliminated;
+      const eliminated = isSurvivor && (localEntry.capture.state.eliminated || localEntry.escaped);
 
       if (captured){
         if (attackRequested) localEntry.capture.pulse();
@@ -896,6 +978,17 @@ window.Game = window.Game || {};
             const near = Math.hypot(localEntry.char.state.pos.x - d.center.x, localEntry.char.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
             if (d.progressLock(delta, near)) net.sendEvent({ kind: 'doorLocked', index });
           });
+
+          gates.forEach((g, index) => {
+            const near = Math.hypot(localEntry.char.state.pos.x - g.state.pos.x, localEntry.char.state.pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius;
+            if (g.progressOpen(delta, near, gatesActive)) net.sendEvent({ kind: 'gateOpened', index });
+          });
+          if (gatesActive && nearOpenGate(localEntry.char.state.pos)){
+            localEntry.escaped = true;
+            localEntry.el.classList.add('escaped');
+            net.sendEvent({ kind: 'survivorEscaped', playerId: localId });
+            checkMatchResolution();
+          }
         } else {
           if (ability1Requested) localAbility1.trigger();
           if (ability2Requested) localAbility2.trigger();
@@ -912,11 +1005,13 @@ window.Game = window.Game || {};
         if (!localEntry.char.state.isAttacking){
           const dir = Game.Input.readMovement();
           const cfg = localEntry.char.characterConfig();
-          let speed;
+          if (isSurvivor) localEntry.health.update(delta, Math.hypot(dir.x, dir.y) <= 0.05);
+          let speed = cfg.speed;
+          if (isSurvivor && localEntry.health.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
           if (isSurvivor && localAbilityKey === 'sprint' && localAbility1.state.activeLeft > 0){
-            speed = cfg.speed * Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
+            speed *= Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
           } else if (!isSurvivor && localAbility2.state.activeLeft > 0){
-            speed = cfg.speed * Game.CONFIG.abilities.killerDash.speedMultiplier;
+            speed *= Game.CONFIG.abilities.killerDash.speedMultiplier;
           }
           const moved = moveTowards(localEntry.char.state, cfg, dir, delta, speed);
           localEntry.char.setFacing(localEntry.char.state.facingRight);
@@ -941,6 +1036,7 @@ window.Game = window.Game || {};
           facingRight: localEntry.char.state.facingRight,
           moving: localEntry.el.classList.contains('running'),
           camouflaged: isSurvivor && ((localAbilityKey === 'camouflage' && localAbility1.state.activeLeft > 0) || localEntry.hideout.state.hidden),
+          injured: isSurvivor && localEntry.health.state.injured,
         });
       }
 

@@ -14,7 +14,7 @@ Game.CONFIG = {
       label: 'SOBREVIVENTE',
     },
     killer: {
-      speed: 220,
+      speed: 205, // era 220 (+22%); +14% sobre o Sobrevivente agora, proporção mais perto do jogo original
       color: '--killer',
       label: 'ASSASSINO',
       attackCooldown: 600, // ms
@@ -32,12 +32,15 @@ Game.CONFIG = {
   // diferença de gameplay entre eles
   survivorColors: ['#3f8f6f', '#4a90c2', '#c2934a', '#a15fc7'],
 
-  // objetivos = sobreviventes + 1 (regra do README). Só existe 1 jogador
-  // local por enquanto, então isso vira variável assim que houver mais.
+  // 1 jogador local no modo solo (a IA é o Assassino)
   survivorCount: 1,
+  // geradores fixos em 5, igual ao jogo original — não escala mais com o
+  // número de Sobreviventes (era sobreviventes+1); MAP.objectiveSpots tem
+  // 8 pontos disponíveis, os 5 primeiros são usados
+  generatorCount: 5,
   objective: {
     radius: 70,   // px — distância máxima do centro do objetivo pra progredir
-    duration: 4,  // segundos parado por perto pra completar 0% -> 100%
+    duration: 35, // segundos parado por perto pra completar 0% -> 100% (era 4 — partida durava segundos)
   },
 
   // skill check circular (estilo DBD): dispara de vez em quando enquanto o
@@ -62,6 +65,24 @@ Game.CONFIG = {
   },
 
   maxSurvivors: 4, // limite de sobreviventes por partida (modo online)
+
+  // sistema de vida (js/health.js): 1º golpe do Assassino machuca (fica
+  // mais lento, sangrando, dá pra curar sozinho parado); só o 2º golpe
+  // derruba de vez (aí sim entra a barra de struggle de js/capture.js) —
+  // igual ao jogo original em vez de cair capturado no primeiro toque
+  health: {
+    injuredSpeedMultiplier: 0.85,
+    healDuration: 10, // segundos parado pra curar sozinho (ferido -> saudável)
+  },
+
+  // portão de saída (js/gate.js): só pode ser aberto depois que todos os
+  // geradores forem concluídos. Sobrevivente canaliza parado perto por
+  // `openDuration`; uma vez aberto, fica aberto pro resto da partida —
+  // qualquer Sobrevivente que chegar perto depois disso escapa na hora
+  gate: {
+    radius: 130,
+    openDuration: 15,
+  },
 
   // portas das salas (js/door.js): Sobrevivente tranca ficando perto (sem o
   // Assassino por perto) por `lockDuration`; o Assassino sempre consegue

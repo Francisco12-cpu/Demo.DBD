@@ -114,6 +114,12 @@ window.Game = window.Game || {};
     ],
     // 1 esconderijo (armário/mesa) por sala, num canto — ver js/hideout.js
     hideoutSpots: ROOM_DEF.map((r) => ({ x: r.x + 60, y: r.y + 60 })),
+    // 2 portões de saída, em bordas opostas do mapa, longe de qualquer sala
+    // — só podem ser abertos depois que os 5 geradores terminarem (ver js/gate.js)
+    gateSpots: [
+      { x: 1500, y: 100 },
+      { x: 1500, y: 1900 },
+    ],
     // V3 do mapa: layouts com salas de verdade. Escolhido aleatoriamente no
     // início de cada partida (no modo online, quem inicia sorteia e manda
     // o índice pra todo mundo — ver matchStart em server.js/net-webrtc.js).

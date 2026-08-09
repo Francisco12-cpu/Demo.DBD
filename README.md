@@ -157,7 +157,8 @@ escopo (não do jeito "ainda não fizemos", e sim "não vamos fazer por agora").
 - [ ] Sobreviventes escolhem 1 habilidade adicional no menu antes de entrar
 
 ### Assassino (1 jogador por partida)
-- [x] Mais rápido que os Sobreviventes (velocidade maior, configurável)
+- [x] Mais rápido que os Sobreviventes (205 vs 180, ~+14% — era +22%,
+      ajustado pra ficar mais perto da proporção do jogo original)
 - [x] Ataque básico: espada curta — exige estar bem perto do alvo (**só o
       Assassino ataca** — Sobrevivente não tem nenhum ataque, por decisão
       do usuário: "eu sou sobrevivente, não é pra ter ataque")
@@ -189,8 +190,9 @@ quina. No **modo online** o Assassino é um jogador de verdade, controlado
 por quem escolheu esse papel na sala.
 
 ### Sobreviventes (até 4 jogadores por partida)
-- [x] Velocidade base mais lenta que o Assassino (180 vs 220,
-      `Game.CONFIG.characters`)
+- [x] Velocidade base mais lenta que o Assassino (180 vs 205,
+      `Game.CONFIG.characters`) — fica ainda mais lenta enquanto ferido
+      (ver `Sistema de vida` abaixo)
 - [x] Escolhem 1 habilidade no menu (solo) ou no lobby (online), entre:
   - [x] Sprint — corrida temporária (`speedMultiplier` em
         `Game.CONFIG.abilities.survivor.sprint`)
@@ -211,27 +213,60 @@ por quem escolheu esse papel na sala.
   jogo junto (não fazia mais sentido sem ninguém pra bater nele)
 - [ ] Futuro: usar túneis/atalhos no mapa
 
+### Sistema de vida (2 golpes, igual ao jogo original)
+- [x] `js/health.js` (novo): 1º golpe do Assassino **machuca** — o
+      Sobrevivente fica ferido (mais lento, `Game.CONFIG.health.injuredSpeedMultiplier`),
+      mas continua andando e agindo normalmente. Só o **2º golpe** derruba
+      de vez (aí sim entra a struggle bar abaixo). Antes, qualquer golpe já
+      capturava de primeira — a partida acabava rápido demais e não tinha o
+      "quase escapei" que o jogo original tem
+- [x] Cura sozinho: ferido + parado por `Game.CONFIG.health.healDuration`
+      segundos (10s por padrão) volta a saudável — anda e a cura pausa/decai
+      (não dá pra curar andando)
+- [x] Estado visual próprio (`.char.injured`, tingido) — sincronizado pela
+      rede no modo online igual à Camuflagem, então o Assassino (e outros
+      Sobreviventes) veem quem está ferido
+
 ### Sistema de captura
-- [x] Ao ser atingido pelo Assassino, o Sobrevivente entra em estado de
-      "capturado" (trava movimento) — `js/capture.js`
+- [x] Ao ser atingido já ferido, o Sobrevivente entra em estado de
+      "capturado" (trava movimento) — `js/capture.js`, sem mudança na lógica
+      em si, só passou a exigir o 2º golpe em vez do 1º
 - [x] Barra de "struggle" — apertar o botão de ataque/interação repetidas
       vezes enche a barra (`Game.CONFIG.capture.pulseGain`), que também
       decai sozinha com o tempo — não dá pra só apertar uma vez e esperar
 - [x] Encher a barra a tempo = escapa (com uma imunidade curta pra não ser
-      recapturado na hora, colado); não encher a tempo = eliminado **daquela
-      partida** (não é banimento nem afeta partidas futuras — reabrindo o
-      jogo ou numa nova sala é tudo do zero de novo)
-- [x] Vitória/derrota: Sobreviventes vencem completando todos os objetivos
-      e escapando; Assassino vence quando todos os Sobreviventes forem
-      eliminados (capturados sem escapar)
+      recapturado na hora, colado, mas continua ferido); não encher a tempo
+      = eliminado **daquela partida** (não é banimento nem afeta partidas
+      futuras — reabrindo o jogo ou numa nova sala é tudo do zero de novo)
+- [x] Vitória/derrota: Assassino vence quando todos os Sobreviventes forem
+      eliminados (capturados sem escapar); Sobreviventes vencem quando todo
+      mundo que sobrou (não eliminado) conseguiu escapar pelo portão — ver
+      `Fase de fuga` abaixo. Um jogo pode terminar com alguns Sobreviventes
+      escapados e outros eliminados; conta como vitória dos Sobreviventes
+      que restaram
+
+### Fase de fuga (portão de saída)
+- [x] `js/gate.js` (novo): 2 portões em bordas opostas do mapa
+      (`MAP.gateSpots`), só podem ser canalizados **depois** que os 5
+      geradores terminarem (`Game.CONFIG.gate`). Sobrevivente parado perto
+      por `openDuration` segundos (15s por padrão) abre — uma vez aberto,
+      fica aberto pro resto da partida, qualquer Sobreviverte que chegar
+      perto depois disso escapa na hora. Concluir os geradores não vence
+      mais na hora — antes disso, a partida acabava assim que o último
+      gerador terminava, sem essa fase final de tensão do jogo original
+- [x] HUD avisa quando os geradores terminam ("Geradores prontos! Ache um
+      portão pra escapar.")
 
 ### Objetivos e skill checks
 - [x] Objetivos espalhados pelo mapa (pontos de interação) — `js/objective.js`
       + `MAP.objectiveSpots` em `js/map.js`
-- [x] Número de objetivos escala com a quantidade de jogadores:
-      `objetivos = sobreviventes + 1` — no modo solo usa
-      `Game.CONFIG.survivorCount` (fixo em 1); no modo online usa a
-      quantidade real de Sobreviventes na sala
+- [x] **5 geradores fixos por partida** (`Game.CONFIG.generatorCount`, era
+      "sobreviventes + 1" — no modo solo dava só 2) — igual ao jogo original,
+      não escala mais com o número de Sobreviventes
+- [x] Duração de cada gerador: **35 segundos** parado por perto (era 4 —
+      a partida inteira acabava em segundos; 35s é bem mais perto da
+      proporção real do jogo original, ~80s, ajustada pro ritmo mais curto
+      deste projeto)
 - [x] Ao interagir com um objetivo, preencher uma barra de progresso ficando
       por perto (raio/duração configuráveis em `Game.CONFIG.objective`)
 - [x] Skill check circular (estilo Dead by Daylight): um ponteiro giratório,
@@ -242,6 +277,12 @@ por quem escolheu esse papel na sala.
       objetivo (além de quem já está preenchendo) acelera o preenchimento em
       +50% — só quem está fisicamente perto continua contando, igual antes,
       só que junto acelera em vez de não fazer diferença
+- [x] Igual ao jogo original: errar o skill check (deixar o ponteiro dar a
+      volta ou apertar fora da zona) faz um barulho alto e **revela a
+      posição** pro Assassino (ping visual + som) — no modo solo, a IA
+      interrompe a perseguição pra investigar o gerador por alguns segundos.
+      Começar a reparar (sem errar nada ainda) manda um aviso bem discreto,
+      sem posição — só avisa que "algo está acontecendo em algum gerador"
 
 ### Áudio
 - [x] Som de "batimento cardíaco" que aumenta de intensidade quanto mais
@@ -445,6 +486,14 @@ trocar de host; ver `Planos futuros` pro failover completo.
 ---
 
 ## Planos futuros (fora de escopo agora, mas já anotado)
+- **Pallets e janelas (loops de perseguição):** o item que mais falta pra
+  aproximar de verdade do jogo original — sem eles, uma perseguição é só
+  "quem é mais rápido". Janela: Sobrevivente vaulta rápido, Assassino
+  devagar; pallet: Sobrevivente derruba, vira parede temporária, atordoa o
+  Assassino se acertar em cima dele. Ficou de fora desta rodada (que já
+  trouxe vida em 2 golpes + fase de portão de saída) por ser um mecanismo
+  novo (posicionamento fixo no mapa, animação de vault, estado de atordoado)
+  — próxima rodada de balanceamento.
 - **Sistema de mapa "criar e carregar":** hoje `js/map.js` já é 100% dados
   (paredes por layout) separado da lógica de jogo — é a base certa pra
   evoluir pra: desenhar/exportar um mapa em uma ferramenta (ex: Tiled) e o
