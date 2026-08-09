@@ -25,6 +25,9 @@ window.Game = window.Game || {};
       { x: 150, y: 420, w: 110, h: 24 },  // obstáculo solto
       { x: 640, y: 70, w: 26, h: 130 },   // obstáculo solto
     ],
+    // vão entre os dois segmentos da parede central — onde a habilidade
+    // "Barricar porta" spawna uma parede temporária
+    door: { x: 440, y: 220, w: 20, h: 120 },
     // pontos onde objetivos podem nascer; main.js usa os N primeiros,
     // N = Game.CONFIG.survivorCount + 1
     objectiveSpots: [

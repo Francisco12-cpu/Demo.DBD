@@ -24,6 +24,7 @@ Game.CONFIG = {
     },
   },
   playerRadius: 21, // raio de colisão do personagem (metade do sprite de 42px)
+  killerVisionRange: 240, // px — modo online: distância normal que o Assassino enxerga um Sobrevivente sem usar Sentido
 
   // objetivos = sobreviventes + 1 (regra do README). Só existe 1 jogador
   // local por enquanto, então isso vira variável assim que houver mais.
@@ -55,4 +56,47 @@ Game.CONFIG = {
   },
 
   maxSurvivors: 4, // limite de sobreviventes por partida (modo online)
+
+  // ---------- habilidades (passo 7) ----------
+  // Assassino tem sempre as duas; Sobrevivente escolhe 1 das 4 antes de
+  // entrar. Todas seguem o mesmo objeto { duration, cooldown, ... } lido
+  // por js/ability.js — nunca hardcoded fora daqui.
+  abilities: {
+    killerSense: {
+      label: 'Sentido',
+      duration: 4,     // segundos revelando todos os Sobreviventes através das paredes
+      cooldown: 18,
+    },
+    killerDash: {
+      label: 'Investida',
+      duration: 1.2,   // segundos de velocidade aumentada
+      cooldown: 10,
+      speedMultiplier: 2.2,
+    },
+    survivor: {
+      sprint: {
+        label: 'Sprint',
+        duration: 3,
+        cooldown: 12,
+        speedMultiplier: 1.6,
+      },
+      camouflage: {
+        label: 'Camuflagem',
+        duration: 6,     // segundos invisível pro Sentido do Assassino
+        cooldown: 16,
+      },
+      barricade: {
+        label: 'Barricar porta',
+        duration: 8,     // segundos que a barricada bloqueia a passagem
+        cooldown: 0,
+        maxUses: 2,      // usos limitados por partida, não infinito
+        radius: 90,       // precisa estar perto da porta pra usar
+      },
+      distract: {
+        label: 'Distrair',
+        duration: 5,     // segundos que o "ruído" falso dura
+        cooldown: 14,
+      },
+    },
+  },
 };

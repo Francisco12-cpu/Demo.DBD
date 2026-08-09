@@ -42,9 +42,16 @@ html,body{
 .menu-card h1{ font-size:18px; color:var(--gold); letter-spacing:1px; margin:0 0 4px; }
 .menu-card h2{ font-size:15px; color:var(--gold); letter-spacing:1px; margin:0 0 4px; }
 .menu-card label{ display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
-.menu-card input[type=text]{
+.menu-card input[type=text], .menu-card select{
   background: var(--bg-deep); color: var(--ink); border: 1px solid var(--wall);
   font-family: inherit; font-size: 13px; padding: 8px;
+}
+.menu-card hr{ border: none; border-top: 1px solid var(--wall); width: 100%; margin: 2px 0; }
+.menu-credits{ color: var(--muted); font-size: 11px; text-align: center; margin: 8px 0 0; }
+.room-code{
+  font-size: 22px; letter-spacing: 2px; color: var(--gold);
+  background: var(--bg-deep); border: 1px solid var(--wall);
+  padding: 12px; text-align: center; word-break: break-all;
 }
 .menu-card button{
   background: var(--wall); color: var(--ink); border: 1px solid var(--muted);
@@ -88,6 +95,9 @@ html,body{
 }
 #title b{ color: var(--gold); display:block; font-size:16px; letter-spacing:2px;}
 #objectives-status{ margin-top:4px; color: var(--ink); }
+#ability-hud{ margin-top:4px; display:flex; gap:10px; color: var(--muted); }
+#ability-hud .ability-ready{ color: var(--gold); }
+#ability-hud .ability-cooling{ color: var(--muted); }
 #panel{
   background: rgba(12,10,16,.85);
   border: 1px solid var(--wall);
@@ -111,6 +121,24 @@ html,body{
   background: var(--wall);
   border: 1px solid var(--muted);
   box-shadow: 0 2px 4px rgba(0,0,0,.4);
+}
+.wall.temporary-wall{
+  background: rgba(201,162,75,.35);
+  border: 2px dashed var(--gold);
+}
+.ping-marker{
+  position:absolute;
+  left:0; top:0;
+  width:16px; height:16px;
+  margin:-8px 0 0 -8px;
+  border-radius:50%;
+  border: 2px solid var(--gold);
+  animation: pingPulse 1s ease-out infinite;
+  pointer-events:none;
+}
+@keyframes pingPulse{
+  0%{ transform: scale(1); opacity:1; }
+  100%{ transform: scale(3.2); opacity:0; }
 }
 
 /* ---------- personagem ---------- */
@@ -311,6 +339,23 @@ html,body{
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
+  pointer-events: all;
+  touch-action: none;
+}
+#touch-abilities{
+  display:flex; flex-direction:column; gap:10px;
+  align-self:flex-end;
+  margin: 0 10px 6px;
+  pointer-events: none;
+}
+#touch-abilities button{
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  background: rgba(201,162,75,.35);
+  border: 2px solid var(--gold);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
   pointer-events: all;
   touch-action: none;
 }

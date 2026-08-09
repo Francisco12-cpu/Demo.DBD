@@ -8,19 +8,22 @@ window.Game = window.Game || {};
   const dummy = document.getElementById('dummy');
   const hpFill = document.getElementById('hp-fill');
   const objectivesStatus = document.getElementById('objectives-status');
+  const abilityHudEl = document.getElementById('ability-hud');
   const panel = document.getElementById('panel');
   const MAP = Game.MAP;
 
   let dummyHp = 100;
   const dummyMaxHp = 100;
   let dummyWall = null;
+  let dynamicWalls = []; // paredes temporárias (ex: habilidade "Barricar porta")
   let objectives = [];
 
   // ---------- mundo (mapa + objetivos), compartilhado entre solo e online ----------
   function buildWorld(objectiveCount, includeDummy){
-    arena.querySelectorAll('.wall, .objective, .char').forEach((n) => n.remove());
+    arena.querySelectorAll('.wall, .objective, .char, .ping-marker').forEach((n) => n.remove());
     arena.style.width = MAP.width + 'px';
     arena.style.height = MAP.height + 'px';
+    dynamicWalls = [];
 
     MAP.walls.forEach((wall) => {
       const div = document.createElement('div');
@@ -62,7 +65,10 @@ window.Game = window.Game || {};
   }
 
   function allWalls(){
-    return dummyWall ? MAP.walls.concat([dummyWall]) : MAP.walls;
+    let walls = MAP.walls;
+    if (dummyWall) walls = walls.concat([dummyWall]);
+    if (dynamicWalls.length) walls = walls.concat(dynamicWalls);
+    return walls;
   }
 
   function updateObjectivesStatus(){
@@ -88,18 +94,19 @@ window.Game = window.Game || {};
     }
   }
   // tryAttack() não passa a posição de quem ataca pro callback, então
-  // guardamos a última antes de chamar tryAttack (ver moveAndCollide/uso abaixo)
+  // guardamos a última antes de chamar tryAttack
   let lastAttackerPos = { x: 0, y: 0 };
   let lastAttackerFacingRight = true;
 
-  function moveTowards(entityState, cfg, dir, delta){
+  function moveTowards(entityState, cfg, dir, delta, speedOverride){
     const len = Math.hypot(dir.x, dir.y);
     if (len <= 0.05) return false;
     const nx = dir.x / len, ny = dir.y / len;
     const radius = Game.CONFIG.playerRadius;
+    const speed = speedOverride || cfg.speed;
 
-    let x = entityState.pos.x + nx * cfg.speed * delta;
-    let y = entityState.pos.y + ny * cfg.speed * delta;
+    let x = entityState.pos.x + nx * speed * delta;
+    let y = entityState.pos.y + ny * speed * delta;
     x = Math.max(radius, Math.min(MAP.width - radius, x));
     y = Math.max(radius, Math.min(MAP.height - radius, y));
 
@@ -109,6 +116,53 @@ window.Game = window.Game || {};
     if (nx > 0.01) entityState.facingRight = true;
     if (nx < -0.01) entityState.facingRight = false;
     return true;
+  }
+
+  // ---------- habilidades ----------
+  function updateAbilityHud(list){
+    abilityHudEl.innerHTML = list.map(({ label, ability }) => {
+      const ready = ability.ready();
+      let text;
+      if (ability.state.activeLeft > 0) text = 'ativa';
+      else if (!ready && ability.state.usesLeft <= 0) text = 'sem usos';
+      else text = ready ? 'pronta' : Math.ceil(ability.state.cooldownLeft) + 's';
+      const uses = isFinite(ability.state.usesLeft) ? ` · ${ability.state.usesLeft} uso(s)` : '';
+      return `<span class="${ready ? 'ability-ready' : 'ability-cooling'}">${label}: ${text}${uses}</span>`;
+    }).join('');
+  }
+
+  function doorCenter(){
+    const d = MAP.door;
+    return { x: d.x + d.w / 2, y: d.y + d.h / 2 };
+  }
+
+  // Adiciona a parede temporária da barricada (sem checar nada — quem
+  // chama já validou distância/usos). Usado tanto por quem ativou quanto
+  // por quem só recebeu o evento de rede.
+  function spawnBarricadeWall(){
+    const wall = { x: MAP.door.x, y: MAP.door.y, w: MAP.door.w, h: MAP.door.h };
+    dynamicWalls.push(wall);
+    const div = document.createElement('div');
+    div.className = 'wall temporary-wall';
+    div.style.left = wall.x + 'px';
+    div.style.top = wall.y + 'px';
+    div.style.width = wall.w + 'px';
+    div.style.height = wall.h + 'px';
+    arena.insertBefore(div, arena.firstChild);
+    setTimeout(() => {
+      const idx = dynamicWalls.indexOf(wall);
+      if (idx >= 0) dynamicWalls.splice(idx, 1);
+      div.remove();
+    }, Game.CONFIG.abilities.survivor.barricade.duration * 1000);
+  }
+
+  function spawnPingMarker(x, y, durationSec){
+    const div = document.createElement('div');
+    div.className = 'ping-marker';
+    div.style.left = x + 'px';
+    div.style.top = y + 'px';
+    arena.appendChild(div);
+    setTimeout(() => div.remove(), durationSec * 1000);
   }
 
   function fitToViewport(){
@@ -144,7 +198,7 @@ window.Game = window.Game || {};
   // =====================================================================
   // MODO SOLO — 1 Sobrevivente (jogador) vs 1 Assassino (IA), pra testar
   // =====================================================================
-  function startSolo(name){
+  function startSolo(name, abilityKey){
     panel.style.display = '';
     buildWorld(Game.CONFIG.survivorCount + 1, true);
 
@@ -154,6 +208,10 @@ window.Game = window.Game || {};
     const killer = Game.createCharacter('killer', killerEl);
     const capture = Game.createCapture(playerEl);
 
+    const abilityCfg = Game.CONFIG.abilities.survivor[abilityKey] || Game.CONFIG.abilities.survivor.sprint;
+    const survivorAbility = Game.createAbility(abilityCfg);
+    const killerDash = Game.createAbility(Game.CONFIG.abilities.killerDash);
+
     player.state.pos.x = MAP.player.x; player.state.pos.y = MAP.player.y;
     killer.state.pos.x = MAP.killer.x; killer.state.pos.y = MAP.killer.y;
     player.applyVisuals();
@@ -162,6 +220,9 @@ window.Game = window.Game || {};
     killer.render();
 
     beginMatchUi();
+    Game.Input.setAbilityButtonsVisible(true, false);
+
+    let distraction = null; // { x, y, until } — pra onde a IA vai correr em vez do jogador
 
     let matchOver = false;
     function endMatch(won, detail){
@@ -183,19 +244,42 @@ window.Game = window.Game || {};
     function updateKillerAI(delta){
       if (capture.state.captured || killer.state.isAttacking){ killer.render(); return; }
       const cfg = killer.characterConfig();
-      const dx = player.state.pos.x - killer.state.pos.x;
-      const dy = player.state.pos.y - killer.state.pos.y;
+      const target = (distraction && performance.now() < distraction.until) ? distraction : player.state.pos;
+      const dx = target.x - killer.state.pos.x;
+      const dy = target.y - killer.state.pos.y;
       const dist = Math.hypot(dx, dy);
 
-      if (dist <= cfg.attackRange){
+      if (killerDash.ready() && dist > 220) killerDash.trigger();
+      const speed = killerDash.state.activeLeft > 0
+        ? cfg.speed * Game.CONFIG.abilities.killerDash.speedMultiplier
+        : cfg.speed;
+
+      if (target === player.state.pos && dist <= cfg.attackRange){
         killer.tryAttack(attemptKillerHit);
         killer.setMoving(false);
       } else {
-        const moved = moveTowards(killer.state, cfg, { x: dx, y: dy }, delta);
+        const moved = moveTowards(killer.state, cfg, { x: dx, y: dy }, delta, speed);
         killer.setFacing(killer.state.facingRight);
         killer.setMoving(moved);
       }
       killer.render();
+    }
+
+    function triggerSurvivorAbility(){
+      if (!survivorAbility.ready()) return;
+      if (abilityKey === 'barricade'){
+        const d = doorCenter();
+        const dist = Math.hypot(player.state.pos.x - d.x, player.state.pos.y - d.y);
+        if (dist > abilityCfg.radius) return; // precisa estar perto da porta
+        survivorAbility.trigger();
+        spawnBarricadeWall();
+        return;
+      }
+      survivorAbility.trigger();
+      if (abilityKey === 'distract'){
+        spawnPingMarker(player.state.pos.x, player.state.pos.y, abilityCfg.duration);
+        distraction = { x: player.state.pos.x, y: player.state.pos.y, until: performance.now() + abilityCfg.duration * 1000 };
+      }
     }
 
     let lastTime = performance.now();
@@ -206,11 +290,18 @@ window.Game = window.Game || {};
 
       Game.Input.update();
       capture.update(delta);
+      survivorAbility.update(delta);
+      killerDash.update(delta);
+      updateAbilityHud([{ label: abilityCfg.label, ability: survivorAbility }]);
+
       const attackRequested = Game.Input.consumeAttackRequest();
+      const ability1Requested = Game.Input.consumeAbility1Request();
 
       if (capture.state.captured){
         if (attackRequested) capture.pulse();
       } else if (!capture.state.eliminated){
+        if (ability1Requested) triggerSurvivorAbility();
+
         let consumedBySkillCheck = false;
         let anyObjectiveChanged = false;
         objectives.forEach((obj) => {
@@ -233,7 +324,11 @@ window.Game = window.Game || {};
 
         if (!player.state.isAttacking){
           const dir = Game.Input.readMovement();
-          const moved = moveTowards(player.state, player.characterConfig(), dir, delta);
+          const sprintActive = abilityKey === 'sprint' && survivorAbility.state.activeLeft > 0;
+          const speed = sprintActive
+            ? player.characterConfig().speed * Game.CONFIG.abilities.survivor.sprint.speedMultiplier
+            : undefined;
+          const moved = moveTowards(player.state, player.characterConfig(), dir, delta, speed);
           player.setFacing(player.state.facingRight);
           player.setMoving(moved);
         }
@@ -249,15 +344,14 @@ window.Game = window.Game || {};
   }
 
   // =====================================================================
-  // MODO ONLINE — N jogadores reais conectados via LAN (server/server.js)
+  // MODO ONLINE — N jogadores reais conectados via LAN ou P2P
   // =====================================================================
   function startOnline(net, localId, roster){
     panel.style.display = 'none';
     const survivors = roster.filter((p) => p.role === 'survivor');
-    const killerInfo = roster.find((p) => p.role === 'killer');
     buildWorld(survivors.length + 1, false);
 
-    const entries = new Map(); // id -> { info, char, el, capture, eliminated }
+    const entries = new Map(); // id -> { info, char, el, capture?, eliminated, camouflaged }
     let survivorIndex = 0;
 
     roster.forEach((info) => {
@@ -277,13 +371,23 @@ window.Game = window.Game || {};
       }
       char.render();
 
-      const entry = { info, char, el, eliminated: false };
+      const entry = { info, char, el, eliminated: false, camouflaged: false };
       if (info.role === 'survivor') entry.capture = Game.createCapture(el);
       entries.set(info.id, entry);
     });
 
     const localEntry = entries.get(localId);
+    const isSurvivor = localEntry.info.role === 'survivor';
+
+    const localAbilityCfg = isSurvivor
+      ? (Game.CONFIG.abilities.survivor[localEntry.info.ability] || Game.CONFIG.abilities.survivor.sprint)
+      : null;
+    const localAbility1 = isSurvivor ? Game.createAbility(localAbilityCfg) : Game.createAbility(Game.CONFIG.abilities.killerSense);
+    const localAbility2 = isSurvivor ? null : Game.createAbility(Game.CONFIG.abilities.killerDash);
+    const localAbilityKey = isSurvivor ? localEntry.info.ability : null;
+
     beginMatchUi();
+    Game.Input.setAbilityButtonsVisible(true, !isSurvivor);
 
     let matchOver = false;
     function endMatch(won, detail, announce){
@@ -320,6 +424,7 @@ window.Game = window.Game || {};
       entry.char.setFacing(data.facingRight);
       entry.char.setMoving(data.moving);
       entry.char.render();
+      entry.camouflaged = !!data.camouflaged;
     };
 
     Game.onlinePlayerLeftHandler = function(id){
@@ -365,6 +470,16 @@ window.Game = window.Game || {};
         return;
       }
 
+      if (data.kind === 'barricade'){
+        spawnBarricadeWall();
+        return;
+      }
+
+      if (data.kind === 'distractPing'){
+        spawnPingMarker(data.x, data.y, Game.CONFIG.abilities.survivor.distract.duration);
+        return;
+      }
+
       if (data.kind === 'matchEnd' && !matchOver){
         endMatch(data.result === 'survivors', data.result === 'survivors'
           ? 'Os Sobreviventes completaram os objetivos e escaparam!'
@@ -384,18 +499,63 @@ window.Game = window.Game || {};
       });
     }
 
+    function triggerLocalSurvivorAbility(){
+      if (!localAbility1.ready()) return;
+      if (localAbilityKey === 'barricade'){
+        const d = doorCenter();
+        const dist = Math.hypot(localEntry.char.state.pos.x - d.x, localEntry.char.state.pos.y - d.y);
+        if (dist > localAbilityCfg.radius) return;
+        localAbility1.trigger();
+        spawnBarricadeWall();
+        net.sendEvent({ kind: 'barricade' });
+        return;
+      }
+      localAbility1.trigger();
+      if (localAbilityKey === 'distract'){
+        spawnPingMarker(localEntry.char.state.pos.x, localEntry.char.state.pos.y, localAbilityCfg.duration);
+        net.sendEvent({ kind: 'distractPing', x: localEntry.char.state.pos.x, y: localEntry.char.state.pos.y });
+      }
+    }
+
+    // ---------- visão do Assassino (fog simples: perto sempre vê; Sentido revela geral; Camuflagem esconde sempre) ----------
+    function updateKillerVision(){
+      const senseActive = localAbility1.state.activeLeft > 0;
+      entries.forEach((entry) => {
+        if (entry.info.role !== 'survivor' || entry === localEntry) return;
+        const dx = entry.char.state.pos.x - localEntry.char.state.pos.x;
+        const dy = entry.char.state.pos.y - localEntry.char.state.pos.y;
+        const dist = Math.hypot(dx, dy);
+        const visible = !entry.camouflaged && (senseActive || dist <= Game.CONFIG.killerVisionRange);
+        entry.el.style.display = visible ? '' : 'none';
+      });
+    }
+
     let lastTime = performance.now();
     let lastStateSent = 0;
 
     function loop(now){
-      if (matchOver){ return; }
+      if (matchOver) return;
       const delta = (now - lastTime) / 1000;
       lastTime = now;
 
       Game.Input.update();
-      const isSurvivor = localEntry.info.role === 'survivor';
       if (isSurvivor) localEntry.capture.update(delta);
+      localAbility1.update(delta);
+      if (localAbility2) localAbility2.update(delta);
+
+      if (isSurvivor){
+        updateAbilityHud([{ label: localAbilityCfg.label, ability: localAbility1 }]);
+      } else {
+        updateAbilityHud([
+          { label: Game.CONFIG.abilities.killerSense.label, ability: localAbility1 },
+          { label: Game.CONFIG.abilities.killerDash.label, ability: localAbility2 },
+        ]);
+        updateKillerVision();
+      }
+
       const attackRequested = Game.Input.consumeAttackRequest();
+      const ability1Requested = Game.Input.consumeAbility1Request();
+      const ability2Requested = !isSurvivor && Game.Input.consumeAbility2Request();
 
       const captured = isSurvivor && localEntry.capture.state.captured;
       const eliminated = isSurvivor && localEntry.capture.state.eliminated;
@@ -404,6 +564,8 @@ window.Game = window.Game || {};
         if (attackRequested) localEntry.capture.pulse();
       } else if (!eliminated){
         if (isSurvivor){
+          if (ability1Requested) triggerLocalSurvivorAbility();
+
           let consumedBySkillCheck = false;
           objectives.forEach((obj, index) => {
             const wasDone = obj.state.done;
@@ -420,13 +582,22 @@ window.Game = window.Game || {};
             lastAttackerFacingRight = localEntry.char.state.facingRight;
             localEntry.char.tryAttack(attemptDummyHit);
           }
-        } else if (attackRequested){
-          localEntry.char.tryAttack(attemptKillerHit);
+        } else {
+          if (ability1Requested) localAbility1.trigger();
+          if (ability2Requested) localAbility2.trigger();
+          if (attackRequested) localEntry.char.tryAttack(attemptKillerHit);
         }
 
         if (!localEntry.char.state.isAttacking){
           const dir = Game.Input.readMovement();
-          const moved = moveTowards(localEntry.char.state, localEntry.char.characterConfig(), dir, delta);
+          const cfg = localEntry.char.characterConfig();
+          let speed;
+          if (isSurvivor && localAbilityKey === 'sprint' && localAbility1.state.activeLeft > 0){
+            speed = cfg.speed * Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
+          } else if (!isSurvivor && localAbility2.state.activeLeft > 0){
+            speed = cfg.speed * Game.CONFIG.abilities.killerDash.speedMultiplier;
+          }
+          const moved = moveTowards(localEntry.char.state, cfg, dir, delta, speed);
           localEntry.char.setFacing(localEntry.char.state.facingRight);
           localEntry.char.setMoving(moved);
         }
@@ -441,6 +612,7 @@ window.Game = window.Game || {};
           y: localEntry.char.state.pos.y,
           facingRight: localEntry.char.state.facingRight,
           moving: localEntry.el.classList.contains('running'),
+          camouflaged: isSurvivor && localAbilityKey === 'camouflage' && localAbility1.state.activeLeft > 0,
         });
       }
 

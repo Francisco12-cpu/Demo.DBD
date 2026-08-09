@@ -25,7 +25,7 @@ console.log(`Porta: ${PORT}`);
 console.log(`Senha: ${PASSWORD}`);
 console.log('Os outros jogadores entram pelo navegador usando o IP desta máquina na rede local, essa porta e essa senha.');
 
-/** @type {Map<string, {id:string, ws:import('ws').WebSocket, name:string, role:'killer'|'survivor'|null}>} */
+/** @type {Map<string, {id:string, ws:import('ws').WebSocket, name:string, role:'killer'|'survivor'|null, ability:string|null}>} */
 const players = new Map();
 let matchState = 'lobby'; // 'lobby' | 'playing' | 'ended'
 
@@ -42,7 +42,7 @@ function broadcast(msg, exceptId){
 }
 
 function rosterSnapshot(){
-  return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role }));
+  return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability }));
 }
 
 function broadcastLobby(){
@@ -76,7 +76,7 @@ wss.on('connection', (ws) => {
       }
       id = crypto.randomUUID();
       const name = String(msg.name || 'Jogador').slice(0, 16) || 'Jogador';
-      players.set(id, { id, ws, name, role: null });
+      players.set(id, { id, ws, name, role: null, ability: null });
       send(ws, { type: 'joined', id });
       broadcastLobby();
       return;
@@ -96,6 +96,7 @@ wss.on('connection', (ws) => {
         return;
       }
       me.role = role;
+      if (msg.ability) me.ability = msg.ability;
       broadcastLobby();
       return;
     }
