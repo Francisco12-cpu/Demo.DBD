@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
 const PASSWORD = process.env.ROOM_PASSWORD || 'dbd123';
 const MAX_SURVIVORS = 4;
+const MAP_LAYOUT_COUNT = 2; // precisa bater com Game.MAP.layouts.length em js/map.js
 
 const wss = new WebSocketServer({ port: PORT });
 
@@ -115,7 +116,8 @@ wss.on('connection', (ws) => {
         return;
       }
       matchState = 'playing';
-      broadcast({ type: 'matchStart', players: rosterSnapshot() });
+      const mapLayoutIndex = Math.floor(Math.random() * MAP_LAYOUT_COUNT);
+      broadcast({ type: 'matchStart', players: rosterSnapshot(), mapLayoutIndex });
       return;
     }
 

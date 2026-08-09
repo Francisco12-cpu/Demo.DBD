@@ -5,27 +5,25 @@ window.Game = window.Game || {};
 
   const stage = document.getElementById('stage');
   const arena = document.getElementById('arena');
-  const dummy = document.getElementById('dummy');
-  const hpFill = document.getElementById('hp-fill');
   const objectivesStatus = document.getElementById('objectives-status');
   const abilityHudEl = document.getElementById('ability-hud');
   const panel = document.getElementById('panel');
   const MAP = Game.MAP;
 
-  let dummyHp = 100;
-  const dummyMaxHp = 100;
-  let dummyWall = null;
   let dynamicWalls = []; // paredes temporárias (ex: habilidade "Barricar porta")
   let objectives = [];
+  let currentLayoutWalls = [];
 
   // ---------- mundo (mapa + objetivos), compartilhado entre solo e online ----------
-  function buildWorld(objectiveCount, includeDummy){
+  function buildWorld(objectiveCount, layoutIndex){
     arena.querySelectorAll('.wall, .objective, .char, .ping-marker').forEach((n) => n.remove());
     arena.style.width = MAP.width + 'px';
     arena.style.height = MAP.height + 'px';
     dynamicWalls = [];
 
-    MAP.walls.forEach((wall) => {
+    const layout = MAP.layouts[layoutIndex % MAP.layouts.length];
+    currentLayoutWalls = layout.walls;
+    currentLayoutWalls.forEach((wall) => {
       const div = document.createElement('div');
       div.className = 'wall';
       div.style.left = wall.x + 'px';
@@ -34,20 +32,6 @@ window.Game = window.Game || {};
       div.style.height = wall.h + 'px';
       arena.insertBefore(div, arena.firstChild);
     });
-
-    if (includeDummy){
-      dummy.style.display = '';
-      dummy.style.left = MAP.dummy.x + 'px';
-      dummy.style.top = MAP.dummy.y + 'px';
-      dummy.style.transform = 'translate(-50%,-50%)';
-      const dw = 15, dh = 19;
-      dummyWall = { x: MAP.dummy.x - dw, y: MAP.dummy.y - dh, w: dw * 2, h: dh * 2 };
-      dummyHp = dummyMaxHp;
-      hpFill.style.width = '100%';
-    } else {
-      dummy.style.display = 'none';
-      dummyWall = null;
-    }
 
     const count = Math.min(objectiveCount, MAP.objectiveSpots.length);
     objectives = MAP.objectiveSpots.slice(0, count).map((spot) => {
@@ -65,10 +49,7 @@ window.Game = window.Game || {};
   }
 
   function allWalls(){
-    let walls = MAP.walls;
-    if (dummyWall) walls = walls.concat([dummyWall]);
-    if (dynamicWalls.length) walls = walls.concat(dynamicWalls);
-    return walls;
+    return dynamicWalls.length ? currentLayoutWalls.concat(dynamicWalls) : currentLayoutWalls;
   }
 
   function updateObjectivesStatus(){
@@ -76,27 +57,6 @@ window.Game = window.Game || {};
     objectivesStatus.textContent = `Objetivos: ${done}/${objectives.length}`;
     return done;
   }
-
-  function attemptDummyHit(cfg){
-    if (!dummyWall) return;
-    const dx = MAP.dummy.x - lastAttackerPos.x;
-    const dy = MAP.dummy.y - lastAttackerPos.y;
-    const dist = Math.hypot(dx, dy);
-    const facingMatches = (lastAttackerFacingRight && dx > -10) || (!lastAttackerFacingRight && dx < 10);
-    if (dist <= cfg.attackRange && facingMatches){
-      dummyHp = Math.max(0, dummyHp - cfg.attackDamage);
-      hpFill.style.width = (dummyHp / dummyMaxHp * 100) + '%';
-      dummy.style.filter = 'brightness(2)';
-      setTimeout(() => { dummy.style.filter = ''; }, 100);
-      if (dummyHp === 0){
-        setTimeout(() => { dummyHp = dummyMaxHp; hpFill.style.width = '100%'; }, 400);
-      }
-    }
-  }
-  // tryAttack() não passa a posição de quem ataca pro callback, então
-  // guardamos a última antes de chamar tryAttack
-  let lastAttackerPos = { x: 0, y: 0 };
-  let lastAttackerFacingRight = true;
 
   function moveTowards(entityState, cfg, dir, delta, speedOverride){
     const len = Math.hypot(dir.x, dir.y);
@@ -180,8 +140,14 @@ window.Game = window.Game || {};
   function beginMatchUi(){
     stage.style.display = 'flex';
     Game.Input.init();
+    Game.Audio.init();
     if (Game.Input.isTouchDevice) document.getElementById('hint').style.display = 'none';
     fitToViewport();
+  }
+
+  function hideMatchUi(){
+    stage.style.display = 'none';
+    Game.Audio.stopHeartbeat();
   }
 
   function charDom(){
@@ -195,12 +161,16 @@ window.Game = window.Game || {};
     return div;
   }
 
+  function randomLayoutIndex(){
+    return Math.floor(Math.random() * MAP.layouts.length);
+  }
+
   // =====================================================================
   // MODO SOLO — 1 Sobrevivente (jogador) vs 1 Assassino (IA), pra testar
   // =====================================================================
   function startSolo(name, abilityKey){
     panel.style.display = '';
-    buildWorld(Game.CONFIG.survivorCount + 1, true);
+    buildWorld(Game.CONFIG.survivorCount + 1, randomLayoutIndex());
 
     const playerEl = charDom();
     const killerEl = charDom();
@@ -228,13 +198,15 @@ window.Game = window.Game || {};
     function endMatch(won, detail){
       if (matchOver) return;
       matchOver = true;
-      Game.Menu.showResult(won, detail);
+      Game.Audio.stopHeartbeat();
+      Game.Menu.showResult(won, detail, () => startSolo(name, abilityKey));
     }
 
     function attemptKillerHit(){
       const dx = player.state.pos.x - killer.state.pos.x;
       const dy = player.state.pos.y - killer.state.pos.y;
       if (Math.hypot(dx, dy) <= killer.characterConfig().attackRange){
+        Game.Audio.playCaptureHit();
         capture.start((result) => {
           if (result === 'eliminated') endMatch(false, 'Você foi capturado pelo Assassino.');
         });
@@ -255,6 +227,7 @@ window.Game = window.Game || {};
         : cfg.speed;
 
       if (target === player.state.pos && dist <= cfg.attackRange){
+        Game.Audio.playAttackSwing();
         killer.tryAttack(attemptKillerHit);
         killer.setMoving(false);
       } else {
@@ -293,33 +266,26 @@ window.Game = window.Game || {};
       survivorAbility.update(delta);
       killerDash.update(delta);
       updateAbilityHud([{ label: abilityCfg.label, ability: survivorAbility }]);
+      Game.Audio.updateHeartbeat(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
 
-      const attackRequested = Game.Input.consumeAttackRequest();
       const ability1Requested = Game.Input.consumeAbility1Request();
 
       if (capture.state.captured){
-        if (attackRequested) capture.pulse();
+        if (Game.Input.consumeAttackRequest()) capture.pulse();
       } else if (!capture.state.eliminated){
         if (ability1Requested) triggerSurvivorAbility();
 
-        let consumedBySkillCheck = false;
+        const skillCheckPressed = Game.Input.consumeAttackRequest();
         let anyObjectiveChanged = false;
         objectives.forEach((obj) => {
           const wasDone = obj.state.done;
           const hadSkillCheck = !!obj.state.skillCheck;
-          obj.update(delta, player.state.pos, hadSkillCheck && attackRequested);
-          if (hadSkillCheck && attackRequested) consumedBySkillCheck = true;
+          obj.update(delta, player.state.pos, hadSkillCheck && skillCheckPressed);
           if (obj.state.done && !wasDone) anyObjectiveChanged = true;
         });
         if (anyObjectiveChanged){
           const done = updateObjectivesStatus();
           if (done >= objectives.length) endMatch(true, 'Você completou todos os objetivos e escapou!');
-        }
-
-        if (attackRequested && !consumedBySkillCheck){
-          lastAttackerPos = player.state.pos;
-          lastAttackerFacingRight = player.state.facingRight;
-          player.tryAttack(attemptDummyHit);
         }
 
         if (!player.state.isAttacking){
@@ -346,10 +312,10 @@ window.Game = window.Game || {};
   // =====================================================================
   // MODO ONLINE — N jogadores reais conectados via LAN ou P2P
   // =====================================================================
-  function startOnline(net, localId, roster){
+  function startOnline(net, localId, roster, mapLayoutIndex){
     panel.style.display = 'none';
     const survivors = roster.filter((p) => p.role === 'survivor');
-    buildWorld(survivors.length + 1, false);
+    buildWorld(survivors.length + 1, mapLayoutIndex || 0);
 
     const entries = new Map(); // id -> { info, char, el, capture?, eliminated, camouflaged }
     let survivorIndex = 0;
@@ -365,6 +331,7 @@ window.Game = window.Game || {};
         char.state.pos.y = MAP.killer.y;
       } else {
         const spawn = MAP.survivorSpawns[survivorIndex % MAP.survivorSpawns.length];
+        char.setColorOverride(Game.CONFIG.survivorColors[survivorIndex % Game.CONFIG.survivorColors.length]);
         survivorIndex++;
         char.state.pos.x = spawn.x;
         char.state.pos.y = spawn.y;
@@ -378,6 +345,7 @@ window.Game = window.Game || {};
 
     const localEntry = entries.get(localId);
     const isSurvivor = localEntry.info.role === 'survivor';
+    const killerEntry = [...entries.values()].find((e) => e.info.role === 'killer');
 
     const localAbilityCfg = isSurvivor
       ? (Game.CONFIG.abilities.survivor[localEntry.info.ability] || Game.CONFIG.abilities.survivor.sprint)
@@ -393,9 +361,10 @@ window.Game = window.Game || {};
     function endMatch(won, detail, announce){
       if (matchOver) return;
       matchOver = true;
+      Game.Audio.stopHeartbeat();
       if (announce) net.sendEvent({ kind: 'matchEnd', result: won ? 'survivors' : 'killer' });
       const localWon = localEntry.info.role === 'killer' ? !won : won;
-      Game.Menu.showResult(localWon, detail);
+      Game.Menu.showResult(localWon, detail, null); // "jogar de novo" online volta pro lobby (ver menu.js)
     }
 
     function activeSurvivors(){
@@ -433,12 +402,16 @@ window.Game = window.Game || {};
       entry.eliminated = true;
       entry.el.classList.add('eliminated');
       if (entry.info.role === 'survivor') checkWinFromCaptures();
+      if (entry.info.role === 'killer'){
+        endMatch(true, 'O Assassino saiu da partida — Sobreviventes vencem por desistência.', true);
+      }
     };
 
     Game.onlineEventHandler = function(fromId, data){
       if (!data) return;
 
       if (data.kind === 'captureStart' && data.targetId === localId && localEntry.capture){
+        Game.Audio.playCaptureHit();
         localEntry.capture.start((result) => {
           net.sendEvent({ kind: 'struggleResult', playerId: localId, result });
           if (result === 'eliminated'){
@@ -545,6 +518,8 @@ window.Game = window.Game || {};
 
       if (isSurvivor){
         updateAbilityHud([{ label: localAbilityCfg.label, ability: localAbility1 }]);
+        const killerPos = killerEntry && !killerEntry.eliminated ? killerEntry.char.state.pos : null;
+        Game.Audio.updateHeartbeat(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
       } else {
         updateAbilityHud([
           { label: Game.CONFIG.abilities.killerSense.label, ability: localAbility1 },
@@ -566,26 +541,22 @@ window.Game = window.Game || {};
         if (isSurvivor){
           if (ability1Requested) triggerLocalSurvivorAbility();
 
-          let consumedBySkillCheck = false;
           objectives.forEach((obj, index) => {
             const wasDone = obj.state.done;
             const hadSkillCheck = !!obj.state.skillCheck;
             obj.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested);
-            if (hadSkillCheck && attackRequested) consumedBySkillCheck = true;
             if (obj.state.done && !wasDone){
               net.sendEvent({ kind: 'objectiveDone', index });
               checkWinFromObjectives();
             }
           });
-          if (attackRequested && !consumedBySkillCheck){
-            lastAttackerPos = localEntry.char.state.pos;
-            lastAttackerFacingRight = localEntry.char.state.facingRight;
-            localEntry.char.tryAttack(attemptDummyHit);
-          }
         } else {
           if (ability1Requested) localAbility1.trigger();
           if (ability2Requested) localAbility2.trigger();
-          if (attackRequested) localEntry.char.tryAttack(attemptKillerHit);
+          if (attackRequested){
+            Game.Audio.playAttackSwing();
+            localEntry.char.tryAttack(attemptKillerHit);
+          }
         }
 
         if (!localEntry.char.state.isAttacking){
@@ -627,15 +598,11 @@ window.Game = window.Game || {};
     const btnKiller = document.getElementById('btn-killer');
     const speedSlider = document.getElementById('speed');
     const speedVal = document.getElementById('speed-val');
-    const damageSlider = document.getElementById('damage');
-    const damageVal = document.getElementById('damage-val');
 
     function syncPanel(){
       const cfg = player.characterConfig();
       speedSlider.value = cfg.speed;
       speedVal.textContent = cfg.speed;
-      damageSlider.value = cfg.attackDamage;
-      damageVal.textContent = cfg.attackDamage;
     }
 
     btnSurvivor.onclick = () => {
@@ -655,15 +622,11 @@ window.Game = window.Game || {};
       speedVal.textContent = v;
       player.characterConfig().speed = v;
     };
-    damageSlider.oninput = () => {
-      const v = parseInt(damageSlider.value, 10);
-      damageVal.textContent = v;
-      player.characterConfig().attackDamage = v;
-    };
 
     syncPanel();
   }
 
   Game.startSolo = startSolo;
   Game.startOnline = startOnline;
+  Game.hideMatchUi = hideMatchUi;
 })();

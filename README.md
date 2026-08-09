@@ -15,9 +15,14 @@ tentando completar objetivos e escapar de uma mansão abandonada.
 - **Distribuição:** joga na web (ex: itch.io); sem servidor pago
 - **Modos:** multiplayer local (vários controles no mesmo PC/teclado) →
   depois multiplayer online P2P (sem servidor dedicado)
-- **Arte:** pixel art; sprites pegos prontos da internet e editados por cima
-  (o projeto não depende de arte original desenhada do zero)
-- **Mapas:** começa com 1 mapa fixo; randomização de mapa é objetivo futuro
+- **Arte:** pixel art — hoje é um sprite (`assets/character-mask.png`) gerado
+  localmente por script (16×20px, sem depender de internet pra baixar arte
+  pronta), tingido por CSS `mask-image` com a cor de cada personagem/
+  Sobrevivente. Ver nota em `Planos futuros`
+- **Mapas:** 2 layouts fixos (obstáculos variam, sorteado a cada partida);
+  randomização de verdade continua objetivo futuro
+- **Sobrevivente não ataca ninguém** — só foge, usa habilidade e completa
+  objetivos. Só o Assassino tem ataque (que inicia a captura)
 
 ## Como rodar
 
@@ -47,12 +52,14 @@ partida" quando tiver pelo menos 2 jogadores com 1 deles sendo o Assassino.
 **Multiplayer P2P (celular vira host, sem PC nenhum):** no menu, escolhe
 "Multiplayer P2P (beta)" → "Criar sala (virar host)" — funciona em
 qualquer navegador, inclusive celular, sem instalar nem rodar nada. Aparece
-um código curto (ex: `dbd-XK3F9`); passa esse código + a senha que você
-escolheu pros outros jogadores, que entram em "Entrar com código". Depois
-disso é o mesmo lobby de sempre. Só precisa de internet no instante de
-conectar (usa o broker público e gratuito da biblioteca PeerJS pra fazer as
-duas pontas se acharem); o jogo em si troca dados direto celular-a-celular
-depois disso.
+um código curto (ex: `dbd-XK3F9`) **e um QR code**; passa o código (ou deixa
+o outro jogador escanear o QR) + a senha que você escolheu. Quem escaneia o
+QR já abre o jogo direto na tela de "entrar com código" com o código
+preenchido — só falta digitar a senha. Sem QR, dá pra digitar o código à
+mão também, em "Entrar com código". Depois disso é o mesmo lobby de sempre.
+Só precisa de internet no instante de conectar (usa o broker público e
+gratuito da biblioteca PeerJS pra fazer as duas pontas se acharem); o jogo
+em si troca dados direto celular-a-celular depois disso.
 
 **Jogar pela web (sem instalar nada, só pro modo solo/teste):** existe um
 workflow (`.github/workflows/deploy-pages.yml`) que publica o site
@@ -73,19 +80,22 @@ sozinho e mandar o link pra alguém dar uma olhada.
 index.html              esqueleto HTML (menu + jogo) + tags <script>
 css/style.css             todo o CSS (visual, animações, menu, controles touch)
 js/config.js               config central de balanceamento por tipo de personagem
-js/map.js                   dados do mapa fixo (paredes, spawns, objetivos, porta) + colisão
-js/input.js                 teclado + joystick touch + gamepad, unificados (movimento/ataque/habilidades)
-js/character.js             personagem único parametrizado (movimento/ataque/visual)
+js/map.js                   dados do mapa (2 layouts, spawns, objetivos, porta) + colisão
+js/input.js                 teclado + joystick touch + gamepad, unificados (movimento/ação/habilidades)
+js/character.js             personagem único parametrizado (movimento/ataque/visual/cor)
 js/ability.js                estado genérico de habilidade (duração/cooldown/usos)
 js/objective.js             objetivo com barra de progresso + skill check circular
 js/capture.js               estado "capturado" + barra de struggle
+js/audio.js                  sons sintetizados via Web Audio API (batimento espacial + sfx)
 js/net.js                   cliente WebSocket fino pro modo LAN
 js/net-webrtc.js            host e cliente P2P (WebRTC via PeerJS) pro modo sem PC
-js/menu.js                  telas de menu, lobby (LAN e P2P) e resultado
-js/main.js                  monta o mundo, roda o modo solo ou o modo online, habilidades
+js/menu.js                  telas de menu, lobby (LAN e P2P), QR code e resultado
+js/main.js                  monta o mundo, roda o modo solo ou o modo online, habilidades, áudio
 server/server.js            servidor da sala (Node.js + ws) pro modo LAN
 server/package.json         dependência (ws) e script `npm start`
 vendor/peerjs.min.js        biblioteca PeerJS (MIT) vendorizada, só pro modo P2P
+vendor/qrcode.min.js        biblioteca qrcode-generator (MIT) vendorizada, só pro QR do P2P
+assets/character-mask.png   sprite pixel art (16×20px) gerado localmente, usado via CSS mask
 ```
 Client em `<script>` clássico (sem `type="module"`, sem bundler) pra
 continuar funcionando ao abrir `index.html` direto com duplo clique. O
@@ -139,13 +149,14 @@ escopo (não do jeito "ainda não fizemos", e sim "não vamos fazer por agora").
 
 ### Assassino (1 jogador por partida)
 - [x] Mais rápido que os Sobreviventes (velocidade maior, configurável)
-- [x] Ataque básico: espada curta — exige estar bem perto do alvo
+- [x] Ataque básico: espada curta — exige estar bem perto do alvo (**só o
+      Assassino ataca** — Sobrevivente não tem nenhum ataque, por decisão
+      do usuário: "eu sou sobrevivente, não é pra ter ataque")
   - [x] Cooldown pequeno entre ataques
   - [x] Hitbox/zona de colisão de dano
   - [x] Anima "matar" no alvo atingido — no modo online, atingir um
-        Sobrevivente inicia a captura de verdade (struggle bar); no modo
-        solo continua sendo um flash visual, já que lá o "alvo" é só a IA
-        testando distância/cooldown
+        Sobrevivente inicia a captura de verdade (struggle bar) e toca um
+        efeito sonoro; no modo solo é a mesma captura, contra a IA
 - [x] Poder 1: "Sentido" — revela todos os Sobreviventes por alguns
       segundos, mesmo os que estariam escondidos (fora do alcance normal de
       visão ou atrás de parede — o jogo não simula linha de visão de
@@ -180,9 +191,10 @@ alcançar) — é só um jeito de testar sozinho. No **modo online** o Assassino
         desse ponto em vez do jogador de verdade por alguns segundos; no
         modo online é só um chamariz visual (o Assassino é humano, não dá
         pra forçar ele a ir lá — mas pode enganar)
-- [ ] Ataque próprio (opcional/defensivo), com 2 variantes à escolha —
-      ainda não feito (hoje o ataque do Sobrevivente só serve pra acertar o
-      boneco de treino, sem variantes)
+- **Ataque próprio removido do escopo por pedido direto do usuário** — não
+  é "ainda não fizemos": o Sobrevivente não tem e não vai ter ataque. O
+  boneco de treino que existia só pra testar esse ataque foi removido do
+  jogo junto (não fazia mais sentido sem ninguém pra bater nele)
 - [ ] Futuro: usar túneis/atalhos no mapa
 
 ### Sistema de captura
@@ -214,10 +226,19 @@ alcançar) — é só um jeito de testar sozinho. No **modo online** o Assassino
       o mesmo botão de ataque/interação (config em `Game.CONFIG.skillCheck`)
 
 ### Áudio
-- [ ] Som de "batimento cardíaco" que aumenta de intensidade quanto mais
-      perto o Assassino está de um Sobrevivente
-- [ ] Efeito sonoro de ataque
-- [ ] Efeito sonoro de dano/captura
+- [x] Som de "batimento cardíaco" que aumenta de intensidade quanto mais
+      perto o Assassino está de um Sobrevivente — **espacial de verdade**
+      (`js/audio.js`, Web Audio API com `PannerNode`/HRTF): a posição do
+      Assassino em relação ao Sobrevivente vira posição 3D no áudio, então
+      o som muda de lado no fone conforme a direção real, mesmo sem o
+      Assassino estar visível na tela (`Game.CONFIG.heartbeatRange`)
+- [x] Efeito sonoro de ataque (golpe do Assassino)
+- [x] Efeito sonoro de dano/captura
+
+Todos os sons são **sintetizados na hora** via osciladores (sem arquivo de
+áudio, sem depender de internet) — ver `js/audio.js`. Só o Sobrevivente
+ouve o batimento cardíaco (é a "audição" dele do Assassino, o Assassino não
+ouve o próprio batimento).
 
 ### UI/HUD
 - [x] Indicador visual de cooldown de habilidades — texto simples no HUD
@@ -236,9 +257,14 @@ alcançar) — é só um jeito de testar sozinho. No **modo online** o Assassino
       "criar um mapa e o jogo carregar e desenhar" que é objetivo futuro
       (ver `Planos futuros` abaixo) — só falta trocar o array de paredes
       escrito à mão por um formato de tileset/arquivo de mapa carregado.
-- [ ] V2: randomização de elementos do mapa (não é a versão inicial —
-      cuidado ao migrar de fixo pra aleatório sem quebrar o código já feito;
-      manter o gerador de mapa desacoplado da lógica de jogo desde o início)
+- [x] V2: variação de mapa — `MAP.layouts` tem 2 arranjos de obstáculos
+      (mesma parede central com porta nos dois, pra `js/main.js` não
+      precisar saber qual layout está ativo na hora de barricar); sorteado
+      no início de cada partida. No modo online, quem inicia sorteia e
+      manda o índice escolhido no `matchStart`, pra todo mundo ficar no
+      mesmo mapa. Ainda não é aleatoriedade "de verdade" (só 2 opções
+      fixas) — mais variações é questão de adicionar mais entradas em
+      `MAP.layouts`, o motor de colisão não muda nada
 
 ### Multiplayer
 Local (mesmo teclado) foi cortado do escopo por pedido do usuário — o foco
@@ -279,40 +305,53 @@ clientes reais no modo LAN):
       objetivo concluído e fim de partida são eventos (`event`)
 - [x] Vitória/derrota sincronizada pra todo mundo na sala
 
+- [x] "Jogar de novo" volta pro lobby **da mesma sala**, sem recarregar a
+      página nem precisar reentrar com IP/código/senha (`net.rematch()`)
+- [x] Se o Assassino sair no meio da partida, os Sobreviventes vencem por
+      desistência em vez da partida travar
+
 **Limitações conhecidas (simplificações de propósito, não bugs):** é um
 relay simples sem validação/anti-cheat (confia nos clientes — ok pra jogar
 com amigos, não pra torneio competitivo); cada objetivo só conta o
 progresso de quem está fisicamente perto dele (sem "encher mais rápido"
-cooperativamente com vários Sobreviventes no mesmo objetivo); "Jogar de
-novo" recarrega a página, então quem estava numa sala online precisa
-reentrar de novo (com IP/senha ou código/senha); entrada sem QR code ainda
-(ver Planos futuros); se o Assassino cair a partida trava (sem tratamento
-de desconexão do papel principal ainda); no modo P2P, se o host fechar a
-aba, a sala inteira cai junto (ele é o servidor).
+cooperativamente com vários Sobreviventes no mesmo objetivo); no modo P2P,
+se o host fechar a aba, a sala inteira cai junto (ele é o servidor) — não
+tem um "trocar de host" automático.
 
 ---
 
 ## Planos futuros (fora de escopo agora, mas já anotado)
-- **Entrar na sala por QR code:** mais fácil que digitar IP+senha no
-  celular; adiado porque IP+senha já funciona e QR é mais complexo de
-  gerar/ler sem biblioteca externa. Pode entrar como alternativa ao IP,
-  não substituindo a senha.
-- **Reconexão/tratamento de desconexão do Assassino em partida:** hoje só o
-  desconectar de um Sobrevivente é tratado (conta como eliminado); o
-  servidor não tem um plano B se o Assassino cair no meio do jogo.
-- **Sprites em pixel art:** trocar os retângulos/CSS atuais por sprites de
-  verdade — a maioria com folhas de animação (spritesheet) e usando tileset
-  pro cenário. Sprites pegos prontos/editados, não arte original do zero
-  (ver seção "Arte" acima). Só entra depois que a jogabilidade das etapas
-  1-7 estiver validada com os placeholders simples de hoje.
+- **Sprites com animação de verdade (spritesheet):** hoje é 1 sprite
+  estático (silhueta) tingido por CSS mask — dá pro personagem virar,
+  correr e "respirar" só com transform/animação CSS (sem trocar de frame).
+  Um spritesheet de verdade (frames de andar/atacar desenhados) é o próximo
+  passo, mas exige arte feita à mão ou baixada de algum lugar — esse
+  projeto não teve acesso à internet pra buscar arte pronta durante o
+  desenvolvimento, por isso o sprite atual foi gerado por script
+  (`assets/character-mask.png`, ver `Convenções de código`).
+- **Reconexão de jogador (não só o Assassino):** hoje quem cai não volta —
+  fica marcado como eliminado/saiu. Reconectar no meio da partida (mesmo
+  papel, mesma posição) é mais complexo e ficou de fora.
 - **Sistema de mapa "criar e carregar":** hoje `js/map.js` já é 100% dados
-  (lista de paredes) separado da lógica de jogo — é a base certa pra evoluir
-  pra: desenhar/exportar um mapa em uma ferramenta (ex: Tiled) e o jogo só
-  carregar esse arquivo e desenhar em cima, em vez de ter o array de paredes
-  escrito à mão como está agora. Trocar o "conteúdo" do mapa sem mexer no
-  motor de colisão/jogo.
+  (paredes por layout) separado da lógica de jogo — é a base certa pra
+  evoluir pra: desenhar/exportar um mapa em uma ferramenta (ex: Tiled) e o
+  jogo só carregar esse arquivo e desenhar em cima, em vez de ter os
+  arrays de paredes escritos à mão como hoje (só 2 layouts fixos). Trocar o
+  "conteúdo" do mapa sem mexer no motor de colisão/jogo.
+- **Failover de host no modo P2P:** se quem hospedou a sala cair, hoje a
+  sala inteira cai; eleger outro jogador como novo host automaticamente
+  seria o próximo passo, mas é bem mais complexo de fazer direito.
 
 ---
+
+## Sprite (pixel art)
+`assets/character-mask.png` é uma silhueta pixel art de 16×20px, desenhada
+por um script Python (Pillow) direto nesse projeto — não foi baixada de
+lugar nenhum. `css/style.css` usa ela como `mask-image` no `.torso`: o PNG
+só define o "recorte" (transparência), e a cor de cada personagem continua
+vindo do JS (`character.js`/`Game.CONFIG`), igual antes. Pra gerar uma
+variante diferente, é só desenhar outra grade de pixels e trocar o arquivo
+— não precisa mudar nada em CSS/JS.
 
 ## Convenções de código
 - Toda variável de balanceamento (velocidade, dano, cooldowns, duração de

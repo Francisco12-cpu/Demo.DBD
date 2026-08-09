@@ -28,6 +28,7 @@ html,body{
 /* ---------- menu inicial / lobby ---------- */
 #menu{
   position:fixed; inset:0;
+  z-index: 30; /* fica por cima do #stage (position:relative) mesmo vindo antes no DOM */
   display:flex; align-items:center; justify-content:center;
   padding: 20px;
   overflow-y:auto;
@@ -49,9 +50,16 @@ html,body{
 .menu-card hr{ border: none; border-top: 1px solid var(--wall); width: 100%; margin: 2px 0; }
 .menu-credits{ color: var(--muted); font-size: 11px; text-align: center; margin: 8px 0 0; }
 .room-code{
+  display:flex; flex-direction:column; align-items:center; gap:8px;
   font-size: 22px; letter-spacing: 2px; color: var(--gold);
   background: var(--bg-deep); border: 1px solid var(--wall);
   padding: 12px; text-align: center; word-break: break-all;
+}
+#lobby-room-qr{
+  width: 140px; height: 140px;
+  background: #fff;
+  padding: 6px;
+  display:none; /* menu.js mostra quando tem QR pra exibir */
 }
 .menu-card button{
   background: var(--wall); color: var(--ink); border: 1px solid var(--muted);
@@ -155,9 +163,18 @@ html,body{
 }
 .torso{
   width:26px; height:34px;
-  border-radius: 8px 8px 4px 4px;
   position:relative;
   box-shadow: 0 3px 6px rgba(0,0,0,.5);
+  /* sprite pixel art (16x20, gerado localmente — ver assets/character-mask.png):
+     a imagem só carrega o "recorte" (alpha), a cor vem do background,
+     igual antes — cada personagem/Sobrevivente continua tingido via JS */
+  -webkit-mask-image: url('../assets/character-mask.png');
+  mask-image: url('../assets/character-mask.png');
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  image-rendering: pixelated;
 }
 .face{
   position:absolute; top:2px; left:50%;
@@ -225,22 +242,6 @@ html,body{
   position:absolute; bottom:-22px; left:50%; transform:translateX(-50%);
   font-size:9px; color:var(--muted); white-space:nowrap; text-transform:uppercase; letter-spacing:1px;
 }
-#dummy{
-  position:absolute;
-  width:30px; height:38px;
-  background: var(--wall);
-  border: 1px solid var(--muted);
-  border-radius: 6px;
-}
-#dummy .hp-bar{
-  position:absolute; top:-14px; left:50%; transform:translateX(-50%);
-  width:34px; height:5px; background:#1a1420; border:1px solid var(--wall);
-}
-#dummy .hp-fill{
-  height:100%; background: var(--blood); width:100%;
-  transition: width .15s ease-out;
-}
-
 /* ---------- objetivos ---------- */
 .objective{
   position:absolute;

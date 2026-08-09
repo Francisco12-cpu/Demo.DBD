@@ -40,6 +40,8 @@ window.Game = window.Game || {};
   const p2pBackBtn = document.getElementById('p2p-back');
 
   const lobbyRoomCode = document.getElementById('lobby-room-code');
+  const lobbyRoomCodeText = document.getElementById('lobby-room-code-text');
+  const lobbyRoomQr = document.getElementById('lobby-room-qr');
   const lobbyPlayers = document.getElementById('lobby-players');
   const lobbyBeKiller = document.getElementById('lobby-be-killer');
   const lobbyBeSurvivor = document.getElementById('lobby-be-survivor');
@@ -82,14 +84,34 @@ window.Game = window.Game || {};
   let lastServerErrorAt = 0;
   let hostingRoomCode = null;
 
+  function renderRoomCode(){
+    if (!hostingRoomCode){
+      lobbyRoomCode.style.display = 'none';
+      return;
+    }
+    lobbyRoomCode.style.display = 'flex';
+    lobbyRoomCodeText.textContent = 'Código da sala: ' + hostingRoomCode;
+    if (typeof qrcode !== 'undefined'){
+      try {
+        const qr = qrcode(0, 'M');
+        const url = location.origin + location.pathname + '?p2p=' + encodeURIComponent(hostingRoomCode);
+        qr.addData(url);
+        qr.make();
+        lobbyRoomQr.src = qr.createDataURL(6, 4);
+        lobbyRoomQr.style.display = 'block';
+      } catch (err) {
+        lobbyRoomQr.style.display = 'none';
+      }
+    }
+  }
+
   function makeHandlers(errorTarget){
     return {
       onJoined(id){
         localId = id;
         errorTarget.textContent = '';
         showScreen('lobby');
-        lobbyRoomCode.style.display = hostingRoomCode ? 'block' : 'none';
-        if (hostingRoomCode) lobbyRoomCode.textContent = 'Código da sala: ' + hostingRoomCode;
+        renderRoomCode();
       },
       onLobby(msg){
         lastLobby = msg;
@@ -111,9 +133,9 @@ window.Game = window.Game || {};
           showScreen(errorTarget === p2pHostError || errorTarget === p2pJoinError ? 'p2pChoice' : 'join');
         }
       },
-      onMatchStart(players){
+      onMatchStart(players, mapLayoutIndex){
         menu.style.display = 'none';
-        Game.startOnline(net, localId, players);
+        Game.startOnline(net, localId, players, mapLayoutIndex);
       },
       onEvent(fromId, data){
         if (Game.onlineEventHandler) Game.onlineEventHandler(fromId, data);
@@ -159,6 +181,15 @@ window.Game = window.Game || {};
     net = Game.NetWebRTC.join({ code, password: p2pJoinPassword.value, name: playerName() }, makeHandlers(p2pJoinError));
   });
 
+  // Se chegou aqui por um QR code (link com ?p2p=codigo), já abre direto
+  // na tela de entrar com esse código preenchido — só falta a senha.
+  (function prefillFromQr(){
+    const code = new URLSearchParams(location.search).get('p2p');
+    if (!code) return;
+    p2pCode.value = code;
+    showScreen('p2pChoice');
+  })();
+
   // ---------- lobby (comum aos dois transportes online) ----------
   function renderLobby(msg){
     lobbyPlayers.innerHTML = '';
@@ -202,7 +233,14 @@ window.Game = window.Game || {};
   });
 
   // ---------- tela de resultado (chamada pelo main.js ao fim da partida) ----------
-  function showResult(won, detail){
+  // onPlayAgain: no modo solo, função que reinicia uma partida nova direto;
+  // no modo online, null — "jogar de novo" usa a mesma sala (net.rematch())
+  // em vez de recarregar a página.
+  let playAgainSolo = null;
+
+  function showResult(won, detail, onPlayAgain){
+    playAgainSolo = onPlayAgain || null;
+    Game.hideMatchUi();
     menu.style.display = 'flex';
     showScreen('result');
     resultTitle.textContent = won ? 'Vitória!' : 'Derrota';
@@ -211,6 +249,20 @@ window.Game = window.Game || {};
   }
 
   resultAgain.addEventListener('click', () => {
+    Game.hideMatchUi();
+    if (playAgainSolo){
+      const again = playAgainSolo;
+      playAgainSolo = null;
+      menu.style.display = 'none';
+      again();
+      return;
+    }
+    if (net){
+      lobbyError.textContent = '';
+      net.rematch();
+      showScreen('lobby');
+      return;
+    }
     window.location.reload();
   });
 

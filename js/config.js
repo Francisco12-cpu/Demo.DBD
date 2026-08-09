@@ -3,28 +3,33 @@ window.Game = window.Game || {};
 // Config central de balanceamento (equivalente às @export do Godot).
 // Nunca duplicar esses valores espalhados pelo código — sempre ler daqui.
 Game.CONFIG = {
+  // O Sobrevivente não ataca ninguém (só foge/usa habilidade) — attackXxx
+  // só existe pro Assassino, cujo "ataque" inicia a captura. Um único
+  // objeto de personagem por tipo continua valendo (nenhuma duplicação de
+  // lógica), só que o Sobrevivente simplesmente nunca chama tryAttack().
   characters: {
     survivor: {
       speed: 180,
       color: '--survivor',
       label: 'SOBREVIVENTE',
-      attackDamage: 25,
-      attackCooldown: 600, // ms
-      attackDuration: 350, // ms
-      attackRange: 55,     // px
     },
     killer: {
       speed: 220,
       color: '--killer',
       label: 'ASSASSINO',
-      attackDamage: 25,
-      attackCooldown: 600,
-      attackDuration: 350,
-      attackRange: 55,
+      attackCooldown: 600, // ms
+      attackDuration: 350, // ms
+      attackRange: 55,     // px
     },
   },
   playerRadius: 21, // raio de colisão do personagem (metade do sprite de 42px)
   killerVisionRange: 240, // px — modo online: distância normal que o Assassino enxerga um Sobrevivente sem usar Sentido
+  heartbeatRange: 340, // px — modo online/solo: distância máxima em que o Sobrevivente ouve o batimento cardíaco do Assassino (funciona mesmo sem ele estar visível)
+
+  // cor de cada "vaga" de Sobrevivente na partida (índice = ordem de
+  // entrada/spawn) — só pra diferenciar visualmente, sem nenhuma outra
+  // diferença de gameplay entre eles
+  survivorColors: ['#3f8f6f', '#4a90c2', '#c2934a', '#a15fc7'],
 
   // objetivos = sobreviventes + 1 (regra do README). Só existe 1 jogador
   // local por enquanto, então isso vira variável assim que houver mais.

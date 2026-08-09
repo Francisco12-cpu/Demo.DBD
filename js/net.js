@@ -25,7 +25,7 @@ window.Game = window.Game || {};
       if (msg.type === 'error' && handlers.onServerError) handlers.onServerError(msg.message);
       if (msg.type === 'joined' && handlers.onJoined) handlers.onJoined(msg.id);
       if (msg.type === 'lobby' && handlers.onLobby) handlers.onLobby(msg);
-      if (msg.type === 'matchStart' && handlers.onMatchStart) handlers.onMatchStart(msg.players);
+      if (msg.type === 'matchStart' && handlers.onMatchStart) handlers.onMatchStart(msg.players, msg.mapLayoutIndex);
       if (msg.type === 'state' && handlers.onState) handlers.onState(msg.id, msg.data);
       if (msg.type === 'event' && handlers.onEvent) handlers.onEvent(msg.id, msg.data);
       if (msg.type === 'playerLeft' && handlers.onPlayerLeft) handlers.onPlayerLeft(msg.id);

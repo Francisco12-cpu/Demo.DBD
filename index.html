@@ -55,7 +55,10 @@
 
   <div class="menu-card" id="menu-lobby" style="display:none">
     <h2>Sala</h2>
-    <div id="lobby-room-code" class="room-code" style="display:none"></div>
+    <div id="lobby-room-code" class="room-code" style="display:none">
+      <div id="lobby-room-code-text"></div>
+      <img id="lobby-room-qr" alt="QR code da sala">
+    </div>
     <div id="lobby-players"></div>
     <div class="row">
       <button id="lobby-be-killer" type="button">Ser Assassino</button>
@@ -101,23 +104,14 @@
           <input id="speed" type="range" min="60" max="360" value="180">
           <span id="speed-val">180</span>
         </div>
-        <div class="row">
-          <span>Dano do ataque:</span>
-          <input id="damage" type="range" min="5" max="100" value="25">
-          <span id="damage-val">25</span>
-        </div>
       </div>
     </div>
-
-    <div id="dummy">
-      <div class="hp-bar"><div class="hp-fill" id="hp-fill"></div></div>
-    </div>
-
   </div>
 
   <div id="hint">
-    <b>WASD</b>/<b>setas</b> ou joystick pra mover · <b>ESPAÇO</b>, botão de
-    ataque ou gamepad pra atacar · troque o tipo e a velocidade no painel acima
+    <b>WASD</b>/<b>setas</b> ou joystick pra mover · <b>ESPAÇO</b>/botão de
+    ação pra interagir (skill check, escapar, atacar como Assassino) ·
+    <b>E</b>/<b>Q</b> pra usar habilidades
   </div>
 </div>
 
@@ -133,6 +127,7 @@
 </div>
 
 <script defer src="vendor/peerjs.min.js"></script>
+<script defer src="vendor/qrcode.min.js"></script>
 <script defer src="js/config.js"></script>
 <script defer src="js/map.js"></script>
 <script defer src="js/input.js"></script>
@@ -140,6 +135,7 @@
 <script defer src="js/ability.js"></script>
 <script defer src="js/objective.js"></script>
 <script defer src="js/capture.js"></script>
+<script defer src="js/audio.js"></script>
 <script defer src="js/net.js"></script>
 <script defer src="js/net-webrtc.js"></script>
 <script defer src="js/menu.js"></script>

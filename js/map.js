@@ -10,7 +10,6 @@ window.Game = window.Game || {};
     width: 900,
     height: 560,
     player: { x: 130, y: 280 },
-    dummy: { x: 760, y: 280 },
     killer: { x: 820, y: 480 },
     // pontos de spawn pra até 4 sobreviventes no modo online (índice = ordem de entrada)
     survivorSpawns: [
@@ -19,14 +18,10 @@ window.Game = window.Game || {};
       { x: 130, y: 100 },
       { x: 300, y: 100 },
     ],
-    walls: [
-      { x: 440, y: 30, w: 20, h: 190 },   // parede central, segmento de cima
-      { x: 440, y: 340, w: 20, h: 190 },  // parede central, segmento de baixo (deixa uma "porta" no meio)
-      { x: 150, y: 420, w: 110, h: 24 },  // obstáculo solto
-      { x: 640, y: 70, w: 26, h: 130 },   // obstáculo solto
-    ],
     // vão entre os dois segmentos da parede central — onde a habilidade
-    // "Barricar porta" spawna uma parede temporária
+    // "Barricar porta" spawna uma parede temporária. Igual nos dois
+    // layouts (só os obstáculos soltos mudam), então não precisa de dado
+    // por layout.
     door: { x: 440, y: 220, w: 20, h: 120 },
     // pontos onde objetivos podem nascer; main.js usa os N primeiros,
     // N = Game.CONFIG.survivorCount + 1
@@ -36,6 +31,28 @@ window.Game = window.Game || {};
       { x: 300, y: 480 },
       { x: 780, y: 130 },
       { x: 80, y: 480 },
+    ],
+    // V2 do mapa: mais de 1 layout de obstáculos. Escolhido aleatoriamente
+    // no início de cada partida (no modo online, quem inicia sorteia e
+    // manda o índice pra todo mundo, pra ficar igual pra todo mundo — ver
+    // matchStart em server.js/net-webrtc.js).
+    layouts: [
+      {
+        walls: [
+          { x: 440, y: 30, w: 20, h: 190 },   // parede central, segmento de cima
+          { x: 440, y: 340, w: 20, h: 190 },  // parede central, segmento de baixo
+          { x: 150, y: 420, w: 110, h: 24 },  // obstáculo solto
+          { x: 640, y: 70, w: 26, h: 130 },   // obstáculo solto
+        ],
+      },
+      {
+        walls: [
+          { x: 440, y: 30, w: 20, h: 190 },
+          { x: 440, y: 340, w: 20, h: 190 },
+          { x: 640, y: 420, w: 110, h: 24 },  // mesmos obstáculos soltos, espelhados
+          { x: 234, y: 70, w: 26, h: 130 },
+        ],
+      },
     ],
   };
 
