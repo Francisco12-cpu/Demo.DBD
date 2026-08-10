@@ -49,10 +49,13 @@ Game.CONFIG = {
   skillCheck: {
     minInterval: 2.5,      // segundos mínimos entre skill checks
     maxInterval: 5,        // segundos máximos entre skill checks
-    zoneWidthDeg: 32,       // tamanho da zona de acerto, em graus
-    speedDegPerSec: 220,    // velocidade do ponteiro giratório
+    // 32deg a 220deg/s dava uma janela de reação de ~145ms — quase
+    // impossível de acertar de primeira, principalmente no toque (o dedo
+    // ainda precisa alcançar o botão). Aumentado pra ~270ms, ainda exige
+    // atenção mas dá pra reagir de verdade.
+    zoneWidthDeg: 46,       // tamanho da zona de acerto, em graus
+    speedDegPerSec: 170,    // velocidade do ponteiro giratório
     successBonus: 0.18,     // progresso ganho ao acertar
-    failPenalty: 0.12,      // progresso perdido ao errar/deixar passar
   },
 
   // captura: ao ser atingido pelo Assassino, o Sobrevivente trava e precisa
@@ -99,8 +102,15 @@ Game.CONFIG = {
   // Camuflagem, mas sem gastar habilidade — em troca, não pode se mexer
   // enquanto escondido e é obrigado a sair sozinho depois de `maxDuration`
   hideout: {
-    radius: 40,       // precisa estar bem perto pra entrar/sair
+    radius: 40,        // precisa estar bem perto pra entrar/sair
     maxDuration: 14,   // segundos — depois disso sai forçado
+    // ficar parado escondido tempo demais faz barulho: depois de
+    // `noiseAfter` segundos escondido, o jogo revela a posição pro
+    // Assassino (som + marcador no mapa) a cada `noiseInterval` segundos,
+    // até sair (por vontade ou forçado em maxDuration). Ajuste esses dois
+    // números pra deixar mais fácil ou mais arriscado ficar escondido.
+    noiseAfter: 6,      // segundos escondido até começar a fazer barulho
+    noiseInterval: 3,   // segundos entre cada barulho, depois de noiseAfter
   },
 
   // ---------- habilidades (passo 7) ----------

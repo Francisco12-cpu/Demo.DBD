@@ -7,6 +7,12 @@ window.Game = window.Game || {};
   const arena = document.getElementById('arena');
   const lightingEl = document.getElementById('lighting');
   const dangerVignetteEl = document.getElementById('danger-vignette');
+  const rotateDismissBtn = document.getElementById('rotate-dismiss');
+  if (localStorage.getItem('dbd_rotate_dismissed') === '1') document.body.classList.add('rotate-dismissed');
+  rotateDismissBtn.addEventListener('click', () => {
+    document.body.classList.add('rotate-dismissed');
+    localStorage.setItem('dbd_rotate_dismissed', '1');
+  });
   const objectivesStatus = document.getElementById('objectives-status');
   const abilityHudEl = document.getElementById('ability-hud');
   const panel = document.getElementById('panel');
@@ -346,11 +352,30 @@ window.Game = window.Game || {};
     grad.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
+
+    // reforço de contorno nas paredes perto: a queda de luz do gradiente
+    // deixa a face da parede fraca demais bem na borda da visão, fazendo
+    // ela "sumir" junto com o cômodo escondido atrás — mesmo estando
+    // dentro do polígono visível. Isso aqui só reforça o traço da própria
+    // parede; como ainda está dentro do clip do polígono, o que sobrar do
+    // traço do lado de fora (atrás da parede, fora de visão) continua
+    // cortado — não revela o cômodo escondido, só deixa a parede em si
+    // legível.
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    segs.forEach((seg) => {
+      ctx.beginPath();
+      ctx.moveTo(seg.x1, seg.y1);
+      ctx.lineTo(seg.x2, seg.y2);
+      ctx.stroke();
+    });
+
     ctx.restore();
   }
 
   function beginMatchUi(){
     stage.style.display = 'flex';
+    document.body.classList.add('in-match'); // liga o aviso de girar o celular (só existe durante a partida, não no menu)
     Game.Input.init();
     Game.Audio.init();
     Game.Audio.startAmbient();
@@ -359,6 +384,7 @@ window.Game = window.Game || {};
 
   function hideMatchUi(){
     stage.style.display = 'none';
+    document.body.classList.remove('in-match');
     Game.Audio.stopHeartbeat();
     Game.Audio.stopAmbient();
     killerCompassEl.classList.remove('active');
@@ -558,7 +584,13 @@ window.Game = window.Game || {};
         if (attackPressed) capture.pulse();
       } else if (!capture.state.eliminated && hideout.state.hidden){
         if (attackPressed) hideout.exit(); // sai antes da hora, por vontade própria
-        hideout.update(delta);
+        const hideoutResult = hideout.update(delta);
+        // ficou escondido tempo demais: entrega a posição igual a um
+        // skill check errado (mesmo mecanismo já usado pra distração da IA)
+        if (hideoutResult.madeNoise){
+          Game.Audio.playError();
+          distraction = { x: player.state.pos.x, y: player.state.pos.y, until: performance.now() + 3000 };
+        }
       } else if (!capture.state.eliminated){
         if (ability1Requested) triggerSurvivorAbility();
 
@@ -849,6 +881,12 @@ window.Game = window.Game || {};
         return;
       }
 
+      if (data.kind === 'hideoutNoise'){
+        spawnPingMarker(data.x, data.y, 2.5);
+        if (!isSurvivor) Game.Audio.playError(); // ficou escondido tempo demais, denuncia a posição
+        return;
+      }
+
       if (data.kind === 'objectiveStarted'){
         if (!isSurvivor) Game.Audio.playObjectiveStart(); // aviso discreto, sem posição
         return;
@@ -940,7 +978,13 @@ window.Game = window.Game || {};
         if (attackRequested) localEntry.capture.pulse();
       } else if (!eliminated && isSurvivor && localEntry.hideout.state.hidden){
         if (attackRequested) localEntry.hideout.exit(); // sai antes da hora, por vontade própria
-        localEntry.hideout.update(delta);
+        const hideoutResult = localEntry.hideout.update(delta);
+        // ficou escondido tempo demais: entrega a posição igual a um
+        // skill check errado, mesma técnica de ping usada em objectiveFailed
+        if (hideoutResult.madeNoise){
+          spawnPingMarker(localEntry.char.state.pos.x, localEntry.char.state.pos.y, 2.5);
+          net.sendEvent({ kind: 'hideoutNoise', x: localEntry.char.state.pos.x, y: localEntry.char.state.pos.y });
+        }
       } else if (!eliminated){
         if (isSurvivor){
           if (ability1Requested) triggerLocalSurvivorAbility();

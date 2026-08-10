@@ -31,11 +31,12 @@ window.Game = window.Game || {};
       scRing.style.display = 'block';
     }
 
+    // Errar (ou deixar o ponteiro dar a volta sem apertar) não tira
+    // progresso — só não ganha nada nesse skill check, o que já custa o
+    // tempo que passou até ele acontecer de novo. Só acertar avança a barra.
     function resolveSkillCheck(hit){
       const cfg = Game.CONFIG.skillCheck;
-      state.progress = hit
-        ? Math.min(1, state.progress + cfg.successBonus)
-        : Math.max(0, state.progress - cfg.failPenalty);
+      if (hit) state.progress = Math.min(1, state.progress + cfg.successBonus);
       if (state.progress >= 1) state.done = true;
       state.skillCheck = null;
       scRing.style.display = 'none';

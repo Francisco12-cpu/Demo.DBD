@@ -272,7 +272,12 @@ por quem escolheu esse papel na sala.
 - [x] Skill check circular (estilo Dead by Daylight): um ponteiro giratório,
       o jogador precisa clicar/apertar no momento certo pra não falhar —
       dispara sozinho de vez em quando enquanto o objetivo enche, reaproveita
-      o mesmo botão de ataque/interação (config em `Game.CONFIG.skillCheck`)
+      o mesmo botão de ataque/interação (config em `Game.CONFIG.skillCheck`).
+      Errar **não tira progresso** — só não ganha nada nesse skill check
+      (o que já custa o tempo até o próximo aparecer); só acertar avança a
+      barra. Zona de acerto e velocidade do ponteiro ajustadas pra dar uma
+      janela de reação real (~270ms, era ~145ms) — importante especialmente
+      no toque, onde o dedo ainda precisa alcançar o botão
 - [x] Cooperação: no modo online, cada Sobreviventes extra perto do mesmo
       objetivo (além de quem já está preenchendo) acelera o preenchimento em
       +50% — só quem está fisicamente perto continua contando, igual antes,
@@ -319,6 +324,23 @@ joga sem fone/som ligado.
       capturam/são capturados
 - [x] Indicador de estado — classes visuais (`.captured`, `.eliminated`,
       barra de struggle) mostram capturado/eliminado
+- [x] Aviso pra girar o celular (`#rotate-prompt`) só aparece **durante a
+      partida** (`body.in-match`, ligado por `beginMatchUi`/`hideMatchUi` em
+      `js/main.js`) — antes travava o menu inteiro em paisagem também, o que
+      deixava o menu (ainda não adaptado a isso) ruim de usar. Tem um botão
+      "Continuar assim mesmo" que dispensa o aviso (guardado em
+      `localStorage`) pra quem não consegue ou não quer girar a tela — sem
+      ele, ficaria impossível jogar nesse caso
+- [x] Menu responsivo a telas curtas (celular deitado ou qualquer janela com
+      pouca altura): `@media (max-height: 480px)` reduz preenchimento,
+      fontes e o tamanho do QR code, e o card do menu vira rolável
+      internamente se ainda assim não couber tudo (`css/style.css`)
+- [x] Texto de dica corrigido: portas/geradores **não precisam de botão**
+      pra progredir (só ficar parado por perto); o botão de ação só serve
+      pra skill check, entrar/sair do esconderijo e atacar/arrombar — o
+      texto antigo sugeria que "trancar" também era por botão, o que
+      confundia (ver `Objetivos e skill checks` e `Salas, portas e
+      esconderijo`)
 
 ### Mapa
 - [x] V1: mapa fixo com colisão — dados do mapa (paredes) vivem em `js/map.js`,
@@ -372,6 +394,14 @@ joga sem fone/som ligado.
       solo, a IA do Assassino esquece a posição exata do Sobrevivente
       escondido (mira no último lugar visto em vez de atravessar o
       esconderijo), senão a mecânica seria inútil sozinho
+- [x] **Fica muito tempo escondido, faz barulho**: depois de
+      `Game.CONFIG.hideout.noiseAfter` segundos escondido (6s por padrão), o
+      jogo revela a posição pro Assassino (som + marcador no mapa) a cada
+      `Game.CONFIG.hideout.noiseInterval` segundos (3s por padrão), até sair
+      — igual ao skill check errado, mesma técnica de ping. Evita que dê pra
+      simplesmente se trancar num esconderijo pro resto da partida; os dois
+      números são variáveis isoladas em `Game.CONFIG.hideout`, fáceis de
+      reajustar
 - [x] IA do Assassino no modo solo agora **arromba porta trancada** em vez
       de só desviar dela feito qualquer parede — reaproveita o mesmo desvio
       de obstáculo, só que prioriza arrombar quando a parede na frente é
@@ -393,6 +423,12 @@ joga sem fone/som ligado.
       escurecer por distância. Vale igual pro Assassino e pros
       Sobreviventes (`wallSegmentsScreen`/`visibilityPolygon`/`drawLighting`
       em `js/main.js`)
+- [x] A própria parede continua visível mesmo na borda da luz: o gradiente
+      de queda de luz deixava a face da parede fraca demais bem no limite da
+      visão, fazendo ela "sumir" junto com o cômodo escuro atrás mesmo
+      dentro do polígono visível — agora tem um reforço de contorno só na
+      própria parede (ainda cortado pelo mesmo polígono, então não revela
+      nada do que tem atrás, só deixa a parede em si legível)
 - [x] Legibilidade da fonte: rótulo do nome não força mais maiúsculas
       (`text-transform` removido), fonte maior e com contorno/sombra pra
       distinguir maiúscula de minúscula de longe
