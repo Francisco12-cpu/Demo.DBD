@@ -13,7 +13,10 @@ window.Game = window.Game || {};
     const scRing = el.querySelector('.skillcheck-ring');
     const scNeedle = el.querySelector('.skillcheck-needle');
 
-    const state = { pos, progress: 0, done: false, skillCheck: null, active: false };
+    // skillCheckLevel: sobe a cada ACERTO nesse gerador (dificuldade
+    // progressiva — cada skill check fica um pouco mais rápido/apertado que
+    // o anterior). Errar não muda o nível, só obriga repetir no mesmo nível.
+    const state = { pos, progress: 0, done: false, skillCheck: null, active: false, skillCheckLevel: 0 };
     let nextCheckIn = randomCheckDelay();
 
     function randomCheckDelay(){
@@ -23,19 +26,28 @@ window.Game = window.Game || {};
 
     function spawnSkillCheck(){
       const cfg = Game.CONFIG.skillCheck;
-      const zoneStart = Math.random() * (360 - cfg.zoneWidthDeg);
-      const zoneEnd = zoneStart + cfg.zoneWidthDeg;
-      state.skillCheck = { angle: 0, zoneStart, zoneEnd };
+      const level = state.skillCheckLevel;
+      const zoneWidthDeg = Math.max(cfg.minZoneWidthDeg, cfg.zoneWidthDeg - level * cfg.zoneShrinkPerHit);
+      const speedDegPerSec = Math.min(cfg.maxSpeedDegPerSec, cfg.speedDegPerSec + level * cfg.speedGainPerHit);
+      const zoneStart = Math.random() * (360 - zoneWidthDeg);
+      const zoneEnd = zoneStart + zoneWidthDeg;
+      state.skillCheck = { angle: 0, zoneStart, zoneEnd, speedDegPerSec };
       scRing.style.setProperty('--zone-start', zoneStart + 'deg');
       scRing.style.setProperty('--zone-end', zoneEnd + 'deg');
       scRing.style.display = 'block';
     }
 
+    // Errar (ou deixar o ponteiro dar a volta sem apertar) não tira
+    // progresso nem sobe o nível de dificuldade — só não ganha nada nesse
+    // skill check, o que já custa o tempo até ele aparecer de novo no
+    // mesmo nível. Só acertar avança a barra E sobe a dificuldade do
+    // próximo skill check desse gerador.
     function resolveSkillCheck(hit){
       const cfg = Game.CONFIG.skillCheck;
-      state.progress = hit
-        ? Math.min(1, state.progress + cfg.successBonus)
-        : Math.max(0, state.progress - cfg.failPenalty);
+      if (hit){
+        state.progress = Math.min(1, state.progress + cfg.successBonus);
+        state.skillCheckLevel += 1;
+      }
       if (state.progress >= 1) state.done = true;
       state.skillCheck = null;
       scRing.style.display = 'none';
@@ -59,8 +71,7 @@ window.Game = window.Game || {};
       const wasActive = state.active;
 
       if (state.skillCheck){
-        const scCfg = Game.CONFIG.skillCheck;
-        state.skillCheck.angle += scCfg.speedDegPerSec * delta;
+        state.skillCheck.angle += state.skillCheck.speedDegPerSec * delta;
         if (state.skillCheck.angle >= 360){
           resolveSkillCheck(false); // deu a volta sem apertar = falhou
           result.justFailed = true;

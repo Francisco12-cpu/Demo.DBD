@@ -27,7 +27,8 @@ window.Game = window.Game || {};
 
   const nameInput = document.getElementById('menu-name');
   const abilitySelect = document.getElementById('menu-ability');
-  const soloBtn = document.getElementById('menu-solo');
+  const soloSurvivorBtn = document.getElementById('menu-solo-survivor');
+  const soloKillerBtn = document.getElementById('menu-solo-killer');
   const lanBtn = document.getElementById('menu-lan');
   const p2pBtn = document.getElementById('menu-p2p');
 
@@ -140,9 +141,14 @@ window.Game = window.Game || {};
   }
   renderStats();
 
-  soloBtn.addEventListener('click', () => {
+  soloSurvivorBtn.addEventListener('click', () => {
     menu.style.display = 'none';
     Game.startSolo(playerName(), abilitySelect.value);
+  });
+
+  soloKillerBtn.addEventListener('click', () => {
+    menu.style.display = 'none';
+    Game.startSoloAsKiller(playerName());
   });
 
   lanBtn.addEventListener('click', () => {

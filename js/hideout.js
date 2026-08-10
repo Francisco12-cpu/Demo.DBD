@@ -9,28 +9,42 @@ window.Game = window.Game || {};
   // cooldown/uso) — em troca não pode se mexer enquanto escondido, e é
   // obrigado a sair sozinho depois de `maxDuration` segundos.
   function createHideout(){
-    const state = { hidden: false, timeLeft: 0 };
+    const state = { hidden: false, timeLeft: 0, hiddenFor: 0 };
+    let nextNoiseAt = 0;
 
     function enter(){
       if (state.hidden) return;
       state.hidden = true;
       state.timeLeft = Game.CONFIG.hideout.maxDuration;
+      state.hiddenFor = 0;
+      nextNoiseAt = Game.CONFIG.hideout.noiseAfter;
     }
 
     function exit(){
       state.hidden = false;
       state.timeLeft = 0;
+      state.hiddenFor = 0;
     }
 
-    // retorna true se acabou de sair forçado (útil pra quem chama avisar/tocar som)
+    // retorna { forcedExit, madeNoise } — forcedExit quando o tempo máximo
+    // acaba (útil pra quem chama avisar/tocar som), madeNoise quando ficou
+    // escondido tempo demais e acabou de entregar a posição pro Assassino.
     function update(delta){
-      if (!state.hidden) return false;
+      const result = { forcedExit: false, madeNoise: false };
+      if (!state.hidden) return result;
       state.timeLeft -= delta;
+      state.hiddenFor += delta;
       if (state.timeLeft <= 0){
         exit();
-        return true;
+        result.forcedExit = true;
+        return result;
       }
-      return false;
+      const cfg = Game.CONFIG.hideout;
+      if (state.hiddenFor >= nextNoiseAt){
+        nextNoiseAt += cfg.noiseInterval;
+        result.madeNoise = true;
+      }
+      return result;
     }
 
     return { state, enter, exit, update };

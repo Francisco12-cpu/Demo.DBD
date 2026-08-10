@@ -79,6 +79,38 @@ html,body{
 .lobby-player.role-survivor .role-tag{ color: var(--survivor); }
 #result-title.won{ color: var(--survivor); }
 #result-title.lost{ color: var(--killer); }
+
+/* menu em tela baixa (celular deitado, ou qualquer janela curta): dá pra
+   girar o celular livremente no menu agora (o aviso de rotação só aparece
+   durante a partida), então o menu precisa caber tanto em pé quanto
+   deitado sem ficar apertado/cortado */
+@media (max-height: 480px){
+  #menu{ padding: 8px; align-items: flex-start; }
+  .menu-card{
+    max-width: 420px;
+    max-height: calc(100vh - 16px);
+    padding: 10px 16px;
+    gap: 6px;
+    overflow-y: auto;
+  }
+  .menu-card h1{ font-size: 14px; margin: 2px 0; }
+  .menu-card h2{ font-size: 13px; margin: 2px 0; }
+  .menu-card label{ font-size: 11px; gap: 2px; }
+  .menu-card input[type=text], .menu-card select{ padding: 5px; font-size: 12px; }
+  .menu-card button{ padding: 6px; font-size: 12px; }
+  .menu-card hr{ margin: 0; }
+  .room-code{ font-size: 16px; padding: 6px; gap: 4px; }
+  #lobby-room-qr{ width: 90px; height: 90px; }
+  .menu-credits{ margin-top: 2px; }
+}
+
+/* telas bem estreitas (celulares pequenos em pé) — o card já usa
+   width:100% + max-width, mas o padding fixo sobrava pouco espaço útil */
+@media (max-width: 360px){
+  #menu{ padding: 12px; }
+  .menu-card{ padding: 16px; }
+}
+
 #arena{
   position:absolute;
   top:0; left:0;
@@ -492,24 +524,40 @@ html,body{
   #hint{ font-size: 10px; padding: 6px 10px; }
 }
 
-/* pede pra girar o celular — a maioria dos jogos joga deitado, e o joystick
-   + botões cabem bem melhor com mais largura. Só aparece em tela de toque
-   em retrato (pointer:coarse evita disparar em janela estreita de desktop) */
-#rotate-prompt{ display:none; }
+/* sugere girar o celular — a maioria dos jogos joga deitado, e o joystick
+   + botões cabem bem melhor com mais largura. Só um AVISO pequeno, nunca
+   bloqueia o jogo por baixo (o jogador pode simplesmente ignorar e
+   continuar jogando em pé) — igual ao #gamepad-toast. Só aparece DURANTE A
+   PARTIDA (body.in-match, ligado/desligado por beginMatchUi/hideMatchUi em
+   main.js), nunca no menu. pointer:coarse evita disparar em janela estreita
+   de desktop. */
+#rotate-prompt{
+  position:fixed; z-index:90; top:16px; left:50%;
+  transform: translateX(-50%) translateY(-140%);
+  display:flex; align-items:center; gap:10px;
+  background: rgba(10,8,14,.92); border:1px solid var(--gold); color: var(--ink);
+  padding: 10px 14px; font-size:12px; max-width: 92vw;
+  pointer-events:none; opacity:0;
+  transition: transform .25s ease, opacity .25s ease;
+}
 @media (orientation: portrait) and (pointer: coarse){
-  #rotate-prompt{
-    position:fixed; inset:0; z-index:100;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:16px; background: var(--bg-deep); color: var(--ink);
-    text-align:center; padding: 24px; font-family: inherit;
+  body.in-match:not(.rotate-dismissed) #rotate-prompt{
+    transform: translateX(-50%) translateY(0); opacity:1;
+    pointer-events:auto;
   }
-  #rotate-icon{ font-size:48px; animation: rotateHint 1.6s ease-in-out infinite; }
+  #rotate-icon{ font-size:20px; animation: rotateHint 1.6s ease-in-out infinite; flex-shrink:0; }
   @keyframes rotateHint{
     0%,100%{ transform: rotate(0deg); }
     50%{ transform: rotate(90deg); }
   }
-  #menu, #stage, #touch-controls{ display:none !important; }
 }
+#rotate-prompt p{ margin:0; text-align:left; flex:1; white-space:nowrap; }
+#rotate-dismiss{
+  background: transparent; border: 1px solid var(--muted); color: var(--muted);
+  font-family: inherit; font-size: 11px; padding: 6px 10px;
+  border-radius: 4px; flex-shrink:0;
+}
+#rotate-dismiss:active{ border-color: var(--gold); color: var(--ink); }
 
 /* escurece/avermelha as bordas da tela quanto mais perto o Assassino está —
    mesma proximidade já calculada pro batimento cardíaco (js/main.js), só

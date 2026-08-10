@@ -49,10 +49,24 @@ Game.CONFIG = {
   skillCheck: {
     minInterval: 2.5,      // segundos mínimos entre skill checks
     maxInterval: 5,        // segundos máximos entre skill checks
-    zoneWidthDeg: 32,       // tamanho da zona de acerto, em graus
-    speedDegPerSec: 220,    // velocidade do ponteiro giratório
+    // 32deg a 220deg/s dava uma janela de reação de ~145ms — quase
+    // impossível de acertar de primeira, principalmente no toque (o dedo
+    // ainda precisa alcançar o botão). Aumentado pra ~270ms, ainda exige
+    // atenção mas dá pra reagir de verdade.
+    zoneWidthDeg: 46,       // tamanho da zona de acerto no nível 0 (primeiro skill check do gerador)
+    speedDegPerSec: 170,    // velocidade do ponteiro no nível 0
     successBonus: 0.18,     // progresso ganho ao acertar
-    failPenalty: 0.12,      // progresso perdido ao errar/deixar passar
+
+    // dificuldade progressiva: cada ACERTO no mesmo gerador deixa o próximo
+    // skill check dele um pouco mais rápido/apertado (fica "mais difícil
+    // até conseguir"). Errar não muda a dificuldade nem tira progresso — só
+    // obriga repetir aquele mesmo skill check (perde o tempo até ele
+    // aparecer nesse nível de novo). Os limites (min/max) evitam que vire
+    // impossível de acertar depois de muitos geradores reparados.
+    zoneShrinkPerHit: 3,     // graus a menos na zona por acerto
+    speedGainPerHit: 14,     // graus/s a mais no ponteiro por acerto
+    minZoneWidthDeg: 22,     // nunca fica menor que isso
+    maxSpeedDegPerSec: 320,  // nunca fica mais rápido que isso
   },
 
   // captura: ao ser atingido pelo Assassino, o Sobrevivente trava e precisa
@@ -99,8 +113,29 @@ Game.CONFIG = {
   // Camuflagem, mas sem gastar habilidade — em troca, não pode se mexer
   // enquanto escondido e é obrigado a sair sozinho depois de `maxDuration`
   hideout: {
-    radius: 40,       // precisa estar bem perto pra entrar/sair
+    radius: 40,        // precisa estar bem perto pra entrar/sair
     maxDuration: 14,   // segundos — depois disso sai forçado
+    // ficar parado escondido tempo demais faz barulho: depois de
+    // `noiseAfter` segundos escondido, o jogo revela a posição pro
+    // Assassino (som + marcador no mapa) a cada `noiseInterval` segundos,
+    // até sair (por vontade ou forçado em maxDuration). Ajuste esses dois
+    // números pra deixar mais fácil ou mais arriscado ficar escondido.
+    noiseAfter: 6,      // segundos escondido até começar a fazer barulho
+    noiseInterval: 3,   // segundos entre cada barulho, depois de noiseAfter
+  },
+
+  // Sobrevivente controlado pela IA (modo solo, jogando de Assassino) —
+  // foge do Assassino, repara geradores sozinho e tenta escapar pelo
+  // portão. Espelha `characters.killer` (IA que persegue no modo solo
+  // normal), só que fugindo em vez de perseguindo.
+  survivorAI: {
+    speedMultiplier: 0.96,  // um pouco mais devagar que o Assassino, senão nunca dá pra alcançar
+    fleeRange: 260,         // px — a essa distância do Assassino, larga o gerador e foge
+    // "reação" ao skill check: chance por segundo de tentar apertar
+    // enquanto ele está ativo (não é acerto garantido — ainda depende de
+    // estar no ângulo certo, igual ao jogador)
+    reactionChancePerSecond: 2.2,
+    struggleInterval: 0.6,  // segundos entre cada "puxão" de luta quando capturado
   },
 
   // ---------- habilidades (passo 7) ----------

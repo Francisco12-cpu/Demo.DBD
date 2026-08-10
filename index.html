@@ -22,7 +22,11 @@
         <option value="distract">Distrair — chama atenção pra um ponto falso</option>
       </select>
     </label>
-    <button id="menu-solo" type="button">Jogar sozinho (teste vs IA)</button>
+    <label class="menu-hint">Jogar sozinho (teste vs IA)</label>
+    <div class="row">
+      <button id="menu-solo-survivor" type="button">de Sobrevivente</button>
+      <button id="menu-solo-killer" type="button">de Assassino</button>
+    </div>
     <button id="menu-lan" type="button">Multiplayer LAN (servidor num PC)</button>
     <button id="menu-p2p" type="button">Multiplayer P2P (celular vira host, beta)</button>
     <button id="menu-settings-open" type="button" class="secondary">Configurações</button>
@@ -127,10 +131,11 @@
   </div>
 
   <div id="hint">
-    <b>WASD</b>/<b>setas</b> ou joystick pra mover · <b>ESPAÇO</b>/botão de
-    ação pra interagir (skill check, escapar, trancar/entrar no
-    esconderijo, atacar/arrombar como Assassino) · <b>E</b>/<b>Q</b> pra
-    usar habilidades
+    <b>WASD</b>/<b>setas</b> ou joystick pra mover · fique parado perto de
+    porta/gerador pra reparar/trancar sozinho · <b>ESPAÇO</b>/botão de
+    ação só pra skill check, entrar/sair do esconderijo e
+    atacar/arrombar como Assassino · <b>E</b>/<b>Q</b> pra usar
+    habilidades
   </div>
 
   <div id="killer-compass"><div id="killer-compass-arrow"></div></div>
@@ -140,7 +145,8 @@
 
 <div id="rotate-prompt">
   <div id="rotate-icon">📱</div>
-  <p>Gire o celular pra jogar<br>— fica bem melhor deitado</p>
+  <p>Fica melhor com o celular deitado</p>
+  <button id="rotate-dismiss" type="button">Entendi</button>
 </div>
 
 <div id="touch-controls">
