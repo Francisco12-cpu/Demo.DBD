@@ -11,16 +11,23 @@
 }
 *{box-sizing:border-box;}
 html,body{
-  margin:0; height:100%;
+  margin:0; height:100%; height:100dvh; height:var(--app-height, 100dvh);
   background: var(--bg-deep);
   color: var(--ink);
   font-family: 'Courier New', ui-monospace, monospace;
   overflow:hidden;
   -webkit-tap-highlight-color: transparent;
 }
+/* 100vh no celular é o tamanho MÁXIMO da tela (como se a barra de endereço
+   já estivesse escondida) — quando ela está visível, o conteúdo continua
+   com esse tamanho e o final da tela (controles de toque, botão de
+   atacar...) fica embaixo da barra, inacessível. 100dvh acompanha o
+   tamanho real (suportado desde Chrome 108/Safari 15.4); --app-height (via
+   window.visualViewport, script no <head> do index.html) é a camada extra
+   de segurança em cima disso, medindo o tamanho visível de verdade. */
 #stage{
   position:relative;
-  width:100vw; height:100vh;
+  width:100vw; height:100vh; height:100dvh; height:var(--app-height, 100dvh);
   display:none; /* main.js mostra quando a partida começa */
   overflow:hidden; /* a câmera mostra só uma janela do mapa, que é maior que a tela */
 }
@@ -28,6 +35,7 @@ html,body{
 /* ---------- menu inicial / lobby ---------- */
 #menu{
   position:fixed; inset:0;
+  height:100vh; height:100dvh; height:var(--app-height, 100dvh);
   z-index: 30; /* fica por cima do #stage (position:relative) mesmo vindo antes no DOM */
   display:flex; align-items:center; justify-content:center;
   padding: 20px;
@@ -89,6 +97,8 @@ html,body{
   .menu-card{
     max-width: 420px;
     max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    max-height: calc(var(--app-height, 100dvh) - 16px);
     padding: 10px 16px;
     gap: 6px;
     overflow-y: auto;
@@ -132,7 +142,7 @@ html,body{
   position:fixed; inset:0;
   z-index: 15;
   pointer-events:none;
-  width:100vw; height:100vh;
+  width:100vw; height:100vh; height:100dvh; height:var(--app-height, 100dvh);
   display:block;
 }
 /* bússola de direção do Assassino — complementa o áudio 3D com uma pista
@@ -270,6 +280,33 @@ html,body{
   0%,100%{ box-shadow: 0 0 14px rgba(63,143,111,.55); }
   50%{ box-shadow: 0 0 28px rgba(63,143,111,.9); }
 }
+/* gancho (js/capture.js): onde o Assassino pendura quem ele carrega — um
+   poste simples, bem visível de longe (igual o portão), fica destacado
+   quando tem alguém pendurado nele agora */
+.hook{
+  position:absolute;
+  width:10px; height:56px;
+  transform: translate(-50%,-100%);
+  background: linear-gradient(var(--wall), #1a1420);
+  border: 1px solid var(--muted);
+  border-radius: 3px;
+}
+.hook::after{
+  content:'';
+  position:absolute; top:2px; left:50%; transform:translateX(-50%);
+  width:16px; height:16px;
+  border-radius:50%;
+  background: transparent;
+  border: 2px solid var(--muted);
+}
+.hook.occupied{
+  border-color: var(--blood);
+}
+.hook.occupied::after{
+  border-color: var(--blood);
+  box-shadow: 0 0 12px rgba(140,31,40,.8);
+  animation: gateOpenPulse 1.4s ease-in-out infinite;
+}
 .ping-marker{
   position:absolute;
   left:0; top:0;
@@ -370,6 +407,21 @@ html,body{
 .char.hit-flash .torso{ filter: brightness(2.5) saturate(1.4); }
 .char.captured .torso{ filter: grayscale(.6) brightness(.7); }
 .char.eliminated{ opacity:.35; filter: grayscale(1); }
+/* derrubado (imóvel, esperando ser carregado ou reanimado) e carregado
+   (preso nas costas do Assassino, segue a posição dele) — mesma pose
+   deitada pros dois, só o carregado que segue outra entidade em vez de
+   ficar parado (main.js cuida disso) */
+.char.downed, .char.carried{
+  transform: translate(-50%,-50%) rotate(90deg);
+}
+.char.downed .torso, .char.carried .torso{ filter: grayscale(.5) brightness(.6); }
+/* pendurado no gancho — cor de aviso, balançando, ninguém confunde com "só ferido" */
+.char.hooked .torso{ filter: sepia(.4) saturate(3.5) hue-rotate(-50deg) brightness(.8); }
+.char.hooked{ animation: hookedSway 1.8s ease-in-out infinite; }
+@keyframes hookedSway{
+  0%,100%{ transform: translate(-50%,-50%) rotate(-4deg); }
+  50%{ transform: translate(-50%,-50%) rotate(4deg); }
+}
 /* ferido (1º golpe, js/health.js): mais lento e sangrando — some quando
    cura (parado por um tempo) ou volta pra saudável, some com o 2º golpe
    junto do estado "captured" acima (que sobrepõe visualmente) */
@@ -406,11 +458,20 @@ html,body{
   border: 2px solid var(--muted);
   transform: translate(-50%,-50%);
 }
-.objective.active{ border-color: var(--gold); box-shadow: 0 0 14px rgba(201,162,75,.6); }
+/* pulso visível enquanto alguém repara — precisava ficar óbvio que "está
+   acontecendo alguma coisa" mesmo de relance, numa tela pequena de celular */
+.objective.active{
+  border-color: var(--gold);
+  animation: objectivePulse 1s ease-in-out infinite;
+}
+@keyframes objectivePulse{
+  0%,100%{ box-shadow: 0 0 10px rgba(201,162,75,.5); }
+  50%{ box-shadow: 0 0 22px rgba(201,162,75,.95); }
+}
 .objective.done{ background: var(--gold); border-color: var(--ink); }
 .objective .progress-bar{
-  position:absolute; top:-14px; left:50%; transform:translateX(-50%);
-  width:36px; height:5px; background:#1a1420; border:1px solid var(--wall);
+  position:absolute; top:-20px; left:50%; transform:translateX(-50%);
+  width:54px; height:9px; background:#1a1420; border:1px solid var(--wall);
 }
 .objective .objective-fill{
   height:100%; background: var(--gold); width:0%;
@@ -464,6 +525,9 @@ html,body{
   justify-content: space-between;
   align-items: flex-end;
   padding: 20px;
+  /* espaço extra pra não ficar embaixo da barra de gestos/notch quando
+     instalado como app (viewport-fit=cover no <meta viewport>) */
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   pointer-events: none;
   z-index: 20;
 }

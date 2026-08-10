@@ -120,6 +120,16 @@ window.Game = window.Game || {};
       { x: 1500, y: 100 },
       { x: 1500, y: 1900 },
     ],
+    // ganchos: onde o Assassino pendura quem ele carrega (ver js/capture.js).
+    // Espalhados pelo campo aberto entre as salas, longe o bastante de
+    // qualquer sala pra nunca cair dentro de uma (checar contra ROOM_DEF
+    // ao mudar isso: nenhum ponto pode cair num retângulo de sala).
+    hookSpots: [
+      { x: 970, y: 850 },
+      { x: 1870, y: 850 },
+      { x: 970, y: 1750 },
+      { x: 1870, y: 1750 },
+    ],
     // V3 do mapa: layouts com salas de verdade. Escolhido aleatoriamente no
     // início de cada partida (no modo online, quem inicia sorteia e manda
     // o índice pra todo mundo — ver matchStart em server.js/net-webrtc.js).

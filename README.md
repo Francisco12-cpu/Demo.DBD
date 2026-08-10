@@ -81,6 +81,17 @@ modo Multiplayer LAN não funciona pelo GitHub Pages (precisa do servidor
 Node.js rodando em alguém na mesma rede) — o Pages é só pra jogar/testar
 sozinho e mandar o link pra alguém dar uma olhada.
 
+**Instalar como app (PWA):** o site tem `manifest.json` + `sw.js`
+(service worker) — no Chrome do celular ou desktop, abrir o link e apertar
+"Instalar app" (ou "Adicionar à tela inicial") no menu do navegador cria um
+ícone que abre o jogo em janela própria, sem barra de endereço. O service
+worker usa estratégia "rede primeiro, cache só como reserva pra quando
+estiver offline" — de propósito, pra nunca prender alguém numa versão
+antiga depois de um update (já tivemos um problema de cache de navegador
+escondendo correção antes; não queríamos que um cache mais agressivo
+piorasse isso). Ícones em `assets/icon-*.png`, gerados localmente (mesmo
+esquema de cores do jogo, sem depender de internet).
+
 ## Estrutura do projeto
 ```
 index.html              esqueleto HTML (menu + jogo) + tags <script>
@@ -233,23 +244,51 @@ por quem escolheu esse papel na sala.
       rede no modo online igual à Camuflagem, então o Assassino (e outros
       Sobreviventes) veem quem está ferido
 
-### Sistema de captura
-- [x] Ao ser atingido já ferido, o Sobrevivente entra em estado de
-      "capturado" (trava movimento) — `js/capture.js`, sem mudança na lógica
-      em si, só passou a exigir o 2º golpe em vez do 1º
-- [x] Barra de "struggle" — apertar o botão de ataque/interação repetidas
-      vezes enche a barra (`Game.CONFIG.capture.pulseGain`), que também
-      decai sozinha com o tempo — não dá pra só apertar uma vez e esperar
-- [x] Encher a barra a tempo = escapa (com uma imunidade curta pra não ser
-      recapturado na hora, colado, mas continua ferido); não encher a tempo
-      = eliminado **daquela partida** (não é banimento nem afeta partidas
-      futuras — reabrindo o jogo ou numa nova sala é tudo do zero de novo)
+### Sistema de captura (gancho — cópia fiel do jogo original)
+- [x] `js/capture.js`: o 2º golpe **derruba** (`downed`), não captura na
+      hora — o Sobrevivente fica imóvel, mas ainda não começou luta nenhuma.
+      O Assassino precisa chegar perto e apertar o botão de ação pra
+      **pegar** (`Game.CONFIG.capture.pickUpRange`) — vira `carried`, preso
+      nas costas dele (a posição de quem é carregado segue a do Assassino
+      todo frame, em todo cliente no modo online, sem mensagem de rede por
+      frame — só eventos discretos: pegou, pendurou, soltou)
+- [x] Carregando, o Assassino anda mais devagar
+      (`Game.CONFIG.capture.carrySpeedMultiplier`) — janela real de
+      perseguição/resgate, igual ao jogo original
+- [x] Enquanto carregado, apertar o botão repetido tenta se soltar antes de
+      chegar num gancho (`Game.CONFIG.capture.wiggleGoal` apertos) — solta
+      e cai derrubado nesse lugar, o Assassino tem que pegar de novo
+- [x] O Assassino pendura num `MAP.hookSpots` (4 postes espalhados pelo
+      campo aberto — `js/main.js`, `.hook`) ao chegar perto
+      (`Game.CONFIG.capture.hookRange`) e apertar — **só aí** começa a luta
+      de verdade (struggle bar, apertando repetido antes do tempo acabar,
+      igual sempre foi)
+- [x] Encher a barra a tempo = solta do gancho sozinho (com uma imunidade
+      curta pra não ser derrubado de novo na hora); outro Sobrevivente ativo
+      pode chegar perto e **resgatar** (`Game.CONFIG.capture.rescueRange`),
+      mesmo efeito; não encher a tempo = **sacrificado**, eliminado
+      **daquela partida** (não é banimento nem afeta partidas futuras —
+      reabrindo o jogo ou numa nova sala é tudo do zero de novo). Em
+      qualquer dos dois primeiros casos, continua **ferido** (não volta
+      saudável) — um golpe já derruba de novo
+- [x] Só 1 corpo por gancho de cada vez (`hook.occupiedBy`); um gancho já
+      ocupado não conta como "livre" pra ninguém mais
+- [x] Modo solo: nos dois papéis, a IA sabe fazer a sequência inteira
+      sozinha — a IA Assassino (jogando de Sobrevivente) persegue, pega,
+      carrega e pendura; a IA Sobrevivente (jogando de Assassino) tenta se
+      soltar carregada e se debater no gancho sozinha, em intervalos
+      (`Game.CONFIG.survivorAI.struggleInterval`)
 - [x] Vitória/derrota: Assassino vence quando todos os Sobreviventes forem
-      eliminados (capturados sem escapar); Sobreviventes vencem quando todo
+      eliminados (sacrificados sem escapar); Sobreviventes vencem quando todo
       mundo que sobrou (não eliminado) conseguiu escapar pelo portão — ver
       `Fase de fuga` abaixo. Um jogo pode terminar com alguns Sobreviventes
       escapados e outros eliminados; conta como vitória dos Sobreviventes
       que restaram
+- [x] **Simplificação consciente em relação ao original**: aqui é só 1
+      estágio de gancho (derrubou uma vez → pendurou → ou sacrifica ou
+      solta) — o jogo original tem 2-3 estágios progressivamente mais
+      curtos antes da morte definitiva ("Mori"). Fica pra uma rodada futura
+      se fizer falta no play-test.
 
 ### Fase de fuga (portão de saída)
 - [x] `js/gate.js` (novo): 2 portões em bordas opostas do mapa
@@ -327,6 +366,15 @@ ouve o próprio batimento). Complementando o áudio, o Sobrevivente também
 tem uma bússola visual no HUD (`#killer-compass`) apontando a direção real
 do Assassino quando ele está dentro do alcance do batimento — útil pra quem
 joga sem fone/som ligado.
+
+**Sobre o efeito "3D" do batimento não parecer perceptível**: verificado
+via teste automatizado que o `PannerNode` (HRTF) dispara e recebe as
+posições certas — o mecanismo funciona. O efeito de direção (vem da
+esquerda/direita) só é perceptível em **fone de ouvido ou caixa de som
+estéreo de verdade** — um alto-falante mono de celular fisicamente não
+consegue reproduzir esse tipo de painel, então nesse caso só dá pra notar o
+volume/velocidade do batimento aumentando (que não depende de estéreo). Não
+é um bug de código — é uma limitação física do hardware de áudio.
 
 ### UI/HUD
 - [x] Indicador visual de cooldown de habilidades — texto simples no HUD
