@@ -69,13 +69,25 @@ Game.CONFIG = {
     maxSpeedDegPerSec: 320,  // nunca fica mais rápido que isso
   },
 
-  // captura: ao ser atingido pelo Assassino, o Sobrevivente trava e precisa
-  // "lutar" apertando repetidamente antes do tempo acabar
+  // captura (js/capture.js) — igual ao jogo original: o 2º golpe DERRUBA
+  // (não captura na hora). O Assassino precisa carregar até um gancho
+  // (`MAP.hookSpots`) e pendurar; só aí começa a luta de verdade (struggle
+  // bar, apertando repetido antes do tempo acabar). Outro Sobrevivente
+  // pode resgatar quem tá pendurado, ou a própria pessoa pode se soltar do
+  // carrego se apertar rápido o bastante antes de chegar no gancho.
   capture: {
-    duration: 6,       // segundos pra tentar escapar antes de ser eliminado da partida
-    pulseGain: 0.12,    // progresso ganho por aperto
+    // fase pendurado no gancho
+    duration: 6,       // segundos pendurado antes de ser sacrificado (eliminado)
+    pulseGain: 0.12,    // progresso ganho por aperto, tentando se soltar
     decayPerSec: 0.05,  // progresso perdido por segundo (não dá pra só apertar uma vez e esperar)
-    immunityAfterEscape: 1.5, // segundos livre de captura de novo depois de escapar (senão o Assassino recaptura na hora, colado)
+    immunityAfterEscape: 1.5, // segundos livre de ser derrubado de novo depois de se soltar/ser resgatado (senão o Assassino recaptura na hora, colado)
+
+    // fase derrubado -> carregado -> gancho
+    pickUpRange: 55,          // px — o quão perto o Assassino precisa estar de quem caiu pra pegar
+    carrySpeedMultiplier: 0.72, // Assassino anda mais devagar carregando alguém (janela de perseguição/resgate)
+    wiggleGoal: 5,             // apertos necessários pra se soltar do carrego antes de chegar no gancho
+    hookRange: 70,             // px — o quão perto de um gancho o Assassino precisa estar pra pendurar
+    rescueRange: 55,           // px — o quão perto um Sobrevivente aliado precisa estar pra resgatar quem tá pendurado
   },
 
   maxSurvivors: 4, // limite de sobreviventes por partida (modo online)

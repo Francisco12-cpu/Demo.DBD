@@ -25,11 +25,12 @@ window.Game = window.Game || {};
   let objectives = [];
   let doors = [];
   let gates = [];
+  let hooks = [];
   let currentLayoutWalls = [];
 
-  // ---------- mundo (mapa + objetivos + portas + esconderijos + portões), compartilhado entre solo e online ----------
+  // ---------- mundo (mapa + objetivos + portas + esconderijos + portões + ganchos), compartilhado entre solo e online ----------
   function buildWorld(objectiveCount, layoutIndex){
-    arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .door, .hideout-spot, .gate').forEach((n) => n.remove());
+    arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .door, .hideout-spot, .gate, .hook').forEach((n) => n.remove());
     arena.style.width = MAP.width + 'px';
     arena.style.height = MAP.height + 'px';
 
@@ -74,6 +75,15 @@ window.Game = window.Game || {};
       return Game.createGate(spot, div);
     });
 
+    hooks = MAP.hookSpots.map((spot) => {
+      const div = document.createElement('div');
+      div.className = 'hook';
+      div.style.left = spot.x + 'px';
+      div.style.top = spot.y + 'px';
+      arena.appendChild(div);
+      return { pos: spot, el: div, occupiedBy: null };
+    });
+
     const count = Math.min(objectiveCount, MAP.objectiveSpots.length);
     objectives = MAP.objectiveSpots.slice(0, count).map((spot) => {
       const div = document.createElement('div');
@@ -116,6 +126,23 @@ window.Game = window.Game || {};
   // por ele (raio menor que o de canalizar — precisa realmente chegar lá)
   function nearOpenGate(pos){
     return gates.some((g) => g.state.open && Math.hypot(pos.x - g.state.pos.x, pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius * 0.5);
+  }
+
+  // gancho livre mais perto, dentro do alcance — um gancho já ocupado não
+  // conta (só 1 corpo por gancho de cada vez)
+  function nearestFreeHook(pos, maxDist){
+    let best = null, bestDist = Infinity;
+    hooks.forEach((h) => {
+      if (h.occupiedBy) return;
+      const dist = Math.hypot(pos.x - h.pos.x, pos.y - h.pos.y);
+      if (dist <= maxDist && dist < bestDist){ best = h; bestDist = dist; }
+    });
+    return best;
+  }
+
+  function setHookOccupied(hook, entryOrId){
+    hook.occupiedBy = entryOrId || null;
+    hook.el.classList.toggle('occupied', !!hook.occupiedBy);
   }
 
   function updateObjectivesStatus(){
@@ -451,6 +478,7 @@ window.Game = window.Game || {};
     let distraction = null; // { x, y, until } — pra onde a IA vai correr em vez do jogador
     const matchStartAt = performance.now();
     let lastStepAt = 0;
+    let heldHook = null; // gancho ocupado agora (pra liberar quando soltar/resgatar/sacrificar)
 
     let matchOver = false;
     function endMatch(won, detail){
@@ -481,8 +509,8 @@ window.Game = window.Game || {};
       }
 
       Game.Audio.playCaptureHit();
-      capture.start((result) => {
-        if (result === 'eliminated') endMatch(false, 'Você foi capturado pelo Assassino.');
+      capture.down((result) => {
+        if (result === 'eliminated') endMatch(false, 'Você foi sacrificado no gancho.');
       });
     }
 
@@ -495,8 +523,72 @@ window.Game = window.Game || {};
     let aiNudgeUntil = 0;
     let aiNudgeDir = 1;
 
+    // depois de derrubar: a IA precisa ir até o Sobrevivente caído, pegar,
+    // carregar até um gancho livre e pendurar — só aí a luta de verdade
+    // acontece (capture.js cuida do struggle em si; aqui só é o "andar até
+    // lá" de cada sub-fase). Sem esconderijo/distração nessas fases —
+    // encontrar o alvo é trivial (já está literalmente derrubado no lugar).
+    function updateKillerAfterDown(delta){
+      const cfg = killer.characterConfig();
+      const cCfg = Game.CONFIG.capture;
+
+      if (capture.state.downed){
+        const dx = player.state.pos.x - killer.state.pos.x;
+        const dy = player.state.pos.y - killer.state.pos.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= cCfg.pickUpRange){
+          capture.pickUp();
+          killer.setMoving(false);
+        } else {
+          const moved = moveTowards(killer.state, cfg, { x: dx, y: dy }, delta, cfg.speed);
+          killer.setFacing(killer.state.facingRight);
+          killer.setMoving(moved);
+        }
+        killer.render();
+        return true;
+      }
+
+      if (capture.state.carried){
+        // segue preso nas costas do Assassino a cada frame
+        player.state.pos.x = killer.state.pos.x;
+        player.state.pos.y = killer.state.pos.y;
+        const hook = nearestFreeHook(killer.state.pos, Infinity);
+        if (hook){
+          const dx = hook.pos.x - killer.state.pos.x;
+          const dy = hook.pos.y - killer.state.pos.y;
+          const dist = Math.hypot(dx, dy);
+          const speed = cfg.speed * cCfg.carrySpeedMultiplier;
+          if (dist <= cCfg.hookRange){
+            capture.hook(hook.pos);
+            player.state.pos.x = hook.pos.x;
+            player.state.pos.y = hook.pos.y - 10; // um pouco acima do poste, parece pendurado nele
+            setHookOccupied(hook, 'ai-survivor');
+            heldHook = hook;
+            killer.setMoving(false);
+          } else {
+            const moved = moveTowards(killer.state, cfg, { x: dx, y: dy }, delta, speed);
+            killer.setFacing(killer.state.facingRight);
+            killer.setMoving(moved);
+          }
+        }
+        killer.render();
+        return true;
+      }
+
+      if (capture.state.hooked){
+        // já pendurou — fica de guarda perto do gancho (sem re-perseguir
+        // ninguém, é o único Sobrevivente da partida)
+        killer.setMoving(false);
+        killer.render();
+        return true;
+      }
+
+      return false;
+    }
+
     function updateKillerAI(delta){
-      if (capture.state.captured || killer.state.isAttacking){ killer.render(); return; }
+      if (killer.state.isAttacking){ killer.render(); return; }
+      if (updateKillerAfterDown(delta)) return;
       if (!hideout.state.hidden) lastKnownPlayerPos = { x: player.state.pos.x, y: player.state.pos.y };
       const cfg = killer.characterConfig();
       // escondido = "invisível": a IA mira no último lugar visto em vez de
@@ -587,6 +679,8 @@ window.Game = window.Game || {};
       Game.Audio.updateHeartbeat(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
       updateKillerCompass(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
       updateDangerVignette(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
+      // saiu do gancho (fugiu, foi resgatado ou foi sacrificado) — libera pra outro corpo usar
+      if (heldHook && !capture.state.hooked){ setHookOccupied(heldHook, null); heldHook = null; }
 
       const ability1Requested = Game.Input.consumeAbility1Request();
       const attackPressed = Game.Input.consumeAttackRequest();
@@ -709,6 +803,7 @@ window.Game = window.Game || {};
     let lastStepAt = 0;
     let aiLastStepAt = 0;
     let aiStruggleTimer = Game.CONFIG.survivorAI.struggleInterval;
+    let heldHook = null; // gancho ocupado agora (pra liberar quando soltar/sacrificar)
 
     let matchOver = false;
     function endMatch(won, detail){
@@ -735,8 +830,8 @@ window.Game = window.Game || {};
       }
 
       Game.Audio.playCaptureHit();
-      aiCapture.start((result) => {
-        if (result === 'eliminated') endMatch(true, 'Você capturou o Sobrevivente!');
+      aiCapture.down((result) => {
+        if (result === 'eliminated') endMatch(true, 'Você sacrificou o Sobrevivente!');
       });
     }
 
@@ -771,6 +866,15 @@ window.Game = window.Game || {};
       if (aiCapture.state.eliminated){ survivor.render(); return; }
 
       if (aiCapture.state.captured){
+        // carregada: segue preso nas costas do Assassino a cada frame,
+        // igual o modo solo normal faz pro lado contrário
+        if (aiCapture.state.carried){
+          survivor.state.pos.x = killer.state.pos.x;
+          survivor.state.pos.y = killer.state.pos.y;
+        }
+        // tenta se soltar (carregada) ou se debater no gancho (pendurada)
+        // sozinha de vez em quando — capture.pulse() já sabe pra qual das
+        // duas despachar; parada (downed, ainda não pega) não faz nada
         aiStruggleTimer -= delta;
         if (aiStruggleTimer <= 0){
           aiCapture.pulse();
@@ -883,14 +987,32 @@ window.Game = window.Game || {};
       aiCapture.update(delta);
       killerDash.update(delta);
       updateAbilityHud([{ label: Game.CONFIG.abilities.killerDash.label, ability: killerDash }]);
+      // saiu do gancho (fugiu, foi sacrificado) — libera pra outro corpo usar
+      if (heldHook && !aiCapture.state.hooked){ setHookOccupied(heldHook, null); heldHook = null; }
 
       const attackPressed = Game.Input.consumeAttackRequest();
       const ability2Requested = Game.Input.consumeAbility2Request();
       if (ability2Requested) killerDash.trigger();
 
       if (attackPressed){
-        Game.Audio.playAttackSwing();
-        killer.tryAttack(attemptKillerHit);
+        const cCfg = Game.CONFIG.capture;
+        if (aiCapture.state.downed){
+          const dx = survivor.state.pos.x - killer.state.pos.x;
+          const dy = survivor.state.pos.y - killer.state.pos.y;
+          if (Math.hypot(dx, dy) <= cCfg.pickUpRange) aiCapture.pickUp();
+        } else if (aiCapture.state.carried){
+          const hook = nearestFreeHook(killer.state.pos, cCfg.hookRange);
+          if (hook){
+            aiCapture.hook(hook.pos);
+            survivor.state.pos.x = hook.pos.x;
+            survivor.state.pos.y = hook.pos.y - 10;
+            setHookOccupied(hook, 'ai-survivor');
+            heldHook = hook;
+          }
+        } else {
+          Game.Audio.playAttackSwing();
+          killer.tryAttack(attemptKillerHit);
+        }
       }
 
       doors.forEach((d) => {
@@ -987,6 +1109,22 @@ window.Game = window.Game || {};
     const matchStartAt = performance.now();
     let lastStepAt = 0;
     let gatesActive = false; // vira true quando os 5 geradores terminam (todo mundo calcula igual, é só olhar objectives.state.done, já sincronizado)
+    let carryingEntry = null; // só o Assassino usa: quem ele está carregando agora (null = ninguém)
+
+    // enquanto alguém está "carried" (js/capture.js), a posição dele segue
+    // a do Assassino em todo cliente — o Assassino já transmite a própria
+    // posição normalmente, então todo mundo (inclusive o próprio
+    // carregado) só precisa espelhar isso, sem mensagem de rede extra
+    function mirrorCarriedEntries(){
+      if (!killerEntry) return;
+      entries.forEach((entry) => {
+        if (entry.capture && entry.capture.state.carried){
+          entry.char.state.pos.x = killerEntry.char.state.pos.x;
+          entry.char.state.pos.y = killerEntry.char.state.pos.y;
+          entry.char.render();
+        }
+      });
+    }
 
     let matchOver = false;
     function endMatch(won, detail, announce){
@@ -1058,7 +1196,10 @@ window.Game = window.Game || {};
 
       // 1º golpe machuca (fica ferido, mais lento, dá pra curar sozinho);
       // só o 2º derruba de vez — decidido no cliente de quem foi atingido,
-      // já que só ele sabe seu próprio estado de vida sem atraso de rede
+      // já que só ele sabe seu próprio estado de vida sem atraso de rede.
+      // Derrubar não é mais o fim — o Assassino ainda precisa carregar até
+      // um gancho (eventos pickedUp/hooked abaixo) antes da luta de
+      // verdade (struggleResult) começar.
       if (data.kind === 'captureStart' && data.targetId === localId && localEntry.capture){
         if (localEntry.health && !localEntry.health.state.injured){
           Game.Audio.playAttackSwing();
@@ -1068,19 +1209,100 @@ window.Game = window.Game || {};
           return;
         }
         Game.Audio.playCaptureHit();
-        localEntry.capture.start((result) => {
+        localEntry.capture.down((result) => {
           net.sendEvent({ kind: 'struggleResult', playerId: localId, result });
+          // libera o gancho no PRÓPRIO cliente também — sendEvent não volta
+          // pro remetente, então sem isso só os outros clientes soltavam
+          const usedHook = hooks.find((h) => h.occupiedBy === localId);
+          if (usedHook) setHookOccupied(usedHook, null);
           if (result === 'eliminated'){
             localEntry.eliminated = true;
             checkMatchResolution();
           }
         });
+        net.sendEvent({ kind: 'downed', targetId: localId });
+        return;
+      }
+
+      // visual pros outros clientes — quem realmente controla o desfecho é
+      // sempre o dono da entry (down()/hook()/rescue() reais só rodam no
+      // cliente de quem caiu; os outros só espelham estado pra desenhar certo)
+      if (data.kind === 'downed'){
+        const entry = entries.get(data.targetId);
+        if (entry && entry.capture && entry !== localEntry){
+          entry.capture.state.captured = true;
+          entry.capture.state.downed = true;
+          entry.capture.render();
+        }
+        return;
+      }
+
+      if (data.kind === 'pickedUp'){
+        const entry = entries.get(data.targetId);
+        if (entry && entry.capture){
+          entry.capture.state.downed = false;
+          entry.capture.state.carried = true;
+          entry.capture.render();
+        }
+        return;
+      }
+
+      // soltou do carrego antes de chegar no gancho (apertou rápido o
+      // bastante) — o Assassino (quem estava carregando) precisa saber que
+      // não está mais carregando ninguém
+      if (data.kind === 'droppedFree'){
+        const entry = entries.get(data.targetId);
+        if (entry && entry.capture && entry !== localEntry){
+          entry.capture.state.carried = false;
+          entry.capture.state.downed = true;
+          entry.capture.render();
+        }
+        if (carryingEntry && carryingEntry.info.id === data.targetId) carryingEntry = null;
+        return;
+      }
+
+      if (data.kind === 'hooked'){
+        const entry = entries.get(data.targetId);
+        const hook = hooks[data.hookIndex];
+        if (!entry || !entry.capture || !hook) return;
+        if (entry === localEntry){
+          // sou eu que fui pendurado — a partir daqui EU sou dono do
+          // desfecho (hookPulse/timeout), igual downed/captureStart
+          entry.capture.hook(hook.pos);
+        } else {
+          entry.capture.state.carried = false;
+          entry.capture.state.hooked = true;
+          entry.capture.state.hookPos = hook.pos;
+          entry.capture.render();
+        }
+        entry.char.state.pos.x = hook.pos.x;
+        entry.char.state.pos.y = hook.pos.y - 10;
+        entry.char.render();
+        setHookOccupied(hook, data.targetId);
+        if (carryingEntry && carryingEntry.info.id === data.targetId) carryingEntry = null;
+        return;
+      }
+
+      // outro Sobrevivente resgatou quem tá pendurado — só quem tá
+      // pendurado de verdade age (é o dono do desfecho); os outros só vão
+      // ver o resultado chegar via struggleResult daqui a pouco
+      if (data.kind === 'rescued'){
+        if (data.targetId === localId && localEntry.capture) localEntry.capture.rescue();
         return;
       }
 
       if (data.kind === 'struggleResult'){
         const entry = entries.get(data.playerId);
         if (!entry) return;
+        if (entry !== localEntry && entry.capture){
+          entry.capture.state.captured = false;
+          entry.capture.state.downed = false;
+          entry.capture.state.carried = false;
+          entry.capture.state.hooked = false;
+          entry.capture.render();
+        }
+        const usedHook = hooks.find((h) => h.occupiedBy === data.playerId);
+        if (usedHook) setHookOccupied(usedHook, null);
         if (data.result === 'eliminated'){
           entry.eliminated = true;
           entry.el.classList.add('eliminated');
@@ -1210,6 +1432,7 @@ window.Game = window.Game || {};
       if (isSurvivor) localEntry.capture.update(delta);
       localAbility1.update(delta);
       if (localAbility2) localAbility2.update(delta);
+      mirrorCarriedEntries();
 
       if (isSurvivor){
         updateAbilityHud([{ label: localAbilityCfg.label, ability: localAbility1 }]);
@@ -1233,7 +1456,16 @@ window.Game = window.Game || {};
       const eliminated = isSurvivor && (localEntry.capture.state.eliminated || localEntry.escaped);
 
       if (captured){
-        if (attackRequested) localEntry.capture.pulse();
+        if (attackRequested){
+          const wasCarried = localEntry.capture.state.carried;
+          localEntry.capture.pulse();
+          // se soltou do carrego antes de chegar no gancho, o Assassino
+          // que estava carregando precisa saber (senão continua achando
+          // que ainda tá com alguém nas costas)
+          if (wasCarried && !localEntry.capture.state.carried){
+            net.sendEvent({ kind: 'droppedFree', targetId: localId });
+          }
+        }
       } else if (!eliminated && isSurvivor && localEntry.hideout.state.hidden){
         if (attackRequested) localEntry.hideout.exit(); // sai antes da hora, por vontade própria
         const hideoutResult = localEntry.hideout.update(delta);
@@ -1248,7 +1480,11 @@ window.Game = window.Game || {};
           if (ability1Requested) triggerLocalSurvivorAbility();
 
           const nearHideout = nearestHideoutSpot(localEntry.char.state.pos, Game.CONFIG.hideout.radius);
-          if (attackRequested && nearHideout){
+          const hookedAlly = activeSurvivors().find((e) => e !== localEntry && e.capture && e.capture.state.hooked &&
+            Math.hypot(e.char.state.pos.x - localEntry.char.state.pos.x, e.char.state.pos.y - localEntry.char.state.pos.y) <= Game.CONFIG.capture.rescueRange);
+          if (attackRequested && hookedAlly){
+            net.sendEvent({ kind: 'rescued', targetId: hookedAlly.info.id });
+          } else if (attackRequested && nearHideout){
             localEntry.hideout.enter();
           } else {
             objectives.forEach((obj, index) => {
@@ -1295,8 +1531,40 @@ window.Game = window.Game || {};
           if (ability1Requested) localAbility1.trigger();
           if (ability2Requested) localAbility2.trigger();
           if (attackRequested){
-            Game.Audio.playAttackSwing();
-            localEntry.char.tryAttack(attemptKillerHit);
+            const cCfg = Game.CONFIG.capture;
+            if (carryingEntry){
+              // já carregando alguém: só resta pendurar (se tiver um
+              // gancho livre por perto) — não ataca nem pega outro
+              const hookIndex = hooks.findIndex((h) => !h.occupiedBy &&
+                Math.hypot(h.pos.x - localEntry.char.state.pos.x, h.pos.y - localEntry.char.state.pos.y) <= cCfg.hookRange);
+              if (hookIndex >= 0){
+                const targetId = carryingEntry.info.id;
+                net.sendEvent({ kind: 'hooked', targetId, hookIndex });
+                const hook = hooks[hookIndex];
+                carryingEntry.capture.state.carried = false;
+                carryingEntry.capture.state.hooked = true;
+                carryingEntry.capture.state.hookPos = hook.pos;
+                carryingEntry.capture.render();
+                carryingEntry.char.state.pos.x = hook.pos.x;
+                carryingEntry.char.state.pos.y = hook.pos.y - 10;
+                carryingEntry.char.render();
+                setHookOccupied(hook, targetId);
+                carryingEntry = null;
+              }
+            } else {
+              const downedNearby = activeSurvivors().find((e) => e.capture && e.capture.state.downed &&
+                Math.hypot(e.char.state.pos.x - localEntry.char.state.pos.x, e.char.state.pos.y - localEntry.char.state.pos.y) <= cCfg.pickUpRange);
+              if (downedNearby){
+                net.sendEvent({ kind: 'pickedUp', targetId: downedNearby.info.id });
+                downedNearby.capture.state.downed = false;
+                downedNearby.capture.state.carried = true;
+                downedNearby.capture.render();
+                carryingEntry = downedNearby;
+              } else {
+                Game.Audio.playAttackSwing();
+                localEntry.char.tryAttack(attemptKillerHit);
+              }
+            }
           }
           doors.forEach((d, index) => {
             const near = Math.hypot(localEntry.char.state.pos.x - d.center.x, localEntry.char.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;

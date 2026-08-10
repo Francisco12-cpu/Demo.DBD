@@ -2,9 +2,35 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Assassino vs Sobreviventes — Demo</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0c0a10">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Assassino vs Sobreviventes">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="icon" href="assets/icon-192.png">
+<script>
+  // 100vh no celular é o tamanho MÁXIMO da tela, como se a barra de
+  // endereço já estivesse escondida — quando ela aparece, o fim da tela
+  // (botão de atacar, joystick) fica embaixo dela, inacessível. Isso mede o
+  // tamanho REAL visível (window.visualViewport, quando existe) e expõe
+  // como --app-height pra CSS usar em vez de 100vh. Roda antes do resto da
+  // página carregar, direto no <head>, pra não ter flash de layout errado.
+  (function(){
+    function setAppHeight(){
+      var h = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+      document.documentElement.style.setProperty('--app-height', h + 'px');
+    }
+    setAppHeight();
+    window.addEventListener('resize', setAppHeight);
+    window.addEventListener('orientationchange', setAppHeight);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', setAppHeight);
+  })();
+</script>
 </head>
 <body>
 
@@ -178,6 +204,15 @@
 <script defer src="js/net-webrtc.js"></script>
 <script defer src="js/menu.js"></script>
 <script defer src="js/main.js"></script>
+<script>
+  // registra o service worker só quando suportado e só depois da página
+  // carregar (não atrasa o primeiro carregamento do jogo)
+  if ('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
 
 </body>
 </html>
