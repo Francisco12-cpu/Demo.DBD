@@ -524,29 +524,38 @@ html,body{
   #hint{ font-size: 10px; padding: 6px 10px; }
 }
 
-/* pede pra girar o celular — a maioria dos jogos joga deitado, e o joystick
-   + botões cabem bem melhor com mais largura. Só aparece DURANTE A PARTIDA
-   (body.in-match, ligado/desligado por beginMatchUi/hideMatchUi em main.js),
-   nunca no menu — o menu já é jogável em pé. pointer:coarse evita disparar
-   em janela estreita de desktop. */
-#rotate-prompt{ display:none; }
+/* sugere girar o celular — a maioria dos jogos joga deitado, e o joystick
+   + botões cabem bem melhor com mais largura. Só um AVISO pequeno, nunca
+   bloqueia o jogo por baixo (o jogador pode simplesmente ignorar e
+   continuar jogando em pé) — igual ao #gamepad-toast. Só aparece DURANTE A
+   PARTIDA (body.in-match, ligado/desligado por beginMatchUi/hideMatchUi em
+   main.js), nunca no menu. pointer:coarse evita disparar em janela estreita
+   de desktop. */
+#rotate-prompt{
+  position:fixed; z-index:90; top:16px; left:50%;
+  transform: translateX(-50%) translateY(-140%);
+  display:flex; align-items:center; gap:10px;
+  background: rgba(10,8,14,.92); border:1px solid var(--gold); color: var(--ink);
+  padding: 10px 14px; font-size:12px; max-width: 92vw;
+  pointer-events:none; opacity:0;
+  transition: transform .25s ease, opacity .25s ease;
+}
 @media (orientation: portrait) and (pointer: coarse){
   body.in-match:not(.rotate-dismissed) #rotate-prompt{
-    position:fixed; inset:0; z-index:100;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:16px; background: var(--bg-deep); color: var(--ink);
-    text-align:center; padding: 24px; font-family: inherit;
+    transform: translateX(-50%) translateY(0); opacity:1;
+    pointer-events:auto;
   }
-  #rotate-icon{ font-size:48px; animation: rotateHint 1.6s ease-in-out infinite; }
+  #rotate-icon{ font-size:20px; animation: rotateHint 1.6s ease-in-out infinite; flex-shrink:0; }
   @keyframes rotateHint{
     0%,100%{ transform: rotate(0deg); }
     50%{ transform: rotate(90deg); }
   }
 }
+#rotate-prompt p{ margin:0; text-align:left; flex:1; white-space:nowrap; }
 #rotate-dismiss{
   background: transparent; border: 1px solid var(--muted); color: var(--muted);
-  font-family: inherit; font-size: 12px; padding: 8px 14px; margin-top: 6px;
-  border-radius: 4px;
+  font-family: inherit; font-size: 11px; padding: 6px 10px;
+  border-radius: 4px; flex-shrink:0;
 }
 #rotate-dismiss:active{ border-color: var(--gold); color: var(--ink); }
 

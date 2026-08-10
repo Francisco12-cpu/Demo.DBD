@@ -663,6 +663,253 @@ window.Game = window.Game || {};
   }
 
   // =====================================================================
+  // MODO SOLO COMO ASSASSINO — o jogador persegue, a IA foge e repara
+  // sozinha. Espelha startSolo() (lá o jogador é o Sobrevivente e a IA
+  // persegue); aqui é o oposto. Função separada em vez de generalizar
+  // startSolo() com um parâmetro de papel — mantém a lógica já testada de
+  // cada lado isolada, sem arriscar os dois caminhos numa refatoração só.
+  // =====================================================================
+  function startSoloAsKiller(name){
+    panel.style.display = 'none';
+    buildWorld(Game.CONFIG.generatorCount, randomLayoutIndex());
+
+    const killerEl = charDom();
+    const survivorEl = charDom();
+    const killer = Game.createCharacter('killer', killerEl);
+    const survivor = Game.createCharacter('survivor', survivorEl);
+    const aiCapture = Game.createCapture(survivorEl);
+    const aiHealth = Game.createHealth(survivorEl);
+    let gatesActive = false;
+
+    const killerDash = Game.createAbility(Game.CONFIG.abilities.killerDash);
+
+    killer.state.pos.x = MAP.killer.x; killer.state.pos.y = MAP.killer.y;
+    survivor.state.pos.x = MAP.player.x; survivor.state.pos.y = MAP.player.y;
+    killer.applyVisuals();
+    survivor.applyVisuals();
+    killerEl.querySelector('.label').textContent = name || 'Assassino';
+    survivorEl.querySelector('.label').textContent = 'Sobrevivente (IA)';
+    survivor.render();
+
+    beginMatchUi();
+    Game.Input.setAbilityButtonsVisible(false, true); // só Investida (Q) — Sentido não faz sentido sem sistema de camuflagem pra IA
+
+    const matchStartAt = performance.now();
+    let lastStepAt = 0;
+    let aiLastStepAt = 0;
+    let aiStruggleTimer = Game.CONFIG.survivorAI.struggleInterval;
+
+    let matchOver = false;
+    function endMatch(won, detail){
+      if (matchOver) return;
+      matchOver = true;
+      const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
+      const doneCount = updateObjectivesStatus();
+      const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
+      Game.Menu.showResult(won, fullDetail, () => startSoloAsKiller(name));
+    }
+
+    function attemptKillerHit(){
+      const dx = survivor.state.pos.x - killer.state.pos.x;
+      const dy = survivor.state.pos.y - killer.state.pos.y;
+      if (Math.hypot(dx, dy) > killer.characterConfig().attackRange) return;
+      if (aiCapture.state.captured || aiCapture.state.eliminated) return;
+
+      if (!aiHealth.state.injured){
+        Game.Audio.playAttackSwing();
+        aiHealth.hit();
+        survivorEl.classList.add('hit-flash');
+        setTimeout(() => survivorEl.classList.remove('hit-flash'), 200);
+        return;
+      }
+
+      Game.Audio.playCaptureHit();
+      aiCapture.start((result) => {
+        if (result === 'eliminated') endMatch(true, 'Você capturou o Sobrevivente!');
+      });
+    }
+
+    // mesmo truque de desvio de obstáculo do updateKillerAI (startSolo) —
+    // sem pathfinding de verdade, só o suficiente pra não ficar travada
+    // burra numa quina
+    let aiStuckTimer = 0;
+    let aiLastPos = null;
+    let aiNudgeUntil = 0;
+    let aiNudgeDir = 1;
+
+    function nearestIncompleteObjective(pos){
+      let best = null, bestDist = Infinity;
+      objectives.forEach((obj) => {
+        if (obj.state.done) return;
+        const dist = Math.hypot(pos.x - obj.state.pos.x, pos.y - obj.state.pos.y);
+        if (dist < bestDist){ best = obj; bestDist = dist; }
+      });
+      return best;
+    }
+
+    function nearestGate(pos){
+      let best = null, bestDist = Infinity;
+      gates.forEach((g) => {
+        const dist = Math.hypot(pos.x - g.state.pos.x, pos.y - g.state.pos.y);
+        if (dist < bestDist){ best = g; bestDist = dist; }
+      });
+      return best;
+    }
+
+    function updateSurvivorAI(delta){
+      if (aiCapture.state.eliminated){ survivor.render(); return; }
+
+      if (aiCapture.state.captured){
+        aiStruggleTimer -= delta;
+        if (aiStruggleTimer <= 0){
+          aiCapture.pulse();
+          aiStruggleTimer = Game.CONFIG.survivorAI.struggleInterval;
+        }
+        survivor.render();
+        return;
+      }
+
+      const aiCfg = Game.CONFIG.survivorAI;
+      const cfg = survivor.characterConfig();
+      const dxKiller = survivor.state.pos.x - killer.state.pos.x;
+      const dyKiller = survivor.state.pos.y - killer.state.pos.y;
+      const distToKiller = Math.hypot(dxKiller, dyKiller);
+      const fleeing = distToKiller <= aiCfg.fleeRange;
+
+      let target;
+      if (fleeing){
+        // corre na direção oposta ao Assassino, um bom pedaço à frente —
+        // não é pathfinding, só "pra longe dele"
+        const len = distToKiller || 1;
+        target = { x: survivor.state.pos.x + (dxKiller / len) * 400, y: survivor.state.pos.y + (dyKiller / len) * 400 };
+      } else if (gatesActive){
+        const g = nearestGate(survivor.state.pos);
+        target = g ? g.state.pos : survivor.state.pos;
+      } else {
+        const obj = nearestIncompleteObjective(survivor.state.pos);
+        target = obj ? obj.state.pos : survivor.state.pos;
+      }
+
+      const dx = target.x - survivor.state.pos.x;
+      const dy = target.y - survivor.state.pos.y;
+      const dist = Math.hypot(dx, dy);
+      // já perto o bastante do alvo (objetivo/portão) pra "trabalhar" em
+      // vez de continuar tentando andar até o centro exato dele
+      const workingRadius = fleeing ? 0 : (gatesActive ? Game.CONFIG.gate.radius * 0.6 : Game.CONFIG.objective.radius * 0.6);
+      const shouldMove = dist > workingRadius;
+
+      let moved = false;
+      if (shouldMove){
+        let moveDx = dx, moveDy = dy;
+        const now = performance.now();
+        if (now < aiNudgeUntil){
+          const len = dist || 1;
+          moveDx = dx + (-dy / len) * aiNudgeDir * len;
+          moveDy = dy + (dx / len) * aiNudgeDir * len;
+        }
+        let speed = cfg.speed * aiCfg.speedMultiplier;
+        if (aiHealth.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
+        moved = moveTowards(survivor.state, cfg, { x: moveDx, y: moveDy }, delta, speed);
+        survivor.setFacing(survivor.state.facingRight);
+
+        if (aiLastPos && now >= aiNudgeUntil){
+          const movedDist = Math.hypot(survivor.state.pos.x - aiLastPos.x, survivor.state.pos.y - aiLastPos.y);
+          if (movedDist < speed * delta * 0.3){
+            aiStuckTimer += delta;
+            if (aiStuckTimer > 0.3){
+              aiNudgeDir = Math.random() < 0.5 ? -1 : 1;
+              aiNudgeUntil = now + 650;
+              aiStuckTimer = 0;
+            }
+          } else {
+            aiStuckTimer = 0;
+          }
+        }
+        if (moved && performance.now() - aiLastStepAt > 300){
+          aiLastStepAt = performance.now();
+          spawnDust(survivor.state.pos.x, survivor.state.pos.y + 14);
+        }
+      }
+      survivor.setMoving(moved);
+      aiLastPos = { x: survivor.state.pos.x, y: survivor.state.pos.y };
+      aiHealth.update(delta, !moved);
+
+      if (!fleeing){
+        const obj = nearestIncompleteObjective(survivor.state.pos);
+        if (obj && Math.hypot(survivor.state.pos.x - obj.state.pos.x, survivor.state.pos.y - obj.state.pos.y) <= Game.CONFIG.objective.radius){
+          const hadSkillCheck = !!obj.state.skillCheck;
+          const attempt = hadSkillCheck && Math.random() < aiCfg.reactionChancePerSecond * delta;
+          const wasDone = obj.state.done;
+          obj.update(delta, survivor.state.pos, attempt, 1);
+          if (obj.state.done && !wasDone){
+            const done = updateObjectivesStatus();
+            if (done >= objectives.length && !gatesActive){
+              gatesActive = true;
+              objectivesStatus.textContent = 'Geradores prontos! O Sobrevivente vai tentar escapar.';
+            }
+          }
+        }
+        if (gatesActive){
+          const g = nearestGate(survivor.state.pos);
+          if (g){
+            const near = Math.hypot(survivor.state.pos.x - g.state.pos.x, survivor.state.pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius;
+            g.progressOpen(delta, near, gatesActive);
+          }
+          if (nearOpenGate(survivor.state.pos)) endMatch(false, 'O Sobrevivente escapou pelo portão.');
+        }
+      }
+
+      survivor.render();
+    }
+
+    let lastTime = performance.now();
+    function loop(now){
+      if (matchOver) return;
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+
+      Game.Input.update();
+      aiCapture.update(delta);
+      killerDash.update(delta);
+      updateAbilityHud([{ label: Game.CONFIG.abilities.killerDash.label, ability: killerDash }]);
+
+      const attackPressed = Game.Input.consumeAttackRequest();
+      const ability2Requested = Game.Input.consumeAbility2Request();
+      if (ability2Requested) killerDash.trigger();
+
+      if (attackPressed){
+        Game.Audio.playAttackSwing();
+        killer.tryAttack(attemptKillerHit);
+      }
+
+      doors.forEach((d) => {
+        const near = Math.hypot(killer.state.pos.x - d.center.x, killer.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
+        d.progressBreak(delta, near);
+      });
+
+      if (!killer.state.isAttacking){
+        const dir = Game.Input.readMovement();
+        let speed = killer.characterConfig().speed;
+        if (killerDash.state.activeLeft > 0) speed *= Game.CONFIG.abilities.killerDash.speedMultiplier;
+        const moved = moveTowards(killer.state, killer.characterConfig(), dir, delta, speed);
+        killer.setFacing(killer.state.facingRight);
+        killer.setMoving(moved);
+        if (moved && now - lastStepAt > 300){
+          lastStepAt = now;
+          Game.Audio.playFootstep();
+          spawnDust(killer.state.pos.x, killer.state.pos.y + 14);
+        }
+      }
+
+      updateSurvivorAI(delta);
+      killer.render();
+      updateCamera(killer.state.pos);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // =====================================================================
   // MODO ONLINE — N jogadores reais conectados via LAN ou P2P
   // =====================================================================
   function startOnline(net, localId, roster, mapLayoutIndex, resumeData){
@@ -1131,6 +1378,7 @@ window.Game = window.Game || {};
   }
 
   Game.startSolo = startSolo;
+  Game.startSoloAsKiller = startSoloAsKiller;
   Game.startOnline = startOnline;
   Game.resumeOnline = resumeOnline;
   Game.hideMatchUi = hideMatchUi;
