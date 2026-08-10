@@ -342,8 +342,10 @@ joga sem fone/som ligado.
       jogo por baixo — o jogador pode simplesmente continuar jogando em pé
       e ignorar. Só aparece **durante a partida** (`body.in-match`, ligado
       por `beginMatchUi`/`hideMatchUi` em `js/main.js`), nunca no menu. Tem
-      um botão "Entendi" que dispensa (guardado em `localStorage`, não
-      aparece de novo)
+      um botão "Entendi" que dispensa de vez (guardado em `localStorage`) —
+      e, como rede de segurança, **some sozinho depois de 6 segundos** mesmo
+      sem apertar em nada, então nunca fica preso na tela bloqueando o toque
+      por trás dele, seja lá o motivo
 - [x] Menu responsivo a telas curtas (celular deitado ou qualquer janela com
       pouca altura): `@media (max-height: 480px)` reduz preenchimento,
       fontes e o tamanho do QR code, e o card do menu vira rolável

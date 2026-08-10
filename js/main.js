@@ -13,6 +13,10 @@ window.Game = window.Game || {};
     document.body.classList.add('rotate-dismissed');
     localStorage.setItem('dbd_rotate_dismissed', '1');
   });
+  // rede de segurança: some sozinho depois de alguns segundos, mesmo que o
+  // toque no botão não funcione por algum motivo (navegador estranho, dedo
+  // errou o botão, etc.) — nunca pode ficar preso bloqueando o jogo
+  let rotateAutoHideTimer = null;
   const objectivesStatus = document.getElementById('objectives-status');
   const abilityHudEl = document.getElementById('ability-hud');
   const panel = document.getElementById('panel');
@@ -376,6 +380,9 @@ window.Game = window.Game || {};
   function beginMatchUi(){
     stage.style.display = 'flex';
     document.body.classList.add('in-match'); // liga o aviso de girar o celular (só existe durante a partida, não no menu)
+    if (localStorage.getItem('dbd_rotate_dismissed') !== '1'){
+      rotateAutoHideTimer = setTimeout(() => document.body.classList.add('rotate-dismissed'), 6000);
+    }
     Game.Input.init();
     Game.Audio.init();
     Game.Audio.startAmbient();
@@ -385,6 +392,10 @@ window.Game = window.Game || {};
   function hideMatchUi(){
     stage.style.display = 'none';
     document.body.classList.remove('in-match');
+    if (rotateAutoHideTimer){ clearTimeout(rotateAutoHideTimer); rotateAutoHideTimer = null; }
+    // some sozinho só nessa partida (a menos que tenha sido dispensado de
+    // vez pelo botão) — próxima partida mostra o aviso de novo brevemente
+    if (localStorage.getItem('dbd_rotate_dismissed') !== '1') document.body.classList.remove('rotate-dismissed');
     Game.Audio.stopHeartbeat();
     Game.Audio.stopAmbient();
     killerCompassEl.classList.remove('active');
