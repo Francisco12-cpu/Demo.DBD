@@ -74,10 +74,16 @@ falhava numa bateria, é isso, não é bug de código.
 - **LAN (`server/server.js`) e P2P (`js/net-webrtc.js`) implementam o
   mesmo protocolo de mensagens** — `js/main.js`/`js/menu.js` não sabem qual
   dos dois está em uso. Mexer no protocolo exige mexer nos dois.
-- **Sem assets externos** — sprites são CSS `mask-image` gerados
-  localmente por script Python/Pillow (ver `assets/`), áudio é 100%
+- **Sem assets baixados da internet** — sprites são arte pixel autoral do
+  Francisco (`assets/killer-sheet.png`, `assets/survivor-sheet.png`,
+  spritesheets 32px/quadro, uso livre), renderizados via `background-image`+
+  `background-position` calculado por `js/character.js` a partir de
+  `Game.CONFIG.sprites` (metadados `row`/`frames`/`fps`/`loop` por
+  animação — nunca hardcoded fora do config). Cor dos 4 Sobreviventes:
+  `filter: hue-rotate()` (`Game.CONFIG.survivorHues`), já que a arte é
+  colorida e não uma silhueta tingível como antes. Áudio é 100%
   sintetizado via Web Audio API (`js/audio.js`, osciladores, zero arquivo de
-  som). Ícones do PWA (`assets/icon-*.png`) idem.
+  som). Ícones do PWA (`assets/icon-*.png`) idem (gerados por script).
 - **Testar antes de considerar pronto** — qualquer mudança em mecânica de
   jogo é testada via Playwright (solo E online, quando aplicável) antes de
   reportar como concluída. Ver `README.md` → cada item `[x]` do checklist
@@ -122,13 +128,30 @@ fase de portão de saída, iluminação por raycasting (paredes bloqueiam visão
 mas continuam visíveis), áudio 3D sintetizado, câmera seguindo o jogador,
 multiplayer LAN + P2P com reconexão, modo solo dos dois lados (jogar de
 Sobrevivente OU de Assassino, cada um contra uma IA simples do lado
-oposto), menu responsivo, PWA instalável.
+oposto), menu responsivo, PWA instalável, **sprite de pixel art autoral real
+pro Assassino e Sobrevivente** (spritesheets `assets/killer-sheet.png`/
+`survivor-sheet.png`, substituindo a silhueta CSS antiga — animações
+idle/run/sprint/attack, o `downed` da captura reaproveitado pras 3 fases
+derrubado/carregado/pendurado, hitbox de ataque com offset frontal
+espelhado por direção, cor dos 4 Sobreviventes por `hue-rotate`).
+
+**Ainda em aberto sobre os sprites** (perguntar ao usuário antes de decidir
+sozinho): pose de "parado" dedicada do Sobrevivente — não foi confirmada
+nenhuma linha específica, hoje usa o quadro 0 do `run` como placeholder;
+linha r8 do Sobrevivente ("teste") — o usuário mencionou mas não ficou claro
+pra que serve; r2 do Sobrevivente (mini-animação de transição ao parar) —
+descrita como "seria legal" mas não implementada; `hit` do Sobrevivente
+(r7) já está no `Game.CONFIG.sprites` mas o flash de dano continua sendo o
+filtro CSS antigo, não foi trocado pro sprite. `vanish`/`fall` do Assassino
+(r6/r7) estão no config só reservados — não têm sistema de jogo (invisibilidade,
+cutscene de fuga) que os use ainda.
 
 **Pendente/backlog** (ver `README.md` → "Planos futuros"): pallets e
-janelas (loops de perseguição — só chase em linha reta hoje), sprite/mapa
-em pixel art de verdade (hoje é tudo CSS/canvas gerado), protocolo de sala
-com host/dono controlando kick/papel, 2ª estágio de gancho antes da morte
-definitiva (hoje é só 1 estágio, simplificação consciente).
+janelas (loops de perseguição — só chase em linha reta hoje), mapa em pixel
+art de verdade (hoje é CSS/canvas gerado — só os personagens ganharam arte
+autoral até agora), protocolo de sala com host/dono controlando kick/papel,
+2ª estágio de gancho antes da morte definitiva (hoje é só 1 estágio,
+simplificação consciente).
 
 **Ideias já discutidas mas propositalmente NÃO implementadas ainda**
 (usuário pediu só análise escrita, não construir): editor visual de

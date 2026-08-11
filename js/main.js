@@ -145,6 +145,17 @@ window.Game = window.Game || {};
     hook.el.classList.toggle('occupied', !!hook.occupiedBy);
   }
 
+  // ponto de onde o golpe do Assassino realmente sai — um pouco à frente
+  // do centro dele, espelhado pro lado que está virado (facingRight),
+  // em vez de sempre do centro do corpo pra qualquer direção
+  function attackOrigin(killerState, killerCfg){
+    const offset = killerCfg.attackForwardOffset || 0;
+    return {
+      x: killerState.pos.x + (killerState.facingRight ? offset : -offset),
+      y: killerState.pos.y,
+    };
+  }
+
   function updateObjectivesStatus(){
     const done = objectives.filter((o) => o.state.done).length;
     objectivesStatus.textContent = `Objetivos: ${done}/${objectives.length}`;
@@ -434,7 +445,7 @@ window.Game = window.Game || {};
     div.className = 'char';
     div.innerHTML =
       '<div class="shadow"></div>' +
-      '<div class="body"><div class="torso"><div class="face"></div></div><div class="weapon"></div></div>' +
+      '<div class="body"><div class="torso"></div></div>' +
       '<div class="label"></div>';
     arena.appendChild(div);
     return div;
@@ -492,8 +503,9 @@ window.Game = window.Game || {};
     }
 
     function attemptKillerHit(){
-      const dx = player.state.pos.x - killer.state.pos.x;
-      const dy = player.state.pos.y - killer.state.pos.y;
+      const origin = attackOrigin(killer.state, killer.characterConfig());
+      const dx = player.state.pos.x - origin.x;
+      const dy = player.state.pos.y - origin.y;
       if (Math.hypot(dx, dy) > killer.characterConfig().attackRange) return;
       if (capture.state.captured || capture.state.eliminated) return; // já caído, o golpe não faz mais nada
 
@@ -748,6 +760,7 @@ window.Game = window.Game || {};
           const moved = moveTowards(player.state, player.characterConfig(), dir, delta, speed);
           player.setFacing(player.state.facingRight);
           player.setMoving(moved);
+          player.setSprinting(sprintActive);
           if (moved && now - lastStepAt > 300){
             lastStepAt = now;
             Game.Audio.playFootstep();
@@ -816,8 +829,9 @@ window.Game = window.Game || {};
     }
 
     function attemptKillerHit(){
-      const dx = survivor.state.pos.x - killer.state.pos.x;
-      const dy = survivor.state.pos.y - killer.state.pos.y;
+      const origin = attackOrigin(killer.state, killer.characterConfig());
+      const dx = survivor.state.pos.x - origin.x;
+      const dy = survivor.state.pos.y - origin.y;
       if (Math.hypot(dx, dy) > killer.characterConfig().attackRange) return;
       if (aiCapture.state.captured || aiCapture.state.eliminated) return;
 
@@ -1064,7 +1078,7 @@ window.Game = window.Game || {};
         char.state.pos.y = MAP.killer.y;
       } else {
         const spawn = MAP.survivorSpawns[survivorIndex % MAP.survivorSpawns.length];
-        char.setColorOverride(Game.CONFIG.survivorColors[survivorIndex % Game.CONFIG.survivorColors.length]);
+        char.setColorOverride(Game.CONFIG.survivorHues[survivorIndex % Game.CONFIG.survivorHues.length]);
         survivorIndex++;
         char.state.pos.x = spawn.x;
         char.state.pos.y = spawn.y;
@@ -1175,6 +1189,7 @@ window.Game = window.Game || {};
       entry.char.state.pos.y = data.y;
       entry.char.setFacing(data.facingRight);
       entry.char.setMoving(data.moving);
+      entry.char.setSprinting(!!data.sprinting);
       entry.char.render();
       entry.camouflaged = !!data.camouflaged;
       entry.el.classList.toggle('injured', !!data.injured);
@@ -1381,10 +1396,11 @@ window.Game = window.Game || {};
 
     function attemptKillerHit(){
       const cfg = localEntry.char.characterConfig();
+      const origin = attackOrigin(localEntry.char.state, cfg);
       activeSurvivors().forEach((entry) => {
         if (entry.info.id === localId) return;
-        const dx = entry.char.state.pos.x - localEntry.char.state.pos.x;
-        const dy = entry.char.state.pos.y - localEntry.char.state.pos.y;
+        const dx = entry.char.state.pos.x - origin.x;
+        const dy = entry.char.state.pos.y - origin.y;
         if (Math.hypot(dx, dy) <= cfg.attackRange){
           net.sendEvent({ kind: 'captureStart', targetId: entry.info.id });
         }
@@ -1577,8 +1593,9 @@ window.Game = window.Game || {};
           const cfg = localEntry.char.characterConfig();
           if (isSurvivor) localEntry.health.update(delta, Math.hypot(dir.x, dir.y) <= 0.05);
           let speed = cfg.speed;
+          const sprintActive = isSurvivor && localAbilityKey === 'sprint' && localAbility1.state.activeLeft > 0;
           if (isSurvivor && localEntry.health.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
-          if (isSurvivor && localAbilityKey === 'sprint' && localAbility1.state.activeLeft > 0){
+          if (sprintActive){
             speed *= Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
           } else if (!isSurvivor && localAbility2.state.activeLeft > 0){
             speed *= Game.CONFIG.abilities.killerDash.speedMultiplier;
@@ -1586,6 +1603,7 @@ window.Game = window.Game || {};
           const moved = moveTowards(localEntry.char.state, cfg, dir, delta, speed);
           localEntry.char.setFacing(localEntry.char.state.facingRight);
           localEntry.char.setMoving(moved);
+          if (isSurvivor) localEntry.char.setSprinting(sprintActive);
           if (moved && now - lastStepAt > 300){
             lastStepAt = now;
             Game.Audio.playFootstep();
@@ -1605,6 +1623,7 @@ window.Game = window.Game || {};
           y: localEntry.char.state.pos.y,
           facingRight: localEntry.char.state.facingRight,
           moving: localEntry.el.classList.contains('running'),
+          sprinting: isSurvivor && localEntry.char.state.sprinting,
           camouflaged: isSurvivor && ((localAbilityKey === 'camouflage' && localAbility1.state.activeLeft > 0) || localEntry.hideout.state.hidden),
           injured: isSurvivor && localEntry.health.state.injured,
         });

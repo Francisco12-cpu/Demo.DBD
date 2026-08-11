@@ -5,7 +5,12 @@ window.Game = window.Game || {};
 
   // Fábrica de personagem único parametrizado por tipo (survivor/killer).
   // Nenhuma lógica de movimento/ataque deve ser duplicada por tipo — tudo
-  // que muda entre Sobrevivente e Assassino vive em Game.CONFIG.characters.
+  // que muda entre Sobrevivente e Assassino vive em Game.CONFIG.characters
+  // (números) e Game.CONFIG.sprites (arte). Desenha via CSS
+  // background-image + background-position sobre a spritesheet real
+  // (assets/killer-sheet.png, assets/survivor-sheet.png) — cada instância
+  // guarda só qual animação está tocando e desde quando, `render()`
+  // calcula o frame certo a cada chamada (a cada frame do jogo).
   function createCharacter(type, el){
     const torso = el.querySelector('.torso');
     const label = el.querySelector('.label');
@@ -16,10 +21,18 @@ window.Game = window.Game || {};
       facingRight: true,
       isAttacking: false,
       canAttack: true,
+      sprinting: false, // só Sobrevivente: usa a animação "sprint" (mais rápida) enquanto a habilidade Sprint está ativa
     };
+
+    let currentAnimName = null;
+    let animStartedAt = 0;
 
     function characterConfig(){
       return Game.CONFIG.characters[state.type];
+    }
+
+    function spriteConfig(){
+      return Game.CONFIG.sprites[state.type];
     }
 
     function setType(newType){
@@ -29,15 +42,21 @@ window.Game = window.Game || {};
 
     function applyVisuals(){
       const cfg = characterConfig();
-      torso.style.background = getComputedStyle(document.documentElement)
-        .getPropertyValue(cfg.color).trim();
+      const sprite = spriteConfig();
       label.textContent = cfg.label;
+      const scaled = sprite.frameSize * sprite.scale;
+      torso.style.backgroundImage = `url('${sprite.sheet}')`;
+      torso.style.width = scaled + 'px';
+      torso.style.height = scaled + 'px';
+      torso.style.backgroundSize = (sprite.cols * scaled) + 'px ' + (sprite.rows * scaled) + 'px';
+      currentAnimName = null; // força recalcular no próximo render (mudou de tipo)
     }
 
     // Sobrescreve só a cor (usado pra diferenciar vários Sobreviventes na
-    // mesma partida — não muda tipo/config, só o visual).
-    function setColorOverride(color){
-      torso.style.background = color;
+    // mesma partida — não muda tipo/config, só o visual). hueDeg: graus de
+    // hue-rotate (0 = cor original da arte).
+    function setColorOverride(hueDeg){
+      torso.style.filter = hueDeg ? `hue-rotate(${hueDeg}deg)` : '';
     }
 
     function setFacing(right){
@@ -47,6 +66,12 @@ window.Game = window.Game || {};
 
     function setMoving(moving){
       el.classList.toggle('running', moving);
+    }
+
+    // só o Sobrevivente usa — liga a animação "sprint" (mais rápida)
+    // enquanto a habilidade Sprint está com efeito ativo
+    function setSprinting(active){
+      state.sprinting = active;
     }
 
     // onHit(cfg) é chamado assim que o golpe é disparado — quem chama decide
@@ -70,12 +95,49 @@ window.Game = window.Game || {};
       setTimeout(() => { state.canAttack = true; }, cfg.attackCooldown);
     }
 
+    // qual animação deveria estar tocando agora, dado o estado atual —
+    // downed/carried (js/capture.js) tem prioridade (imóvel, esperando
+    // gancho ou resgate), depois ataque, depois corrida (sprint se ativo),
+    // por último parado
+    function pickAnimationName(sprite){
+      const incapacitated = el.classList.contains('downed') || el.classList.contains('carried') || el.classList.contains('hooked');
+      if (incapacitated && sprite.animations.downed){
+        return 'downed';
+      }
+      if (state.isAttacking && sprite.animations.attack) return 'attack';
+      if (el.classList.contains('running')){
+        if (state.sprinting && sprite.animations.sprint) return 'sprint';
+        if (sprite.animations.run) return 'run';
+      }
+      return sprite.animations.idle ? 'idle' : 'run';
+    }
+
+    function updateAnimationFrame(now){
+      const sprite = spriteConfig();
+      if (!sprite) return;
+      const name = pickAnimationName(sprite);
+      if (name !== currentAnimName){
+        currentAnimName = name;
+        animStartedAt = now;
+      }
+      const anim = sprite.animations[name];
+      const scaled = sprite.frameSize * sprite.scale;
+      const elapsedSec = (now - animStartedAt) / 1000;
+      let frame = Math.floor(elapsedSec * anim.fps);
+      frame = anim.loop ? frame % anim.frames : Math.min(frame, anim.frames - 1);
+      torso.style.backgroundPosition = `-${frame * scaled}px -${anim.row * scaled}px`;
+    }
+
     function render(){
       el.style.left = state.pos.x + 'px';
       el.style.top = state.pos.y + 'px';
+      updateAnimationFrame(performance.now());
     }
 
-    return { state, characterConfig, setType, applyVisuals, setColorOverride, setFacing, setMoving, tryAttack, render };
+    return {
+      state, characterConfig, setType, applyVisuals, setColorOverride,
+      setFacing, setMoving, setSprinting, tryAttack, render,
+    };
   }
 
   Game.createCharacter = createCharacter;

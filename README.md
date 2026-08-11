@@ -15,10 +15,11 @@ tentando completar objetivos e escapar de uma mansão abandonada.
 - **Distribuição:** joga na web (ex: itch.io); sem servidor pago
 - **Modos:** multiplayer local (vários controles no mesmo PC/teclado) →
   depois multiplayer online P2P (sem servidor dedicado)
-- **Arte:** pixel art — hoje é um sprite (`assets/character-mask.png`) gerado
-  localmente por script (16×20px, sem depender de internet pra baixar arte
-  pronta), tingido por CSS `mask-image` com a cor de cada personagem/
-  Sobrevivente. Ver nota em `Planos futuros`
+- **Arte:** pixel art autoral (`assets/killer-sheet.png`,
+  `assets/survivor-sheet.png`) desenhada pelo Francisco, renderizada via
+  spritesheet real (`background-image`/`background-position`, ver seção
+  `Sprite (pixel art autoral)`) — não é mais silhueta gerada por script.
+  Cor dos 4 Sobreviventes: `filter: hue-rotate()` por jogador.
 - **Mapas:** 2 layouts fixos (obstáculos variam, sorteado a cada partida);
   randomização de verdade continua objetivo futuro
 - **Sobrevivente não ataca ninguém** — só foge, usa habilidade e completa
@@ -112,7 +113,8 @@ server/server.js            servidor da sala (Node.js + ws) pro modo LAN
 server/package.json         dependência (ws) e script `npm start`
 vendor/peerjs.min.js        biblioteca PeerJS (MIT) vendorizada, só pro modo P2P
 vendor/qrcode.min.js        biblioteca qrcode-generator (MIT) vendorizada, só pro QR do P2P
-assets/character-mask.png   sprite pixel art (16×20px) gerado localmente, usado via CSS mask
+assets/killer-sheet.png     spritesheet do Assassino (32px/quadro, arte autoral)
+assets/survivor-sheet.png   spritesheet do Sobrevivente (32px/quadro, arte autoral)
 ```
 Client em `<script>` clássico (sem `type="module"`, sem bundler) pra
 continuar funcionando ao abrir `index.html` direto com duplo clique. O
@@ -153,10 +155,11 @@ escopo (não do jeito "ainda não fizemos", e sim "não vamos fazer por agora").
       celular sem depender de controle físico
 - [x] Sprite vira (flip horizontal) ao mudar de direção esquerda/direita
 - [x] Animação "parado" (idle)
-- [x] Animação "correr" — agora com spritesheet de verdade (4 frames,
-      `assets/character-walk.png`, gerado localmente igual ao resto da arte),
-      trocando de quadro via `mask-position` animado em CSS puro (sem
-      trocar elemento nem depender de JS pra isso)
+- [x] Animação "correr" — spritesheet autoral real (`assets/killer-sheet.png`,
+      `assets/survivor-sheet.png`), quadro calculado por `js/character.js` a
+      cada `render()` a partir de `Game.CONFIG.sprites` (fps/loop/row por
+      animação); Sobrevivente ainda troca pra uma animação "sprint" separada
+      (mais rápida) enquanto a habilidade Sprint está ativa
 - [x] Animação "matar"/ataque (trava movimento durante a execução)
 - [x] Velocidade como variável configurável por personagem (não hardcoded)
 - [x] Teclado, gamepad e joystick touch funcionam ao mesmo tempo sem
@@ -639,24 +642,44 @@ trocar de host; ver `Planos futuros` pro failover completo.
 
 ---
 
-## Sprite (pixel art)
-`assets/character-mask.png` é uma silhueta pixel art de 16×20px, desenhada
-por um script Python (Pillow) direto nesse projeto — não foi baixada de
-lugar nenhum. `css/style.css` usa ela como `mask-image` no `.torso`: o PNG
-só define o "recorte" (transparência), e a cor de cada personagem continua
-vindo do JS (`character.js`/`Game.CONFIG`), igual antes. Pra gerar uma
-variante diferente, é só desenhar outra grade de pixels e trocar o arquivo
-— não precisa mudar nada em CSS/JS.
+## Sprite (pixel art autoral)
+`assets/killer-sheet.png` (256×288, 8 col × 9 lin de 32px) e
+`assets/survivor-sheet.png` (320×352, 10 col × 11 lin de 32px) são
+spritesheets desenhados pelo próprio Francisco e cedidos de uso livre pro
+projeto — substituem a silhueta gerada por script que o jogo usava antes.
+Renderização: `js/character.js` desenha via `background-image` +
+`background-position` sobre o `.torso` (64×64px na tela, escala 2× da arte
+32×32), calculando o quadro certo a cada `render()` a partir de metadados
+por-animação (`row`, `frames`, `fps`, `loop`) em `Game.CONFIG.sprites.{killer,
+survivor}` — sem depender de mask-image nem de `steps()` no CSS.
 
-`assets/character-walk.png` é um spritesheet de 4 frames (64×20px, também
-gerado por script, mesma técnica) usado só enquanto o personagem está
-correndo (`.char.running .torso`) — troca de quadro via `mask-position`
-animado com `steps(4)`, técnica clássica de spritesheet em CSS puro, sem
-nenhum JS controlando frame a frame. Continua sem acesso à internet pra
-buscar arte pronta, então a arte em si é minimalista de propósito (ver
-`Planos futuros` na rodada anterior — pedido de sprite "pronto" de algum
-banco de dados/GitHub foi tentado e bloqueado pela política de rede do
-ambiente onde isso foi desenvolvido, documentado então e continua valendo).
+Animações mapeadas (linha da planilha → uso no jogo):
+- **Assassino:** `idle` (r0), `run` (r3), `attack` (r8, dispara junto com a
+  hitbox de golpe — ver abaixo), `vanish` (r6, reservado pra uma futura
+  habilidade de invisibilidade, ainda não implementada) e `fall` (r7,
+  reservado pra uma futura cutscene de fuga do Sobrevivente pelo portão,
+  ainda não implementada).
+- **Sobrevivente:** `idle`/`run` (r0), `sprint` (r1, só toca enquanto a
+  habilidade Sprint está com efeito ativo — `setSprinting()`), `downed` (r6,
+  toca durante as 3 fases de captura — derrubado, carregado *e* pendurado no
+  gancho, já que visualmente é a mesma pose de "incapacitado") e `hit` (r7,
+  reservado, ainda desenhado via CSS `hit-flash` em vez do sprite).
+
+**Cor dos 4 Sobreviventes:** como a arte agora é colorida (não é mais uma
+silhueta tingível), a diferenciação de cor por jogador passou a ser
+`filter: hue-rotate(Ndeg)` no `.torso` (`Game.CONFIG.survivorHues`,
+`setColorOverride(hueDeg)` em `character.js`) em vez de cor sólida.
+
+**Hitbox de ataque com offset frontal:** o Assassino golpeia à frente de si,
+não em cima do próprio centro — `attackOrigin()` (`js/main.js`) desloca o
+ponto de checagem de distância por `Game.CONFIG.characters.killer.
+attackForwardOffset` na direção que ele está olhando (espelha com
+`facingRight`), usado pelas 3 implementações de `attemptKillerHit()` (solo
+Sobrevivente, solo Assassino, online).
+
+Sem arquivo de animação externo (JSON) por enquanto — os metadados vivem
+direto em `Game.CONFIG.sprites`, seguindo a convenção do projeto de que
+`Game.CONFIG` é a única fonte de números/dados de configuração.
 
 ## Convenções de código
 - Toda variável de balanceamento (velocidade, dano, cooldowns, duração de

@@ -323,9 +323,14 @@ html,body{
 }
 
 /* ---------- personagem ---------- */
+/* spritesheets em pixel art de verdade (assets/killer-sheet.png,
+   assets/survivor-sheet.png) — 32px nativo, 2x em tela (ver
+   Game.CONFIG.sprites). .torso não tem mais tamanho/imagem fixos aqui:
+   js/character.js seta background-image/size/position por instância,
+   porque cada tipo usa uma folha e uma grade diferente. */
 .char{
   position:absolute;
-  width:42px; height:42px;
+  width:64px; height:64px;
   left:0; top:0;
   transform: translate(-50%,-50%);
   transition: none;
@@ -335,87 +340,19 @@ html,body{
   display:flex; align-items:center; justify-content:center;
 }
 .torso{
-  width:26px; height:34px;
   position:relative;
-  box-shadow: 0 3px 6px rgba(0,0,0,.5);
-  /* sprite pixel art (16x20, gerado localmente — ver assets/character-mask.png):
-     a imagem só carrega o "recorte" (alpha), a cor vem do background,
-     igual antes — cada personagem/Sobrevivente continua tingido via JS */
-  -webkit-mask-image: url('../assets/character-mask.png');
-  mask-image: url('../assets/character-mask.png');
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
   image-rendering: pixelated;
-}
-/* correndo: troca pro spritesheet de 4 frames (character-walk.png, também
-   gerado localmente) e alterna os quadros via mask-position animado —
-   técnica clássica de spritesheet em CSS puro, sem trocar de elemento */
-.char.running .torso{
-  -webkit-mask-image: url('../assets/character-walk.png');
-  mask-image: url('../assets/character-walk.png');
-  -webkit-mask-size: 400% 100%;
-  mask-size: 400% 100%;
-  animation: bob .28s infinite ease-in-out, walkFrames .5s steps(4) infinite;
-}
-@keyframes walkFrames{
-  from{ -webkit-mask-position: 0% 0; mask-position: 0% 0; }
-  to{ -webkit-mask-position: 100% 0; mask-position: 100% 0; }
-}
-.face{
-  position:absolute; top:2px; left:50%;
-  width:10px; height:10px;
-  background: #1a1420;
-  border-radius:50%;
-  transform: translateX(-50%);
-}
-.weapon{
-  position:absolute;
-  width: 22px; height: 4px;
-  background: var(--gold);
-  top: 12px; right: -14px;
-  border-radius: 2px;
-  transform-origin: left center;
-  opacity: 0;
-}
-.char.facing-left .weapon{ right:auto; left:-14px; transform-origin: right center; transform: scaleX(-1); }
-.char.attacking .weapon{ opacity:1; animation: swing .35s ease-out; }
-@keyframes swing{
-  0%{ transform: rotate(-70deg); opacity:1;}
-  60%{ transform: rotate(25deg); }
-  100%{ transform: rotate(0deg); opacity:0;}
-}
-.char.facing-left.attacking .weapon{ animation: swingL .35s ease-out; }
-@keyframes swingL{
-  0%{ transform: scaleX(-1) rotate(-70deg); opacity:1;}
-  60%{ transform: scaleX(-1) rotate(25deg); }
-  100%{ transform: scaleX(-1) rotate(0deg); opacity:0;}
-}
-@keyframes bob{
-  0%,100%{ transform: translateY(0) scaleY(1); }
-  50%{ transform: translateY(-3px) scaleY(1.04); }
-}
-.char:not(.running):not(.attacking) .torso{
-  animation: idleBreathe 2.4s ease-in-out infinite;
-}
-@keyframes idleBreathe{
-  0%,100%{ transform: scaleY(1); }
-  50%{ transform: scaleY(1.02); }
+  background-repeat: no-repeat;
 }
 .char.facing-left .body{ transform: scaleX(-1); }
 .char.hit-flash .torso{ filter: brightness(2.5) saturate(1.4); }
 .char.captured .torso{ filter: grayscale(.6) brightness(.7); }
 .char.eliminated{ opacity:.35; filter: grayscale(1); }
-/* derrubado (imóvel, esperando ser carregado ou reanimado) e carregado
-   (preso nas costas do Assassino, segue a posição dele) — mesma pose
-   deitada pros dois, só o carregado que segue outra entidade em vez de
-   ficar parado (main.js cuida disso) */
-.char.downed, .char.carried{
-  transform: translate(-50%,-50%) rotate(90deg);
-}
-.char.downed .torso, .char.carried .torso{ filter: grayscale(.5) brightness(.6); }
-/* pendurado no gancho — cor de aviso, balançando, ninguém confunde com "só ferido" */
+/* derrubado/carregado (js/capture.js): a própria animação "downed" da
+   spritesheet já mostra a pose caída — não precisa mais girar o elemento
+   feito na arte antiga (silhueta sem pose própria pra isso) */
+.char.downed .torso, .char.carried .torso{ filter: brightness(.75); }
+/* pendurado no gancho — balançando + cor de aviso, ninguém confunde com "só ferido" */
 .char.hooked .torso{ filter: sepia(.4) saturate(3.5) hue-rotate(-50deg) brightness(.8); }
 .char.hooked{ animation: hookedSway 1.8s ease-in-out infinite; }
 @keyframes hookedSway{
@@ -429,7 +366,7 @@ html,body{
 .char.escaped{ opacity:.25; filter: grayscale(.4) brightness(1.3); }
 .struggle-bar{
   display:none;
-  position:absolute; bottom:-34px; left:50%; transform:translateX(-50%);
+  position:absolute; bottom:-40px; left:50%; transform:translateX(-50%);
   width:46px; height:6px; background:#1a1420; border:1px solid var(--wall);
 }
 .struggle-fill{
@@ -437,15 +374,15 @@ html,body{
   transition: width .08s linear;
 }
 .shadow{
-  position:absolute; bottom:-6px; left:50%;
-  width:26px; height:8px;
+  position:absolute; bottom:-4px; left:50%;
+  width:34px; height:10px;
   background: rgba(0,0,0,.5);
   border-radius:50%;
   transform: translateX(-50%);
   filter: blur(1px);
 }
 .label{
-  position:absolute; bottom:-22px; left:50%; transform:translateX(-50%);
+  position:absolute; bottom:-26px; left:50%; transform:translateX(-50%);
   font-size:11px; color:var(--ink); font-weight:bold; white-space:nowrap; letter-spacing:0.5px;
   text-shadow: 0 1px 2px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.9);
 }
