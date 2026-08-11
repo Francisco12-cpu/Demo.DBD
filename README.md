@@ -353,8 +353,10 @@ por quem escolheu esse papel na sala.
       Assassino estar visível na tela (`Game.CONFIG.heartbeatRange`)
 - [x] Efeito sonoro de ataque (golpe do Assassino)
 - [x] Efeito sonoro de dano/captura
-- [x] Som de passo (discreto, throttled a cada 300ms enquanto anda) — dá
-      presença sonora ao jogo mesmo fora de eventos de captura/ataque
+- [x] Som de passo (discreto, throttled a cada 300ms enquanto anda, 180ms
+      sprintando) — dá presença sonora ao jogo mesmo fora de eventos de
+      captura/ataque; sprintando o passo fica mais alto/agudo E emite
+      ruído de verdade (ver "Sistema de ruído" abaixo)
 - [x] Volume master configurável (menu Configurações), persistido em
       `localStorage`; todos os sons passam por um único `GainNode` central
 - [x] Música ambiente de terror — drone grave com 2 osciladores levemente
@@ -370,14 +372,45 @@ tem uma bússola visual no HUD (`#killer-compass`) apontando a direção real
 do Assassino quando ele está dentro do alcance do batimento — útil pra quem
 joga sem fone/som ligado.
 
-**Sobre o efeito "3D" do batimento não parecer perceptível**: verificado
-via teste automatizado que o `PannerNode` (HRTF) dispara e recebe as
-posições certas — o mecanismo funciona. O efeito de direção (vem da
-esquerda/direita) só é perceptível em **fone de ouvido ou caixa de som
-estéreo de verdade** — um alto-falante mono de celular fisicamente não
-consegue reproduzir esse tipo de painel, então nesse caso só dá pra notar o
-volume/velocidade do batimento aumentando (que não depende de estéreo). Não
-é um bug de código — é uma limitação física do hardware de áudio.
+**Sobre o áudio "não funcionar" no celular (2ª investigação, mais funda)**:
+a 1ª rodada só tinha testado via Playwright/Chromium desktop (sem
+alto-falante físico) e concluiu que o mecanismo de `PannerNode` estava
+tecnicamente correto — o que é verdade, mas não cobria a hipótese de o som
+ficar **totalmente inaudível** por outros motivos. Achamos e corrigimos 5
+causas reais em `js/audio.js`:
+1. **O `AudioContext` nunca era reativado depois do início da partida.**
+   `ensureContext()` só criava o contexto; só `init()` chamava `resume()`,
+   e `init()` só rodava 2x na vida da página inteira. Se o navegador
+   suspendesse o áudio de novo durante a partida (tela apagar, trocar de
+   app, notificação — comum em mobile), o jogo ficava mudo pro resto da
+   partida sem nada tentar reativar. Corrigido: `ensureContext()` agora
+   tenta `resume()` toda vez que é chamada (ou seja, a cada som), e há
+   listeners de `visibilitychange`/`pageshow`/`focus` reativando ao voltar
+   de segundo plano.
+2. **Atenuação dupla no batimento**: o volume calculado manualmente em
+   `updateHeartbeat` já levava a distância em conta, mas o próprio
+   `PannerNode` aplicava uma segunda atenuação em cima (a posição mandada
+   pro panner tinha magnitude fixa, só indicando ângulo, e o
+   `distanceModel='inverse'` usava ela como se fosse distância real).
+   Corrigido com `rolloffFactor = 0` — a atenuação por distância passa a
+   viver só no cálculo manual, já calibrado.
+3. **Frequência grave demais**: o batimento usava 68/52Hz — a maioria dos
+   alto-falantes de celular reproduz muito mal frequências abaixo de
+   ~150-300Hz, principalmente como tom puro. Subido pra 110/85Hz, com um
+   "click" curto e mais agudo somado em cima do tom grave (transiente
+   audível mesmo em speakers que cortam graves).
+4. `panningModel` trocado de `'HRTF'` (pode falhar silenciosamente em
+   WebViews embutidos) pra `'equalpower'` (suporte universal, entrega
+   esquerda/direita perfeita, que é o que importa em alto-falante mono — a
+   nuance frente/trás do HRTF já era imperceptível nesse hardware mesmo).
+5. A música ambiente (drone contínuo em 55-58Hz, quase a mesma faixa do
+   batimento) foi baixada de volume e agora "abaixa" ainda mais
+   dinamicamente quando o batimento está tocando perto, pra não mascará-lo.
+
+O efeito de **direção** (esquerda/direita) continua só sendo perceptível em
+fone de ouvido ou caixa de som estéreo de verdade — isso é mesmo limitação
+física de alto-falante mono e não tem como contornar. Mas agora o som em
+si (volume, presença, ritmo) deve estar audível em qualquer celular.
 
 ### UI/HUD
 - [x] Indicador visual de cooldown de habilidades — texto simples no HUD
@@ -472,6 +505,60 @@ volume/velocidade do batimento aumentando (que não depende de estéreo). Não
       de só desviar dela feito qualquer parede — reaproveita o mesmo desvio
       de obstáculo, só que prioriza arrombar quando a parede na frente é
       uma porta
+
+### Loops de perseguição: pallets e janelas
+As duas peças que faltavam pra uma perseguição ser mais do que "quem é mais
+rápido" — dão ao Sobrevivente uma forma de ganhar distância mesmo sendo mais
+lento, obrigando o Assassino a escolher entre um caminho mais devagar ou dar
+a volta por fora.
+- [x] **Pallet** (`js/pallet.js`, novo — 4 por layout, `js/map.js`): objeto
+      solto no mapa que começa "em pé", sem bloquear nada. O Sobrevivente
+      aperta o botão de ação perto dele pra **derrubar** (ação instantânea,
+      não canalizada) — vira uma parede de verdade na hora (bloqueia o
+      Assassino), e se o Assassino estava perto o bastante (`Game.CONFIG.
+      pallet.stunRadius`) no exato instante da queda, fica **atordoado**
+      por `stunDuration` segundos (2.5s por padrão — parado, sem atacar,
+      sem usar habilidade). O Assassino consegue **quebrar** um pallet já
+      caído ficando perto e canalizando por `breakDuration` segundos (3s,
+      de propósito mais lento que arrombar porta — o loop só vale a pena se
+      custar tempo de verdade), removendo o obstáculo de vez
+- [x] **Janela** (`js/window.js`, novo — 1 por sala, no lado **oposto** da
+      porta, o "shack" clássico do jogo original): vão que **nunca**
+      bloqueia ninguém — a diferença é só velocidade. Dentro do raio da
+      janela (`Game.CONFIG.window.radius`), o Sobrevivente quase não perde
+      velocidade (`survivorSpeedMultiplier`, ~1.05x) enquanto o Assassino
+      perde bastante (`killerSpeedMultiplier`, ~0.55x) — sem evento de rede
+      novo, cada cliente calcula sozinho a partir da própria posição (já
+      sincronizada continuamente)
+- [x] Reaproveita o mesmo botão de ação do Sobrevivente (skill check,
+      entrar/sair do esconderijo, resgatar) — sem tecla nova
+- [x] No modo solo-como-Assassino, a IA Sobrevivente **não derruba pallets
+      sozinha** ainda (usa como obstáculo passivo/quebrável) — decidido
+      como limitação aceitável desta entrega, não trava o resto
+
+### Sistema de ruído
+Generaliza um padrão que antes eram 3 mecanismos quase idênticos copiados
+(aviso de esconderijo, skill check errado, habilidade Distrair) num único
+`emitNoiseOnline`/`emitNoiseSolo` (`js/main.js`) — e introduz um **raio de
+audição de verdade**, que antes não existia (o Assassino ouvia não importa
+a distância).
+- [x] **Sprint faz barulho**: enquanto sprintando, cada passo emite um
+      ruído de raio curto (`Game.CONFIG.noise.sprintRadius`, 160px por
+      padrão) — só o Assassino dentro desse raio reage. Sprint vira uma
+      troca real (mais rápido, mas arrisca ser ouvido de perto), não só
+      velocidade de graça
+- [x] **Pallet derrubando/quebrando faz barulho** (`palletDropRadius`/
+      `palletBreakRadius`)
+- [x] Esconderijo e skill check errado continuam revelando a posição, agora
+      só se o Assassino estiver dentro do raio configurado (antes era
+      sempre, não importava a distância)
+- [x] Distrair continua sendo ouvido de qualquer distância de propósito
+      (`radius: Infinity`) — é uma isca, faz sentido não ter limite
+- [x] Aviso de gerador ativado (som bem discreto, sem revelar posição) — já
+      existia só no Online, agora também nos dois modos solo (no modo
+      "jogar de Assassino", som local; no modo normal, dá à IA Assassina
+      uma reação fraca e curta, sem ser tão informativo quanto um erro de
+      skill check)
 
 ### Câmera e iluminação
 - [x] Câmera segue o jogador local em vez de encolher o mapa inteiro pra
@@ -588,14 +675,6 @@ trocar de host; ver `Planos futuros` pro failover completo.
 ---
 
 ## Planos futuros (fora de escopo agora, mas já anotado)
-- **Pallets e janelas (loops de perseguição):** o item que mais falta pra
-  aproximar de verdade do jogo original — sem eles, uma perseguição é só
-  "quem é mais rápido". Janela: Sobrevivente vaulta rápido, Assassino
-  devagar; pallet: Sobrevivente derruba, vira parede temporária, atordoa o
-  Assassino se acertar em cima dele. Ficou de fora desta rodada (que já
-  trouxe vida em 2 golpes + fase de portão de saída) por ser um mecanismo
-  novo (posicionamento fixo no mapa, animação de vault, estado de atordoado)
-  — próxima rodada de balanceamento.
 - **Sistema de mapa "criar e carregar":** hoje `js/map.js` já é 100% dados
   (paredes por layout) separado da lógica de jogo — é a base certa pra
   evoluir pra: desenhar/exportar um mapa em uma ferramenta (ex: Tiled) e o

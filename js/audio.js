@@ -16,13 +16,18 @@ window.Game = window.Game || {};
   let masterVolume = 1;
 
   function ensureContext(){
-    if (ctx) return ctx;
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return null;
-    ctx = new AudioContextClass();
-    masterGain = ctx.createGain();
-    masterGain.gain.value = masterVolume;
-    masterGain.connect(ctx.destination);
+    if (!ctx){
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+      ctx = new AudioContextClass();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = masterVolume;
+      masterGain.connect(ctx.destination);
+    }
+    // navegadores mobile suspendem o contexto sozinhos no meio da partida
+    // (tela apagar, trocar de app, notificação) — sem isso, o jogo ficava
+    // mudo pro resto da partida sem nenhuma tentativa de reativar
+    if (ctx.state === 'suspended') ctx.resume();
     return ctx;
   }
 
@@ -37,19 +42,37 @@ window.Game = window.Game || {};
 
   // Precisa ser chamado a partir de um gesto do usuário (clique/toque) —
   // navegadores bloqueiam áudio automático. O menu já garante isso (o
-  // jogador clica "Jogar" antes da partida começar).
+  // jogador clica "Jogar" antes da partida começar). ensureContext() já
+  // tenta resume() sozinha, então init() só existe como o ponto de entrada
+  // "oficial" chamado a partir de um gesto/evento de foco.
   function init(){
-    const c = ensureContext();
-    if (c && c.state === 'suspended') c.resume();
+    ensureContext();
+    nextBeatAt = 0; // evita o batimento ficar "travado" esperando um timestamp de antes de suspender
   }
+
+  // volta de segundo plano (tela apagou, trocou de app, notificação) —
+  // sem isso o AudioContext ficava suspenso pro resto da partida
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') init(); });
+  window.addEventListener('pageshow', () => init());
+  window.addEventListener('focus', () => init());
 
   function makePanner(c, panX, panZ){
     const panner = c.createPanner();
-    panner.panningModel = 'HRTF';
+    // 'equalpower' em vez de 'HRTF': suporte universal (HRTF pode falhar
+    // silenciosamente em WebViews embutidos) e entrega esquerda/direita
+    // perfeita, que é o que importa num alto-falante mono de celular — a
+    // nuance frente/trás do HRTF já era imperceptível nesse hardware.
+    panner.panningModel = 'equalpower';
     panner.distanceModel = 'inverse';
     panner.refDistance = 1;
     panner.maxDistance = 10;
-    panner.rolloffFactor = 1;
+    // rolloffFactor=0 desliga a atenuação por distância do próprio panner
+    // — o volume por proximidade já é calculado manualmente em
+    // updateHeartbeat() e calibrado lá; com rolloff>0 e a posição de pan
+    // tendo magnitude fixa (só indica ângulo, não distância real), o
+    // panner aplicava uma SEGUNDA atenuação em cima da primeira, deixando
+    // o batimento bem mais baixo do que os números do código sugeriam.
+    panner.rolloffFactor = 0;
     if (panner.positionX){
       panner.positionX.value = panX;
       panner.positionY.value = 0;
@@ -77,6 +100,19 @@ window.Game = window.Game || {};
     osc.connect(gain).connect(panner).connect(masterGain);
     osc.start();
     osc.stop(c.currentTime + 0.26);
+
+    // "click" curto e mais agudo em cima do tom grave — alto-falantes de
+    // celular baratos reproduzem muito mal frequências graves puras;
+    // esse transiente dá presença audível mesmo quando o grave se perde
+    const click = c.createOscillator();
+    click.type = 'triangle';
+    click.frequency.value = freq * 4.2;
+    const clickGain = c.createGain();
+    clickGain.gain.setValueAtTime(Math.max(volume, 0.001) * 0.3, c.currentTime);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.015);
+    click.connect(clickGain).connect(panner);
+    click.start();
+    click.stop(c.currentTime + 0.02);
   }
 
   // ---------- batimento cardíaco ----------
@@ -106,11 +142,17 @@ window.Game = window.Game || {};
 
     const proximity = 1 - Math.min(dist / maxDistance, 1); // 0 longe .. 1 grudado
     const intervalMs = 950 - proximity * 600; // 950ms longe -> 350ms bem perto
-    const volume = 0.22 + proximity * 0.5; // subido — o panner HRTF já atenua bastante sozinho
+    const volume = 0.22 + proximity * 0.5;
+
+    // "duck" simples: abaixa o drone ambiente quanto mais perto o
+    // batimento está tocando, pra não mascarar ele na mesma faixa grave
+    if (ambientNodes) ambientNodes.gain.gain.setTargetAtTime(0.06 * (1 - proximity * 0.6), c.currentTime, 0.3);
 
     if (c.currentTime * 1000 >= nextBeatAt){
-      playThump(panX, panZ, volume, 68);
-      setTimeout(() => { if (heartbeatOn) playThump(panX, panZ, volume * 0.75, 52); }, 110);
+      // subido de 68/52Hz — graves demais pra maioria dos alto-falantes de
+      // celular reproduzirem de forma audível, principalmente como tom puro
+      playThump(panX, panZ, volume, 110);
+      setTimeout(() => { if (heartbeatOn) playThump(panX, panZ, volume * 0.75, 85); }, 110);
       nextBeatAt = c.currentTime * 1000 + intervalMs;
     }
   }
@@ -151,16 +193,19 @@ window.Game = window.Game || {};
   }
 
   // passo curto e discreto — dá presença sonora ao jogo mesmo longe de
-  // qualquer evento (captura, ataque, batimento), sem ficar irritante
-  function playFootstep(){
+  // qualquer evento (captura, ataque, batimento), sem ficar irritante.
+  // sprinting: passo um pouco mais alto/agudo — combina com o ruído extra
+  // que o sprint emite (js/main.js), tornando sprint uma troca real
+  // (mais rápido, mas arrisca ser ouvido de perto) em vez de só velocidade
+  function playFootstep(sprinting){
     const c = ensureContext();
     if (!c) return;
     const osc = c.createOscillator();
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(90 + Math.random() * 20, c.currentTime);
+    osc.frequency.setValueAtTime((sprinting ? 110 : 90) + Math.random() * 20, c.currentTime);
 
     const gain = c.createGain();
-    gain.gain.setValueAtTime(0.12, c.currentTime);
+    gain.gain.setValueAtTime(sprinting ? 0.16 : 0.12, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.08);
 
     osc.connect(gain).connect(masterGain);
@@ -253,7 +298,7 @@ window.Game = window.Game || {};
     if (!c || ambientNodes) return;
 
     const gain = c.createGain();
-    gain.gain.value = 0.1;
+    gain.gain.value = 0.06; // era 0.1 — competia com o batimento cardíaco na mesma faixa grave (52-68Hz vs 55-58Hz), mascarando ele no alto-falante mono
     gain.connect(masterGain);
 
     const filter = c.createBiquadFilter();

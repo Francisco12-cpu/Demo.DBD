@@ -24,13 +24,15 @@ window.Game = window.Game || {};
 
   let objectives = [];
   let doors = [];
+  let pallets = [];
+  let windows = [];
   let gates = [];
   let hooks = [];
   let currentLayoutWalls = [];
 
   // ---------- mundo (mapa + objetivos + portas + esconderijos + portões + ganchos), compartilhado entre solo e online ----------
   function buildWorld(objectiveCount, layoutIndex){
-    arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .door, .hideout-spot, .gate, .hook').forEach((n) => n.remove());
+    arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .door, .pallet, .window, .hideout-spot, .gate, .hook').forEach((n) => n.remove());
     arena.style.width = MAP.width + 'px';
     arena.style.height = MAP.height + 'px';
 
@@ -55,6 +57,28 @@ window.Game = window.Game || {};
       div.style.height = rect.h + 'px';
       arena.appendChild(div);
       return Game.createDoor(rect, div);
+    });
+
+    pallets = layout.pallets.map((rect) => {
+      const div = document.createElement('div');
+      div.className = 'pallet';
+      div.style.left = rect.x + 'px';
+      div.style.top = rect.y + 'px';
+      div.style.width = rect.w + 'px';
+      div.style.height = rect.h + 'px';
+      arena.appendChild(div);
+      return Game.createPallet(rect, div);
+    });
+
+    windows = layout.windows.map((rect) => {
+      const div = document.createElement('div');
+      div.className = 'window';
+      div.style.left = rect.x + 'px';
+      div.style.top = rect.y + 'px';
+      div.style.width = rect.w + 'px';
+      div.style.height = rect.h + 'px';
+      arena.appendChild(div);
+      return Game.createWindow(rect, div);
     });
 
     MAP.hideoutSpots.forEach((spot) => {
@@ -101,7 +125,11 @@ window.Game = window.Game || {};
 
   function allWalls(){
     const lockedDoorWalls = doors.filter((d) => d.state.locked).map((d) => d.state.rect);
-    return lockedDoorWalls.length ? currentLayoutWalls.concat(lockedDoorWalls) : currentLayoutWalls;
+    // pallet em pé não bloqueia nada; derrubado vira parede de verdade —
+    // papel invertido do de porta (trancada = parede), mesma técnica
+    const droppedPalletWalls = pallets.filter((p) => p.state.dropped).map((p) => p.state.rect);
+    const extra = lockedDoorWalls.concat(droppedPalletWalls);
+    return extra.length ? currentLayoutWalls.concat(extra) : currentLayoutWalls;
   }
 
   function nearestDoor(pos, maxDist){
@@ -111,6 +139,28 @@ window.Game = window.Game || {};
       if (dist <= maxDist && dist < bestDist){ best = d; bestDist = dist; }
     });
     return best;
+  }
+
+  // pallet mais perto ainda "em pé" (só esses contam pra derrubar — um já
+  // caído ou quebrado não é candidato de novo)
+  function nearestPallet(pos, maxDist){
+    let best = null, bestDist = Infinity;
+    pallets.forEach((p) => {
+      if (p.state.dropped || p.state.broken) return;
+      const dist = Math.hypot(pos.x - p.center.x, pos.y - p.center.y);
+      if (dist <= maxDist && dist < bestDist){ best = p; bestDist = dist; }
+    });
+    return best;
+  }
+
+  // janela: nunca bloqueia ninguém, só muda a velocidade de quem está perto
+  // do vão — Sobrevivente quase não perde, Assassino perde bastante. Isso é
+  // o que cria o loop de perseguição (ver js/window.js).
+  function windowSpeedMultiplier(pos, isKiller){
+    const cfg = Game.CONFIG.window;
+    const inside = windows.some((w) => Math.hypot(pos.x - w.center.x, pos.y - w.center.y) <= cfg.radius);
+    if (!inside) return 1;
+    return isKiller ? cfg.killerSpeedMultiplier : cfg.survivorSpeedMultiplier;
   }
 
   function nearestHideoutSpot(pos, maxDist){
@@ -143,6 +193,15 @@ window.Game = window.Game || {};
   function setHookOccupied(hook, entryOrId){
     hook.occupiedBy = entryOrId || null;
     hook.el.classList.toggle('occupied', !!hook.occupiedBy);
+  }
+
+  // Sobrevivente derrubou um pallet: se o Assassino estava perto o bastante
+  // NESSE instante, é atordoado — a recompensa por deixar ele chegar perto
+  // demais antes de derrubar (checagem de proximidade feita por fora, igual
+  // o resto do jogo — capture.js/door.js não sabem de posição sozinhos)
+  function attemptPalletStun(pallet, killerPos, onStun){
+    const dist = Math.hypot(killerPos.x - pallet.center.x, killerPos.y - pallet.center.y);
+    if (dist <= Game.CONFIG.pallet.stunRadius) onStun();
   }
 
   // ponto de onde o golpe do Assassino realmente sai — um pouco à frente
@@ -224,6 +283,27 @@ window.Game = window.Game || {};
     div.style.top = y + 'px';
     arena.appendChild(div);
     setTimeout(() => div.remove(), durationSec * 1000);
+  }
+
+  // Ruído (modo online) — substitui o que antes eram 3 kinds de evento
+  // quase idênticos (distractPing/objectiveFailed/hideoutNoise), sempre o
+  // mesmo padrão "marcador visual + evento de rede + só o Assassino reage".
+  // Unificados num só kind:'noise' com raio de audição de verdade — antes
+  // o Assassino ouvia não importa a distância, agora só se estiver dentro
+  // de `radius` (ver o handler em startOnline). ping=0 não desenha marcador
+  // (usado pelo aviso discreto de gerador, que não revela posição).
+  function emitNoiseOnline(net, x, y, { radius = Infinity, ping = 2.5, sound = 'error' } = {}){
+    if (ping > 0) spawnPingMarker(x, y, ping);
+    net.sendEvent({ kind: 'noise', x, y, radius, ping, sound });
+  }
+
+  // Ruído (modos solo) — mesma ideia, mas sem rede: só reage se quem
+  // escuta (a IA Assassina em startSolo, ou o jogador-Assassino em
+  // startSoloAsKiller) estiver dentro do raio. `onHeard` decide o que fazer
+  // (setar `distraction` pra IA, ou tocar som pro jogador).
+  function emitNoiseSolo(sourcePos, listenerPos, radius, onHeard){
+    if (Math.hypot(sourcePos.x - listenerPos.x, sourcePos.y - listenerPos.y) > radius) return;
+    onHeard();
   }
 
   // rastro de poeira ao correr — puramente decorativo, some sozinho
@@ -601,6 +681,9 @@ window.Game = window.Game || {};
     function updateKillerAI(delta){
       if (killer.state.isAttacking){ killer.render(); return; }
       if (updateKillerAfterDown(delta)) return;
+      // atordoado por pallet: parado, sem atacar, até o tempo passar —
+      // nem checa porta/pallet/alvo enquanto isso
+      if (performance.now() < killer.state.stunnedUntil){ killer.setMoving(false); killer.render(); return; }
       if (!hideout.state.hidden) lastKnownPlayerPos = { x: player.state.pos.x, y: player.state.pos.y };
       const cfg = killer.characterConfig();
       // escondido = "invisível": a IA mira no último lugar visto em vez de
@@ -623,10 +706,19 @@ window.Game = window.Game || {};
         d.progressBreak(delta, near);
       });
 
+      // pallet já derrubado no caminho: quebra de vez em vez de desviar
+      pallets.forEach((p) => {
+        if (!p.state.dropped) return;
+        const near = Math.hypot(killer.state.pos.x - p.center.x, killer.state.pos.y - p.center.y) <= Game.CONFIG.pallet.radius;
+        if (near) nearLockedDoor = true; // reaproveita o mesmo "não desvia, resolve" da porta
+        p.progressBreak(delta, near);
+      });
+
       if (killerDash.ready() && dist > 220) killerDash.trigger();
-      const speed = killerDash.state.activeLeft > 0
+      let speed = killerDash.state.activeLeft > 0
         ? cfg.speed * Game.CONFIG.abilities.killerDash.speedMultiplier
         : cfg.speed;
+      speed *= windowSpeedMultiplier(killer.state.pos, true);
 
       if (targetingPlayer && dist <= cfg.attackRange){
         Game.Audio.playAttackSwing();
@@ -704,16 +796,29 @@ window.Game = window.Game || {};
         const hideoutResult = hideout.update(delta);
         // ficou escondido tempo demais: entrega a posição igual a um
         // skill check errado (mesmo mecanismo já usado pra distração da IA)
+        // — o som toca sempre (feedback pro jogador), mas a IA só reage se
+        // estiver dentro do raio de audição (antes reagia não importa a distância)
         if (hideoutResult.madeNoise){
           Game.Audio.playError();
-          distraction = { x: player.state.pos.x, y: player.state.pos.y, until: performance.now() + 3000 };
+          emitNoiseSolo(player.state.pos, killer.state.pos, Game.CONFIG.noise.hideoutRadius, () => {
+            distraction = { x: player.state.pos.x, y: player.state.pos.y, until: performance.now() + 3000 };
+          });
         }
       } else if (!capture.state.eliminated){
         if (ability1Requested) triggerSurvivorAbility();
 
         const nearHideout = nearestHideoutSpot(player.state.pos, Game.CONFIG.hideout.radius);
+        const droppablePallet = nearestPallet(player.state.pos, Game.CONFIG.pallet.radius);
         if (attackPressed && nearHideout){
           hideout.enter();
+        } else if (attackPressed && droppablePallet && droppablePallet.drop()){
+          Game.Audio.playError(); // feedback local — "o pallet caiu"
+          emitNoiseSolo(droppablePallet.center, killer.state.pos, Game.CONFIG.noise.palletDropRadius, () => {
+            distraction = { x: droppablePallet.center.x, y: droppablePallet.center.y, until: performance.now() + 1200 };
+          });
+          attemptPalletStun(droppablePallet, killer.state.pos, () => {
+            killer.state.stunnedUntil = performance.now() + Game.CONFIG.pallet.stunDuration * 1000;
+          });
         } else {
           objectives.forEach((obj) => {
             const wasDone = obj.state.done;
@@ -727,10 +832,20 @@ window.Game = window.Game || {};
               }
             }
             // igual ao original: errar o skill check faz barulho alto e
-            // entrega a posição — a IA vai investigar por um tempinho
+            // entrega a posição — a IA vai investigar por um tempinho, se
+            // estiver perto o bastante pra ouvir
             if (result.justFailed){
               Game.Audio.playError();
-              distraction = { x: obj.state.pos.x, y: obj.state.pos.y, until: performance.now() + 3000 };
+              emitNoiseSolo(obj.state.pos, killer.state.pos, Game.CONFIG.noise.skillCheckFailRadius, () => {
+                distraction = { x: obj.state.pos.x, y: obj.state.pos.y, until: performance.now() + 3000 };
+              });
+            }
+            // gerador começou a ser mexido: aviso bem mais fraco que um
+            // erro de skill check (não é um erro do jogador, só "a IA meio
+            // que notou algo") — duração curta pra não virar um alerta
+            // grátis toda vez que alguém liga num gerador
+            if (result.justStarted){
+              distraction = { x: obj.state.pos.x, y: obj.state.pos.y, until: performance.now() + 1500 };
             }
           });
         }
@@ -757,14 +872,22 @@ window.Game = window.Game || {};
           let speed = player.characterConfig().speed;
           if (health.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
           if (sprintActive) speed *= Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
+          speed *= windowSpeedMultiplier(player.state.pos, false);
           const moved = moveTowards(player.state, player.characterConfig(), dir, delta, speed);
           player.setFacing(player.state.facingRight);
           player.setMoving(moved);
           player.setSprinting(sprintActive);
-          if (moved && now - lastStepAt > 300){
+          if (moved && now - lastStepAt > (sprintActive ? 180 : 300)){
             lastStepAt = now;
-            Game.Audio.playFootstep();
+            Game.Audio.playFootstep(sprintActive);
             spawnDust(player.state.pos.x, player.state.pos.y + 14);
+            // sprint é mais rápido, mas arrisca ser ouvido de perto — sem
+            // isso, sprint seria só velocidade de graça
+            if (sprintActive){
+              emitNoiseSolo(player.state.pos, killer.state.pos, Game.CONFIG.noise.sprintRadius, () => {
+                distraction = { x: player.state.pos.x, y: player.state.pos.y, until: performance.now() + 800 };
+              });
+            }
           }
         }
       }
@@ -938,6 +1061,7 @@ window.Game = window.Game || {};
         }
         let speed = cfg.speed * aiCfg.speedMultiplier;
         if (aiHealth.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
+        speed *= windowSpeedMultiplier(survivor.state.pos, false);
         moved = moveTowards(survivor.state, cfg, { x: moveDx, y: moveDy }, delta, speed);
         survivor.setFacing(survivor.state.facingRight);
 
@@ -969,7 +1093,7 @@ window.Game = window.Game || {};
           const hadSkillCheck = !!obj.state.skillCheck;
           const attempt = hadSkillCheck && Math.random() < aiCfg.reactionChancePerSecond * delta;
           const wasDone = obj.state.done;
-          obj.update(delta, survivor.state.pos, attempt, 1);
+          const objResult = obj.update(delta, survivor.state.pos, attempt, 1);
           if (obj.state.done && !wasDone){
             const done = updateObjectivesStatus();
             if (done >= objectives.length && !gatesActive){
@@ -977,6 +1101,9 @@ window.Game = window.Game || {};
               objectivesStatus.textContent = 'Geradores prontos! O Sobrevivente vai tentar escapar.';
             }
           }
+          // mesmo aviso discreto que o modo online já dá pro Assassino
+          // (js/main.js, startOnline) — aqui é local, sem precisar de rede
+          if (objResult.justStarted) Game.Audio.playObjectiveStart();
         }
         if (gatesActive){
           const g = nearestGate(survivor.state.pos);
@@ -1006,9 +1133,10 @@ window.Game = window.Game || {};
 
       const attackPressed = Game.Input.consumeAttackRequest();
       const ability2Requested = Game.Input.consumeAbility2Request();
-      if (ability2Requested) killerDash.trigger();
+      const stunned = performance.now() < killer.state.stunnedUntil; // atordoado por pallet
+      if (ability2Requested && !stunned) killerDash.trigger();
 
-      if (attackPressed){
+      if (attackPressed && !stunned){
         const cCfg = Game.CONFIG.capture;
         if (aiCapture.state.downed){
           const dx = survivor.state.pos.x - killer.state.pos.x;
@@ -1034,10 +1162,18 @@ window.Game = window.Game || {};
         d.progressBreak(delta, near);
       });
 
-      if (!killer.state.isAttacking){
+      pallets.forEach((p) => {
+        const near = Math.hypot(killer.state.pos.x - p.center.x, killer.state.pos.y - p.center.y) <= Game.CONFIG.pallet.radius;
+        p.progressBreak(delta, near);
+      });
+
+      if (stunned){
+        killer.setMoving(false);
+      } else if (!killer.state.isAttacking){
         const dir = Game.Input.readMovement();
         let speed = killer.characterConfig().speed;
         if (killerDash.state.activeLeft > 0) speed *= Game.CONFIG.abilities.killerDash.speedMultiplier;
+        speed *= windowSpeedMultiplier(killer.state.pos, true);
         const moved = moveTowards(killer.state, killer.characterConfig(), dir, delta, speed);
         killer.setFacing(killer.state.facingRight);
         killer.setMoving(moved);
@@ -1365,25 +1501,38 @@ window.Game = window.Game || {};
         return;
       }
 
-      if (data.kind === 'distractPing'){
-        spawnPingMarker(data.x, data.y, Game.CONFIG.abilities.survivor.distract.duration);
+      if (data.kind === 'palletDropped'){
+        if (pallets[data.index]) pallets[data.index].setDropped(true);
         return;
       }
 
-      if (data.kind === 'objectiveFailed'){
-        spawnPingMarker(data.x, data.y, 2.5);
-        if (!isSurvivor) Game.Audio.playError(); // o Assassino ouve o barulho alto de verdade
+      if (data.kind === 'palletBroken'){
+        if (pallets[data.index]) pallets[data.index].setBroken(true);
         return;
       }
 
-      if (data.kind === 'hideoutNoise'){
-        spawnPingMarker(data.x, data.y, 2.5);
-        if (!isSurvivor) Game.Audio.playError(); // ficou escondido tempo demais, denuncia a posição
+      if (data.kind === 'palletStun'){
+        if (data.targetId === localId && localEntry.char.state){
+          localEntry.char.state.stunnedUntil = performance.now() + Game.CONFIG.pallet.stunDuration * 1000;
+        }
         return;
       }
 
-      if (data.kind === 'objectiveStarted'){
-        if (!isSurvivor) Game.Audio.playObjectiveStart(); // aviso discreto, sem posição
+      // ruído genérico — substitui distractPing/objectiveFailed/
+      // hideoutNoise/objectiveStarted, que eram o mesmo padrão copiado 4x
+      // (ver emitNoiseOnline). O marcador aparece pra todo mundo (mesmo
+      // comportamento de antes); o som só toca pro cliente Assassino, e só
+      // se ele estiver dentro do raio de audição do ruído — isso é novo,
+      // antes o Assassino ouvia não importa a distância.
+      if (data.kind === 'noise'){
+        if (data.ping > 0) spawnPingMarker(data.x, data.y, data.ping);
+        if (!isSurvivor){
+          const dist = Math.hypot(data.x - localEntry.char.state.pos.x, data.y - localEntry.char.state.pos.y);
+          if (dist <= (data.radius ?? Infinity)){
+            if (data.sound === 'objectiveStart') Game.Audio.playObjectiveStart();
+            else Game.Audio.playError();
+          }
+        }
         return;
       }
 
@@ -1418,8 +1567,7 @@ window.Game = window.Game || {};
       }
       localAbility1.trigger();
       if (localAbilityKey === 'distract'){
-        spawnPingMarker(localEntry.char.state.pos.x, localEntry.char.state.pos.y, localAbilityCfg.duration);
-        net.sendEvent({ kind: 'distractPing', x: localEntry.char.state.pos.x, y: localEntry.char.state.pos.y });
+        emitNoiseOnline(net, localEntry.char.state.pos.x, localEntry.char.state.pos.y, { radius: Game.CONFIG.noise.distractRadius, ping: localAbilityCfg.duration });
       }
     }
 
@@ -1488,20 +1636,30 @@ window.Game = window.Game || {};
         // ficou escondido tempo demais: entrega a posição igual a um
         // skill check errado, mesma técnica de ping usada em objectiveFailed
         if (hideoutResult.madeNoise){
-          spawnPingMarker(localEntry.char.state.pos.x, localEntry.char.state.pos.y, 2.5);
-          net.sendEvent({ kind: 'hideoutNoise', x: localEntry.char.state.pos.x, y: localEntry.char.state.pos.y });
+          emitNoiseOnline(net, localEntry.char.state.pos.x, localEntry.char.state.pos.y, { radius: Game.CONFIG.noise.hideoutRadius, ping: 2.5 });
         }
       } else if (!eliminated){
+        const stunned = !isSurvivor && performance.now() < localEntry.char.state.stunnedUntil; // atordoado por pallet
         if (isSurvivor){
           if (ability1Requested) triggerLocalSurvivorAbility();
 
           const nearHideout = nearestHideoutSpot(localEntry.char.state.pos, Game.CONFIG.hideout.radius);
           const hookedAlly = activeSurvivors().find((e) => e !== localEntry && e.capture && e.capture.state.hooked &&
             Math.hypot(e.char.state.pos.x - localEntry.char.state.pos.x, e.char.state.pos.y - localEntry.char.state.pos.y) <= Game.CONFIG.capture.rescueRange);
+          const droppablePallet = nearestPallet(localEntry.char.state.pos, Game.CONFIG.pallet.radius);
           if (attackRequested && hookedAlly){
             net.sendEvent({ kind: 'rescued', targetId: hookedAlly.info.id });
           } else if (attackRequested && nearHideout){
             localEntry.hideout.enter();
+          } else if (attackRequested && droppablePallet && droppablePallet.drop()){
+            const index = pallets.indexOf(droppablePallet);
+            net.sendEvent({ kind: 'palletDropped', index });
+            emitNoiseOnline(net, droppablePallet.center.x, droppablePallet.center.y, { radius: Game.CONFIG.noise.palletDropRadius, ping: 1.2 });
+            if (killerEntry && !killerEntry.eliminated){
+              attemptPalletStun(droppablePallet, killerEntry.char.state.pos, () => {
+                net.sendEvent({ kind: 'palletStun', targetId: killerEntry.info.id });
+              });
+            }
           } else {
             objectives.forEach((obj, index) => {
               const wasDone = obj.state.done;
@@ -1519,12 +1677,13 @@ window.Game = window.Game || {};
               // entrega a posição pro Assassino (e marca o ponto pra
               // todo mundo, mesma técnica do ping de Distrair)
               if (result.justFailed){
-                spawnPingMarker(obj.state.pos.x, obj.state.pos.y, 2.5);
-                net.sendEvent({ kind: 'objectiveFailed', x: obj.state.pos.x, y: obj.state.pos.y });
+                emitNoiseOnline(net, obj.state.pos.x, obj.state.pos.y, { radius: Game.CONFIG.noise.skillCheckFailRadius, ping: 2.5 });
               }
               // aviso discreto sem posição — só avisa que "algo está
               // acontecendo em algum gerador", pedido do usuário
-              if (result.justStarted) net.sendEvent({ kind: 'objectiveStarted' });
+              if (result.justStarted){
+                emitNoiseOnline(net, obj.state.pos.x, obj.state.pos.y, { radius: Infinity, ping: 0, sound: 'objectiveStart' });
+              }
             });
           }
 
@@ -1543,7 +1702,7 @@ window.Game = window.Game || {};
             net.sendEvent({ kind: 'survivorEscaped', playerId: localId });
             checkMatchResolution();
           }
-        } else {
+        } else if (!stunned){
           if (ability1Requested) localAbility1.trigger();
           if (ability2Requested) localAbility2.trigger();
           if (attackRequested){
@@ -1586,9 +1745,18 @@ window.Game = window.Game || {};
             const near = Math.hypot(localEntry.char.state.pos.x - d.center.x, localEntry.char.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
             if (d.progressBreak(delta, near)) net.sendEvent({ kind: 'doorBroken', index });
           });
+          pallets.forEach((p, index) => {
+            const near = Math.hypot(localEntry.char.state.pos.x - p.center.x, localEntry.char.state.pos.y - p.center.y) <= Game.CONFIG.pallet.radius;
+            if (p.progressBreak(delta, near)){
+              net.sendEvent({ kind: 'palletBroken', index });
+              emitNoiseOnline(net, p.center.x, p.center.y, { radius: Game.CONFIG.noise.palletBreakRadius, ping: 1.5 });
+            }
+          });
         }
 
-        if (!localEntry.char.state.isAttacking){
+        if (stunned){
+          localEntry.char.setMoving(false);
+        } else if (!localEntry.char.state.isAttacking){
           const dir = Game.Input.readMovement();
           const cfg = localEntry.char.characterConfig();
           if (isSurvivor) localEntry.health.update(delta, Math.hypot(dir.x, dir.y) <= 0.05);
@@ -1600,14 +1768,19 @@ window.Game = window.Game || {};
           } else if (!isSurvivor && localAbility2.state.activeLeft > 0){
             speed *= Game.CONFIG.abilities.killerDash.speedMultiplier;
           }
+          speed *= windowSpeedMultiplier(localEntry.char.state.pos, !isSurvivor);
           const moved = moveTowards(localEntry.char.state, cfg, dir, delta, speed);
           localEntry.char.setFacing(localEntry.char.state.facingRight);
           localEntry.char.setMoving(moved);
           if (isSurvivor) localEntry.char.setSprinting(sprintActive);
-          if (moved && now - lastStepAt > 300){
+          if (moved && now - lastStepAt > (sprintActive ? 180 : 300)){
             lastStepAt = now;
-            Game.Audio.playFootstep();
+            Game.Audio.playFootstep(sprintActive);
             spawnDust(localEntry.char.state.pos.x, localEntry.char.state.pos.y + 14);
+            // sprint é mais rápido, mas arrisca ser ouvido de perto
+            if (sprintActive){
+              emitNoiseOnline(net, localEntry.char.state.pos.x, localEntry.char.state.pos.y, { radius: Game.CONFIG.noise.sprintRadius, ping: 0 });
+            }
           }
         }
       }

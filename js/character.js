@@ -22,6 +22,7 @@ window.Game = window.Game || {};
       isAttacking: false,
       canAttack: true,
       sprinting: false, // só Sobrevivente: usa a animação "sprint" (mais rápida) enquanto a habilidade Sprint está ativa
+      stunnedUntil: 0,  // performance.now() — só Assassino: atordoado por um pallet derrubado perto dele
     };
 
     let currentAnimName = null;
@@ -131,6 +132,7 @@ window.Game = window.Game || {};
     function render(){
       el.style.left = state.pos.x + 'px';
       el.style.top = state.pos.y + 'px';
+      el.classList.toggle('stunned', performance.now() < state.stunnedUntil);
       updateAnimationFrame(performance.now());
     }
 

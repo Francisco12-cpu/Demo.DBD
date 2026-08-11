@@ -59,8 +59,10 @@ falhava numa bateria, é isso, não é bug de código.
   número novo ganha um comentário explicando a unidade e o porquê.
 - **Uma fábrica, N instâncias** — `Game.createX(...)` retorna
   `{ state, ...funções }`, nunca classes. Ver `js/door.js`, `js/gate.js`,
-  `js/health.js`, `js/hideout.js`, `js/capture.js` como modelo. `state` é
-  sempre um objeto plano exposto direto (não encapsulado), porque o modo
+  `js/health.js`, `js/hideout.js`, `js/capture.js`, `js/pallet.js` como
+  modelo (`js/window.js` é a exceção mínima — sem `state` de verdade, só
+  `{rect, center}`, porque janela não tem nenhum estado que muda). `state`
+  é sempre um objeto plano exposto direto (não encapsulado), porque o modo
   online precisa inspecionar/espelhar estado de outros clientes.
 - **Multiplayer é client-authoritative por evento discreto**, não
   replicação de física a cada frame. Cada cliente decide o desfecho do que
@@ -133,7 +135,18 @@ pro Assassino e Sobrevivente** (spritesheets `assets/killer-sheet.png`/
 `survivor-sheet.png`, substituindo a silhueta CSS antiga — animações
 idle/run/sprint/attack, o `downed` da captura reaproveitado pras 3 fases
 derrubado/carregado/pendurado, hitbox de ataque com offset frontal
-espelhado por direção, cor dos 4 Sobreviventes por `hue-rotate`).
+espelhado por direção, cor dos 4 Sobreviventes por `hue-rotate`), **pallets
+e janelas** (`js/pallet.js`/`js/window.js` — loops de perseguição de
+verdade: pallet derruba/bloqueia/atordoa/quebra, janela deixa o
+Sobrevivente passar rápido e o Assassino devagar, ver README "Loops de
+perseguição"), **sistema de ruído com raio de audição real**
+(`emitNoiseOnline`/`emitNoiseSolo` em `js/main.js`, unifica o que antes
+eram 3 mecanismos duplicados — sprint e pallet quebrando agora fazem
+barulho de verdade), **áudio 3D corrigido** (o contexto agora reativa
+sozinho quando o navegador suspende no meio da partida, batimento sem
+atenuação dupla, frequência mais audível em alto-falante mono — ver README
+"Áudio" pro diagnóstico completo), aviso de gerador ativado agora também
+nos 2 modos solo (antes só existia no Online).
 
 **Ainda em aberto sobre os sprites** (perguntar ao usuário antes de decidir
 sozinho): pose de "parado" dedicada do Sobrevivente — não foi confirmada
@@ -146,12 +159,21 @@ filtro CSS antigo, não foi trocado pro sprite. `vanish`/`fall` do Assassino
 (r6/r7) estão no config só reservados — não têm sistema de jogo (invisibilidade,
 cutscene de fuga) que os use ainda.
 
-**Pendente/backlog** (ver `README.md` → "Planos futuros"): pallets e
-janelas (loops de perseguição — só chase em linha reta hoje), mapa em pixel
+**Pendente/backlog** (ver `README.md` → "Planos futuros"): mapa em pixel
 art de verdade (hoje é CSS/canvas gerado — só os personagens ganharam arte
-autoral até agora), protocolo de sala com host/dono controlando kick/papel,
-2ª estágio de gancho antes da morte definitiva (hoje é só 1 estágio,
-simplificação consciente).
+autoral até agora; os pallets/janelas novos também são divs simples, sem
+arte própria ainda), protocolo de sala com host/dono controlando
+kick/papel, 2ª estágio de gancho antes da morte definitiva (hoje é só 1
+estágio, simplificação consciente), IA Sobrevivente (modo solo-como-
+Assassino) ainda não derruba pallets sozinha (limitação conhecida, ver
+README).
+
+**Nome e ícone do jogo**: o usuário pediu ideias de nome (3 direções:
+tradução do tema original, polir o nome descritivo atual, ou marca própria
+— várias opções já sugeridas numa rodada de planejamento) mas **ainda não
+escolheu nenhuma** — perguntar antes de trocar o nome/título em qualquer
+lugar do código ou do PWA. O ícone atual deve continuar servindo de base
+(usuário gostou), só refinar se pedido.
 
 **Ideias já discutidas mas propositalmente NÃO implementadas ainda**
 (usuário pediu só análise escrita, não construir): editor visual de
@@ -175,6 +197,7 @@ js/net.js, net-webrtc.js  transporte (LAN via server.js / P2P via PeerJS)
 js/character.js        personagem genérico (survivor/killer são só config diferente)
 js/capture.js           sistema de captura (derrubado/carregado/pendurado) — o mais complexo
 js/health.js, door.js, gate.js, hideout.js, objective.js, ability.js   fábricas pequenas, um sistema cada
+js/pallet.js, window.js  loops de perseguição — pallet derruba/atordoa/quebra, janela só muda velocidade
 js/audio.js             tudo sintetizado, sem arquivo de som
 js/input.js             teclado/touch/gamepad, unificado
 server/server.js        servidor LAN (Node + ws)
