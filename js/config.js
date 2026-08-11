@@ -156,6 +156,37 @@ Game.CONFIG = {
     openDuration: 15,
   },
 
+  // pallets (js/pallet.js): obstáculo solto que o Sobrevivente derruba na
+  // hora (botão de ação, não canalizado) — em pé não bloqueia nada; caído,
+  // vira parede de verdade E atordoa o Assassino se ele estava perto o
+  // bastante no instante da queda ("pallet stun" clássico). O Assassino
+  // quebra de vez canalizando perto, mais devagar que arrombar porta —
+  // o loop de perseguição só vale a pena se custar tempo de verdade.
+  pallet: {
+    // o pallet mede 110x36 (ver PALLET_SPOTS_BY_LAYOUT em js/map.js) — uma
+    // vez derrubado ele vira colisão de verdade, então esse raio PRECISA
+    // ser maior que metade do lado comprido (55) + playerRadius (28) =
+    // ~83px, senão o Assassino fica travado pela própria colisão do pallet
+    // antes de chegar perto o bastante pra quebrar (bug real, achado
+    // testando: com radius menor que isso, era geometricamente impossível
+    // encostar perto o suficiente vindo do lado comprido)
+    radius: 100,          // px — alcance pra derrubar (Sobrevivente) e canalizar quebra (Assassino)
+    stunRadius: 90,       // px — Assassino nesse raio do pallet NO INSTANTE em que ele cai fica atordoado
+    stunDuration: 2.5,    // segundos travado (sem mover, sem atacar) depois de atordoado
+    breakDuration: 3,     // segundos canalizando perto pra destruir de vez — mais lento que porta (2s) de propósito
+  },
+
+  // janelas (js/window.js): vão que NUNCA bloqueia ninguém (ao contrário de
+  // porta/pallet) — só muda a velocidade de quem atravessa. Sobrevivente
+  // pula rápido, Assassino escala devagar — essa assimetria é o que cria o
+  // loop de perseguição ao redor de uma sala com porta de um lado e janela
+  // do outro.
+  window: {
+    radius: 60,                    // px — raio ao redor do centro da janela onde a velocidade muda
+    survivorSpeedMultiplier: 1.05, // Sobrevivente atravessa quase sem perder velocidade
+    killerSpeedMultiplier: 0.55,   // Assassino perde bastante velocidade escalando
+  },
+
   // portas das salas (js/door.js): Sobrevivente tranca ficando perto (sem o
   // Assassino por perto) por `lockDuration`; o Assassino sempre consegue
   // arrombar ficando perto por `breakDuration` — mais rápido que trancar de
@@ -164,6 +195,21 @@ Game.CONFIG = {
     lockDuration: 3,
     breakDuration: 2,
     radius: 80,
+  },
+
+  // raio de audição de ruído (px) — pra onde o Assassino (real ou IA) só
+  // reage se estiver dentro dessa distância do barulho. Generaliza um
+  // padrão que antes era 3 mecanismos quase idênticos copiados (aviso de
+  // esconderijo, skill check errado, distrair) sem nenhum raio de verdade
+  // (todo mundo recebia o evento, o Assassino sempre ouvia não importa a
+  // distância) — ver js/main.js, emitNoise()/alertKillerAI().
+  noise: {
+    hideoutRadius: 420,
+    skillCheckFailRadius: 500,
+    distractRadius: Infinity, // isca de propósito, sem limite de distância
+    palletDropRadius: 260,
+    palletBreakRadius: 420,
+    sprintRadius: 160,        // sprint é mais rápido, mas arrisca ser ouvido de perto
   },
 
   // esconderijos (armário/mesa, js/hideout.js): Sobrevivente entra parado

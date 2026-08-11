@@ -17,22 +17,29 @@ window.Game = window.Game || {};
   // pra colisão (quando trancada vira uma parede temporária) quanto pra
   // saber quando um jogador está perto o bastante pra interagir com ela.
   const THICK = 36;   // espessura das paredes das salas
-  const DOOR_SIZE = 96; // largura do vão da porta
+  const GAP_SIZE = 96; // largura do vão (porta OU janela — mesmo tamanho por simplicidade)
 
-  function edgeWithGaps(walls, doors, vertical, fixedCoord, start, end, gapPositions){
+  // gaps: [{ at: 0..1, kind: 'door' | 'window' }] — porta vira parede
+  // temporária quando trancada (ver js/door.js/allWalls), janela nunca
+  // bloqueia ninguém (ver js/window.js) — mesmo mecanismo de "abrir um
+  // vão na parede", só o array de destino muda conforme o `kind`.
+  function edgeWithGaps(walls, doors, windows, vertical, fixedCoord, start, end, gaps){
     const length = end - start;
-    const gaps = gapPositions.map((p) => start + p * length).sort((a, b) => a - b);
+    const sorted = gaps
+      .map((g) => ({ pos: start + g.at * length, kind: g.kind }))
+      .sort((a, b) => a.pos - b.pos);
     let cursor = start;
-    gaps.forEach((g) => {
-      const gapStart = g - DOOR_SIZE / 2, gapEnd = g + DOOR_SIZE / 2;
+    sorted.forEach(({ pos, kind }) => {
+      const gapStart = pos - GAP_SIZE / 2, gapEnd = pos + GAP_SIZE / 2;
       if (gapStart > cursor){
         walls.push(vertical
           ? { x: fixedCoord, y: cursor, w: THICK, h: gapStart - cursor }
           : { x: cursor, y: fixedCoord, w: gapStart - cursor, h: THICK });
       }
-      doors.push(vertical
-        ? { x: fixedCoord, y: gapStart, w: THICK, h: DOOR_SIZE }
-        : { x: gapStart, y: fixedCoord, w: DOOR_SIZE, h: THICK });
+      const rect = vertical
+        ? { x: fixedCoord, y: gapStart, w: THICK, h: GAP_SIZE }
+        : { x: gapStart, y: fixedCoord, w: GAP_SIZE, h: THICK };
+      (kind === 'window' ? windows : doors).push(rect);
       cursor = gapEnd;
     });
     if (cursor < end){
@@ -42,20 +49,21 @@ window.Game = window.Game || {};
     }
   }
 
-  // rooms: [{ x, y, w, h, doors: [{ side: 'top'|'bottom'|'left'|'right', at: 0..1 }] }]
+  // rooms: [{ x, y, w, h, gaps: [{ side: 'top'|'bottom'|'left'|'right', at: 0..1, kind: 'door'|'window' }] }]
   function roomsToWalls(rooms){
     const walls = [];
     const doors = [];
+    const windows = [];
     rooms.forEach((room) => {
       const { x, y, w, h } = room;
       const bySide = { top: [], bottom: [], left: [], right: [] };
-      room.doors.forEach((d) => bySide[d.side].push(d.at));
-      edgeWithGaps(walls, doors, false, y, x, x + w, bySide.top);
-      edgeWithGaps(walls, doors, false, y + h - THICK, x, x + w, bySide.bottom);
-      edgeWithGaps(walls, doors, true, x, y, y + h, bySide.left);
-      edgeWithGaps(walls, doors, true, x + w - THICK, y, y + h, bySide.right);
+      room.gaps.forEach((g) => bySide[g.side].push({ at: g.at, kind: g.kind }));
+      edgeWithGaps(walls, doors, windows, false, y, x, x + w, bySide.top);
+      edgeWithGaps(walls, doors, windows, false, y + h - THICK, x, x + w, bySide.bottom);
+      edgeWithGaps(walls, doors, windows, true, x, y, y + h, bySide.left);
+      edgeWithGaps(walls, doors, windows, true, x + w - THICK, y, y + h, bySide.right);
     });
-    return { walls, doors };
+    return { walls, doors, windows };
   }
 
   // 6 salas de 480x360, em 2 fileiras de 3 — o "prédio" de cada sala é
@@ -75,15 +83,45 @@ window.Game = window.Game || {};
     ['bottom', 'left', 'bottom', 'right', 'top', 'left'],
   ];
 
+  const OPPOSITE_SIDE = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+
   const LOOSE_OBSTACLES_BY_LAYOUT = [
     [{ x: 900, y: 900, w: 200, h: 50 }, { x: 1700, y: 1650, w: 50, h: 200 }],
     [{ x: 1900, y: 900, w: 200, h: 50 }, { x: 700, y: 1650, w: 50, h: 200 }],
   ];
 
-  function buildRoomLayout(doorSides, looseObstacles){
-    const rooms = ROOM_DEF.map((r, i) => ({ ...r, doors: [{ side: doorSides[i], at: 0.5 }] }));
-    const { walls, doors } = roomsToWalls(rooms);
-    return { walls: walls.concat(looseObstacles), doors };
+  // pallets: obstáculos soltos em campo aberto (ver js/pallet.js) — em pé
+  // não bloqueiam nada, só viram parede quando o Sobrevivente derruba.
+  // Espalhados nos corredores entre salas, longe de obstáculos/ganchos já
+  // existentes.
+  const PALLET_SPOTS_BY_LAYOUT = [
+    [
+      { x: 600, y: 780, w: 110, h: 36 },
+      { x: 2300, y: 780, w: 110, h: 36 },
+      { x: 600, y: 1620, w: 110, h: 36 },
+      { x: 2300, y: 1620, w: 110, h: 36 },
+    ],
+    [
+      { x: 600, y: 700, w: 110, h: 36 },
+      { x: 2300, y: 700, w: 110, h: 36 },
+      { x: 520, y: 1620, w: 110, h: 36 },
+      { x: 2300, y: 1620, w: 110, h: 36 },
+    ],
+  ];
+
+  function buildRoomLayout(doorSides, looseObstacles, palletSpots){
+    // cada sala ganha 1 porta (lado sorteado por layout) + 1 janela no lado
+    // OPOSTO — o "shack" clássico do jogo original (porta de um lado,
+    // janela do outro), que é o que cria um loop de perseguição de verdade
+    const rooms = ROOM_DEF.map((r, i) => ({
+      ...r,
+      gaps: [
+        { side: doorSides[i], at: 0.5, kind: 'door' },
+        { side: OPPOSITE_SIDE[doorSides[i]], at: 0.5, kind: 'window' },
+      ],
+    }));
+    const { walls, doors, windows } = roomsToWalls(rooms);
+    return { walls: walls.concat(looseObstacles), doors, windows, pallets: palletSpots };
   }
 
   const MAP = {
@@ -133,11 +171,12 @@ window.Game = window.Game || {};
     // V3 do mapa: layouts com salas de verdade. Escolhido aleatoriamente no
     // início de cada partida (no modo online, quem inicia sorteia e manda
     // o índice pra todo mundo — ver matchStart em server.js/net-webrtc.js).
-    // Cada layout expõe `walls` (colisão) e `doors` (retângulo do vão de
-    // cada porta — ver js/door.js pro estado de trancada/arrombada).
+    // Cada layout expõe `walls` (colisão), `doors` (vão de porta, ver
+    // js/door.js), `windows` (vão que nunca bloqueia, ver js/window.js) e
+    // `pallets` (obstáculo solto derrubável, ver js/pallet.js).
     layouts: [
-      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[0], LOOSE_OBSTACLES_BY_LAYOUT[0]),
-      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[1], LOOSE_OBSTACLES_BY_LAYOUT[1]),
+      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[0], LOOSE_OBSTACLES_BY_LAYOUT[0], PALLET_SPOTS_BY_LAYOUT[0]),
+      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[1], LOOSE_OBSTACLES_BY_LAYOUT[1], PALLET_SPOTS_BY_LAYOUT[1]),
     ],
   };
 
