@@ -47,7 +47,7 @@ window.Game = window.Game || {};
     controls.style.display = 'flex';
 
     const maxRadius = 40;
-    let activeTouchId = null;
+    let activePointerId = null;
     let baseRect = null;
 
     function updateDrag(clientX, clientY){
@@ -64,51 +64,46 @@ window.Game = window.Game || {};
     }
 
     function endDrag(){
-      activeTouchId = null;
+      activePointerId = null;
       baseRect = null;
       touchDir.x = 0; touchDir.y = 0;
       joystickStick.style.transform = 'translate(0,0)';
     }
 
-    joystickBase.addEventListener('touchstart', (e) => {
+    // Pointer Events em vez de Touch Events, com setPointerCapture: a
+    // tentativa anterior (rede de segurança ouvindo touchend/touchcancel
+    // em QUALQUER lugar da página) só se recuperava se algum outro evento
+    // de toque acontecesse depois — se o sistema roubasse o gesto (troca
+    // de app, gesto de navegação, notificação) sem NENHUM toque
+    // subsequente em lugar nenhum da página, a rede de segurança nunca era
+    // acionada e o joystick ficava preso do mesmo jeito. `setPointerCapture`
+    // resolve isso de verdade: garante que `lostpointercapture` dispara
+    // nesse elemento sempre que a captura é perdida por qualquer motivo,
+    // mesmo sem outro toque acontecer — é a garantia que faltava.
+    joystickBase.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return; // mouse não usa o joystick virtual
       e.preventDefault();
-      const t = e.changedTouches[0];
-      activeTouchId = t.identifier;
+      activePointerId = e.pointerId;
+      joystickBase.setPointerCapture(e.pointerId);
       baseRect = joystickBase.getBoundingClientRect();
-      updateDrag(t.clientX, t.clientY);
+      updateDrag(e.clientX, e.clientY);
     }, { passive: false });
 
-    joystickBase.addEventListener('touchmove', (e) => {
+    joystickBase.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== activePointerId) return;
       e.preventDefault();
-      for (const t of e.changedTouches){
-        if (t.identifier === activeTouchId) updateDrag(t.clientX, t.clientY);
-      }
+      updateDrag(e.clientX, e.clientY);
     }, { passive: false });
 
-    joystickBase.addEventListener('touchend', (e) => {
-      for (const t of e.changedTouches){
-        if (t.identifier === activeTouchId) endDrag();
-      }
+    joystickBase.addEventListener('pointerup', (e) => {
+      if (e.pointerId === activePointerId) endDrag();
     });
-    joystickBase.addEventListener('touchcancel', endDrag);
-
-    // rede de segurança: em alguns celulares, um touchend/touchcancel do
-    // dedo que estava segurando o joystick às vezes não chega no listener
-    // acima (perdido por foco roubado por outro elemento, notificação,
-    // etc.) — o joystick fica "preso" achando que ainda está sendo
-    // arrastado, e o personagem para de responder até soltar e tocar de
-    // novo. Checando a lista global de toques ativos a cada evento de
-    // toque na página, confirma se o toque que abriu o arrasto ainda
-    // existe de verdade — se não existir mais em lugar nenhum, solta.
-    function verifyActiveTouch(e){
-      if (activeTouchId === null) return;
-      for (const t of e.touches){
-        if (t.identifier === activeTouchId) return; // ainda existe, tudo bem
-      }
-      endDrag(); // sumiu sem avisar o joystick — libera
-    }
-    document.addEventListener('touchend', verifyActiveTouch, { passive: true });
-    document.addEventListener('touchcancel', verifyActiveTouch, { passive: true });
+    joystickBase.addEventListener('pointercancel', (e) => {
+      if (e.pointerId === activePointerId) endDrag();
+    });
+    joystickBase.addEventListener('lostpointercapture', (e) => {
+      if (e.pointerId === activePointerId) endDrag();
+    });
 
     attackBtn.addEventListener('touchstart', (e) => {
       e.preventDefault();
@@ -129,11 +124,17 @@ window.Game = window.Game || {};
     }
   }
 
-  function setAbilityButtonsVisible(show1, show2){
+  // label2: texto do botão de habilidade 2 — "Q" pro dash do Assassino,
+  // "X" quando o Sobrevivente reaproveita o mesmo botão pra sair do modo
+  // de reparo do gerador. Omitir mantém o texto atual.
+  function setAbilityButtonsVisible(show1, show2, label2){
     const ability1Btn = document.getElementById('touch-ability1');
     const ability2Btn = document.getElementById('touch-ability2');
     if (ability1Btn) ability1Btn.style.display = show1 ? '' : 'none';
-    if (ability2Btn) ability2Btn.style.display = show2 ? '' : 'none';
+    if (ability2Btn){
+      ability2Btn.style.display = show2 ? '' : 'none';
+      if (label2) ability2Btn.textContent = label2;
+    }
   }
 
   // ---------- gamepad ----------
