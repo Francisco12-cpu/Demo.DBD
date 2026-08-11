@@ -20,17 +20,63 @@ Game.CONFIG = {
       attackCooldown: 600, // ms
       attackDuration: 350, // ms
       attackRange: 55,     // px
+      // o golpe não sai mais do centro do corpo — sai de um ponto na
+      // FRENTE dele, espelhado conforme o lado que ele está virado (pedido
+      // do usuário: "colisão na frente dele, adaptada pro lado")
+      attackForwardOffset: 16, // px
     },
   },
-  playerRadius: 21, // raio de colisão do personagem (metade do sprite de 42px)
+  playerRadius: 28, // raio de colisão do personagem (metade do sprite 64px, sprite pixel art 32px em escala 2x)
   killerVisionRange: 240, // px — modo online: distância normal que o Assassino enxerga um Sobrevivente sem usar Sentido
   heartbeatRange: 340, // px — modo online/solo: distância máxima em que o Sobrevivente ouve o batimento cardíaco do Assassino (funciona mesmo sem ele estar visível)
   visionRadius: 150, // px (mundo) — raio do "spotlight" ao redor do próprio personagem; na tela vira visionRadius*zoom, então precisa ser bem menor que o alcance de câmera pra sobrar área escura
 
-  // cor de cada "vaga" de Sobrevivente na partida (índice = ordem de
-  // entrada/spawn) — só pra diferenciar visualmente, sem nenhuma outra
-  // diferença de gameplay entre eles
-  survivorColors: ['#3f8f6f', '#4a90c2', '#c2934a', '#a15fc7'],
+  // spritesheets em pixel art de verdade (assets/killer-sheet.png,
+  // assets/survivor-sheet.png — fornecidas pelo usuário, licença de uso
+  // livre) — substituem a técnica antiga de mask-image + cor sólida.
+  // frameSize/cols/rows descrevem a grade da folha; scale é o fator de
+  // ampliação em tela (2x = 32px vira 64px, nítido e sem borrão, sempre
+  // inteiro por causa do image-rendering:pixelated). Cada animação tem sua
+  // própria linha (row, 0-indexed de cima pra baixo), quantidade de frames
+  // realmente usados naquela linha, velocidade (fps) e se repete (loop).
+  sprites: {
+    killer: {
+      sheet: 'assets/killer-sheet.png',
+      frameSize: 32, cols: 8, rows: 9, scale: 2,
+      animations: {
+        idle:   { row: 0, frames: 2, fps: 2,  loop: true },
+        run:    { row: 3, frames: 8, fps: 12, loop: true },
+        attack: { row: 8, frames: 8, fps: 22, loop: false },
+        // ainda não ligadas a nenhum sistema de jogo — reservadas pra
+        // quando a habilidade de invisibilidade e a "cutscene" de derrota
+        // existirem (ver README → Planos futuros)
+        vanish: { row: 6, frames: 4, fps: 8,  loop: false },
+        fall:   { row: 7, frames: 8, fps: 10, loop: false },
+      },
+    },
+    survivor: {
+      sheet: 'assets/survivor-sheet.png',
+      frameSize: 32, cols: 10, rows: 11, scale: 2,
+      animations: {
+        idle:   { row: 0, frames: 1, fps: 1,  loop: true },
+        run:    { row: 0, frames: 6, fps: 8,  loop: true },
+        // usada só enquanto a habilidade Sprint está ativa (mais rápida —
+        // pedido do usuário: "usa o r1 só que muito muito rápido")
+        sprint: { row: 1, frames: 8, fps: 20, loop: true },
+        // derrubado/carregado/pendurado (js/capture.js) — mesma pose em loop
+        downed: { row: 6, frames: 10, fps: 8, loop: true },
+        // reservada pro efeito de dano com sprite de verdade em vez do
+        // filtro CSS atual (ver README → Planos futuros)
+        hit:    { row: 7, frames: 4, fps: 14, loop: false },
+      },
+    },
+  },
+
+  // matiz (graus, hue-rotate) de cada "vaga" de Sobrevivente na partida
+  // (índice = ordem de entrada/spawn) — a arte já vem colorida (não é mais
+  // uma máscara), então diferenciar os 4 é um filtro de cor por cima, não
+  // mais uma cor sólida. 0 = cor original da arte.
+  survivorHues: [0, 70, 160, 250],
 
   // 1 jogador local no modo solo (a IA é o Assassino)
   survivorCount: 1,
