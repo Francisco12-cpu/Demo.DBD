@@ -165,6 +165,19 @@ window.Game = window.Game || {};
     return best;
   }
 
+  // gerador mais perto que ainda pode ser engajado (não terminado, fora do
+  // alcance não conta) — usado pelo botão de ação pra entrar no modo de
+  // reparo (engage()), última prioridade da cadeia de ações do Sobrevivente.
+  function nearestEngageableObjective(pos){
+    let best = null, bestDist = Infinity;
+    objectives.forEach((o) => {
+      if (!o.canEngage(pos)) return;
+      const dist = Math.hypot(pos.x - o.state.pos.x, pos.y - o.state.pos.y);
+      if (dist < bestDist){ best = o; bestDist = dist; }
+    });
+    return best;
+  }
+
   // janela: nunca bloqueia ninguém, só muda a velocidade de quem está perto
   // do vão — Sobrevivente quase não perde, Assassino perde bastante. Isso é
   // o que cria o loop de perseguição (ver js/window.js).
@@ -813,6 +826,7 @@ window.Game = window.Game || {};
 
       const ability1Requested = Game.Input.consumeAbility1Request();
       const attackPressed = Game.Input.consumeAttackRequest();
+      let engagedObjective = null; // gerador engajado pra reparar, se houver
 
       if (capture.state.captured){
         if (attackPressed) capture.pulse();
@@ -831,48 +845,55 @@ window.Game = window.Game || {};
         }
       } else if (!capture.state.eliminated){
         if (ability1Requested) triggerSurvivorAbility();
+        const ability2Requested = Game.Input.consumeAbility2Request();
 
-        const nearHideout = nearestHideoutSpot(player.state.pos, Game.CONFIG.hideout.radius);
-        const droppablePallet = nearestPallet(player.state.pos, Game.CONFIG.pallet.radius);
-        if (attackPressed && nearHideout){
-          hideout.enter();
-        } else if (attackPressed && droppablePallet && droppablePallet.drop()){
-          Game.Audio.playError(); // feedback local — "o pallet caiu"
-          emitNoiseSolo(droppablePallet.center, killer.state.pos, Game.CONFIG.noise.palletDropRadius, () => {
-            distraction = { x: droppablePallet.center.x, y: droppablePallet.center.y, until: performance.now() + 1200 };
-          });
-          attemptPalletStun(droppablePallet, killer.state.pos, () => {
-            killer.state.stunnedUntil = performance.now() + Game.CONFIG.pallet.stunDuration * 1000;
-          });
+        // engajado num gerador: precisa ter apertado o botão de ação perto
+        // dele antes (ver abaixo) — só chegar perto não progride mais nada.
+        // Apertar o X (ability2) sai do modo de reparo a qualquer momento.
+        engagedObjective = objectives.find((o) => o.state.engaged);
+        if (engagedObjective){
+          if (ability2Requested) engagedObjective.disengage();
+          const wasDone = engagedObjective.state.done;
+          const hadSkillCheck = !!engagedObjective.state.skillCheck;
+          const result = engagedObjective.update(delta, player.state.pos, hadSkillCheck && attackPressed);
+          if (engagedObjective.state.done && !wasDone){
+            const done = updateObjectivesStatus();
+            if (done >= objectives.length && !gatesActive){
+              gatesActive = true;
+              objectivesStatus.textContent = 'Geradores prontos! Ache um portão pra escapar.';
+            }
+          }
+          // igual ao original: errar o skill check faz barulho alto e
+          // entrega a posição — a IA vai investigar por um tempinho, se
+          // estiver perto o bastante pra ouvir
+          if (result.justFailed){
+            Game.Audio.playError();
+            emitNoiseSolo(engagedObjective.state.pos, killer.state.pos, Game.CONFIG.noise.skillCheckFailRadius, () => {
+              distraction = { x: engagedObjective.state.pos.x, y: engagedObjective.state.pos.y, until: performance.now() + 3000 };
+            });
+          }
         } else {
-          objectives.forEach((obj) => {
-            const wasDone = obj.state.done;
-            const hadSkillCheck = !!obj.state.skillCheck;
-            const result = obj.update(delta, player.state.pos, hadSkillCheck && attackPressed);
-            if (obj.state.done && !wasDone){
-              const done = updateObjectivesStatus();
-              if (done >= objectives.length && !gatesActive){
-                gatesActive = true;
-                objectivesStatus.textContent = 'Geradores prontos! Ache um portão pra escapar.';
-              }
-            }
-            // igual ao original: errar o skill check faz barulho alto e
-            // entrega a posição — a IA vai investigar por um tempinho, se
-            // estiver perto o bastante pra ouvir
-            if (result.justFailed){
-              Game.Audio.playError();
-              emitNoiseSolo(obj.state.pos, killer.state.pos, Game.CONFIG.noise.skillCheckFailRadius, () => {
-                distraction = { x: obj.state.pos.x, y: obj.state.pos.y, until: performance.now() + 3000 };
-              });
-            }
+          const nearHideout = nearestHideoutSpot(player.state.pos, Game.CONFIG.hideout.radius);
+          const droppablePallet = nearestPallet(player.state.pos, Game.CONFIG.pallet.radius);
+          const engageTarget = nearestEngageableObjective(player.state.pos);
+          if (attackPressed && nearHideout){
+            hideout.enter();
+          } else if (attackPressed && droppablePallet && droppablePallet.drop()){
+            Game.Audio.playError(); // feedback local — "o pallet caiu"
+            emitNoiseSolo(droppablePallet.center, killer.state.pos, Game.CONFIG.noise.palletDropRadius, () => {
+              distraction = { x: droppablePallet.center.x, y: droppablePallet.center.y, until: performance.now() + 1200 };
+            });
+            attemptPalletStun(droppablePallet, killer.state.pos, () => {
+              killer.state.stunnedUntil = performance.now() + Game.CONFIG.pallet.stunDuration * 1000;
+            });
+          } else if (attackPressed && engageTarget){
+            engageTarget.engage();
             // gerador começou a ser mexido: aviso bem mais fraco que um
             // erro de skill check (não é um erro do jogador, só "a IA meio
             // que notou algo") — duração curta pra não virar um alerta
             // grátis toda vez que alguém liga num gerador
-            if (result.justStarted){
-              distraction = { x: obj.state.pos.x, y: obj.state.pos.y, until: performance.now() + 1500 };
-            }
-          });
+            distraction = { x: engageTarget.state.pos.x, y: engageTarget.state.pos.y, until: performance.now() + 1500 };
+          }
         }
 
         gates.forEach((g) => {
@@ -889,35 +910,46 @@ window.Game = window.Game || {};
         });
 
         if (!player.state.isAttacking){
-          const dir = Game.Input.readMovement();
-          const standingStill = Math.hypot(dir.x, dir.y) <= 0.05;
-          health.update(delta, standingStill);
+          if (engagedObjective){
+            // travado reparando: sem movimento até sair do modo (X ou
+            // terminar o gerador)
+            health.update(delta, true);
+            player.setMoving(false);
+            player.setSprinting(false);
+          } else {
+            const dir = Game.Input.readMovement();
+            const standingStill = Math.hypot(dir.x, dir.y) <= 0.05;
+            health.update(delta, standingStill);
 
-          const sprintActive = abilityKey === 'sprint' && survivorAbility.state.activeLeft > 0;
-          let speed = player.characterConfig().speed;
-          if (health.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
-          if (sprintActive) speed *= Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
-          speed *= windowSpeedMultiplier(player.state.pos, false);
-          const moved = moveTowards(player.state, player.characterConfig(), dir, delta, speed);
-          player.setFacing(player.state.facingRight);
-          player.setMoving(moved);
-          player.setSprinting(sprintActive);
-          if (moved && now - lastStepAt > (sprintActive ? 180 : 300)){
-            lastStepAt = now;
-            Game.Audio.playFootstep(sprintActive);
-            spawnDust(player.state.pos.x, player.state.pos.y + 14);
-            // sprint é mais rápido, mas arrisca ser ouvido de perto — sem
-            // isso, sprint seria só velocidade de graça
-            if (sprintActive){
-              emitNoiseSolo(player.state.pos, killer.state.pos, Game.CONFIG.noise.sprintRadius, () => {
-                distraction = { x: player.state.pos.x, y: player.state.pos.y, until: performance.now() + 800 };
-              });
+            const sprintActive = abilityKey === 'sprint' && survivorAbility.state.activeLeft > 0;
+            let speed = player.characterConfig().speed;
+            if (health.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
+            if (sprintActive) speed *= Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
+            speed *= windowSpeedMultiplier(player.state.pos, false);
+            const moved = moveTowards(player.state, player.characterConfig(), dir, delta, speed);
+            player.setFacing(player.state.facingRight);
+            player.setMoving(moved);
+            player.setSprinting(sprintActive);
+            if (moved && now - lastStepAt > (sprintActive ? 180 : 300)){
+              lastStepAt = now;
+              Game.Audio.playFootstep(sprintActive);
+              spawnDust(player.state.pos.x, player.state.pos.y + 14);
+              // sprint é mais rápido, mas arrisca ser ouvido de perto — sem
+              // isso, sprint seria só velocidade de graça
+              if (sprintActive){
+                emitNoiseSolo(player.state.pos, killer.state.pos, Game.CONFIG.noise.sprintRadius, () => {
+                  distraction = { x: player.state.pos.x, y: player.state.pos.y, until: performance.now() + 800 };
+                });
+              }
             }
           }
         }
       }
 
       playerEl.classList.toggle('hidden-in-spot', hideout.state.hidden);
+      // X (ability2/Q) só aparece enquanto engajado num gerador, pra sair
+      // do modo de reparo
+      Game.Input.setAbilityButtonsVisible(true, !!engagedObjective, 'X');
       updateKillerAI(delta);
       player.render();
       updateCamera(player.state.pos);
@@ -1115,10 +1147,18 @@ window.Game = window.Game || {};
       if (!fleeing){
         const obj = nearestIncompleteObjective(survivor.state.pos);
         if (obj && Math.hypot(survivor.state.pos.x - obj.state.pos.x, survivor.state.pos.y - obj.state.pos.y) <= Game.CONFIG.objective.radius){
+          // a IA não tem conceito de "apertar botão" — engaja sozinha assim
+          // que chega perto (o jogador humano precisa apertar; a IA não)
+          if (!obj.state.engaged){
+            obj.engage();
+            // mesmo aviso discreto que o modo online já dá pro Assassino
+            // (js/main.js, startOnline) — aqui é local, sem precisar de rede
+            Game.Audio.playObjectiveStart();
+          }
           const hadSkillCheck = !!obj.state.skillCheck;
           const attempt = hadSkillCheck && Math.random() < aiCfg.reactionChancePerSecond * delta;
           const wasDone = obj.state.done;
-          const objResult = obj.update(delta, survivor.state.pos, attempt, 1);
+          obj.update(delta, survivor.state.pos, attempt, 1);
           if (obj.state.done && !wasDone){
             const done = updateObjectivesStatus();
             if (done >= objectives.length && !gatesActive){
@@ -1126,9 +1166,6 @@ window.Game = window.Game || {};
               objectivesStatus.textContent = 'Geradores prontos! O Sobrevivente vai tentar escapar.';
             }
           }
-          // mesmo aviso discreto que o modo online já dá pro Assassino
-          // (js/main.js, startOnline) — aqui é local, sem precisar de rede
-          if (objResult.justStarted) Game.Audio.playObjectiveStart();
         }
         if (gatesActive){
           const g = nearestGate(survivor.state.pos);
@@ -1639,10 +1676,14 @@ window.Game = window.Game || {};
 
       const attackRequested = Game.Input.consumeAttackRequest();
       const ability1Requested = Game.Input.consumeAbility1Request();
-      const ability2Requested = !isSurvivor && Game.Input.consumeAbility2Request();
+      // Sobrevivente reaproveita esse botão como "X" pra sair do modo de
+      // reparo engajado; Assassino usa pro dash — nunca os dois ao mesmo
+      // tempo, então dá pra consumir sempre e rotear pelo papel abaixo.
+      const ability2Requested = Game.Input.consumeAbility2Request();
 
       const captured = isSurvivor && localEntry.capture.state.captured;
       const eliminated = isSurvivor && (localEntry.capture.state.eliminated || localEntry.escaped);
+      let engagedObjective = null; // gerador que o Sobrevivente engajou pra reparar, se houver
 
       if (captured){
         if (attackRequested){
@@ -1668,48 +1709,55 @@ window.Game = window.Game || {};
         if (isSurvivor){
           if (ability1Requested) triggerLocalSurvivorAbility();
 
-          const nearHideout = nearestHideoutSpot(localEntry.char.state.pos, Game.CONFIG.hideout.radius);
-          const hookedAlly = activeSurvivors().find((e) => e !== localEntry && e.capture && e.capture.state.hooked &&
-            Math.hypot(e.char.state.pos.x - localEntry.char.state.pos.x, e.char.state.pos.y - localEntry.char.state.pos.y) <= Game.CONFIG.capture.rescueRange);
-          const droppablePallet = nearestPallet(localEntry.char.state.pos, Game.CONFIG.pallet.radius);
-          if (attackRequested && hookedAlly){
-            net.sendEvent({ kind: 'rescued', targetId: hookedAlly.info.id });
-          } else if (attackRequested && nearHideout){
-            localEntry.hideout.enter();
-          } else if (attackRequested && droppablePallet && droppablePallet.drop()){
-            const index = pallets.indexOf(droppablePallet);
-            net.sendEvent({ kind: 'palletDropped', index });
-            emitNoiseOnline(net, droppablePallet.center.x, droppablePallet.center.y, { radius: Game.CONFIG.noise.palletDropRadius, ping: 1.2 });
-            if (killerEntry && !killerEntry.eliminated){
-              attemptPalletStun(droppablePallet, killerEntry.char.state.pos, () => {
-                net.sendEvent({ kind: 'palletStun', targetId: killerEntry.info.id });
-              });
+          // engajado num gerador: só chegar perto não progride mais nada —
+          // precisou apertar o botão de ação antes (ver abaixo). O X
+          // (ability2) sai do modo de reparo a qualquer momento.
+          engagedObjective = objectives.find((o) => o.state.engaged);
+          if (engagedObjective){
+            if (ability2Requested) engagedObjective.disengage();
+            const wasDone = engagedObjective.state.done;
+            const hadSkillCheck = !!engagedObjective.state.skillCheck;
+            const index = objectives.indexOf(engagedObjective);
+            // cooperação: cada Sobrevivente extra perto do mesmo objetivo
+            // (além de quem está preenchendo) acelera 50% o preenchimento
+            const helpers = activeSurvivors().filter((e) => e !== localEntry &&
+              Math.hypot(e.char.state.pos.x - engagedObjective.state.pos.x, e.char.state.pos.y - engagedObjective.state.pos.y) <= Game.CONFIG.objective.radius).length;
+            const result = engagedObjective.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested, 1 + helpers * 0.5);
+            if (engagedObjective.state.done && !wasDone){
+              net.sendEvent({ kind: 'objectiveDone', index });
+              checkWinFromObjectives();
+            }
+            // igual ao original: errar o skill check faz barulho alto e
+            // entrega a posição pro Assassino (e marca o ponto pra
+            // todo mundo, mesma técnica do ping de Distrair)
+            if (result.justFailed){
+              emitNoiseOnline(net, engagedObjective.state.pos.x, engagedObjective.state.pos.y, { radius: Game.CONFIG.noise.skillCheckFailRadius, ping: 2.5 });
             }
           } else {
-            objectives.forEach((obj, index) => {
-              const wasDone = obj.state.done;
-              const hadSkillCheck = !!obj.state.skillCheck;
-              // cooperação: cada Sobrevivente extra perto do mesmo objetivo
-              // (além de quem está preenchendo) acelera 50% o preenchimento
-              const helpers = activeSurvivors().filter((e) => e !== localEntry &&
-                Math.hypot(e.char.state.pos.x - obj.state.pos.x, e.char.state.pos.y - obj.state.pos.y) <= Game.CONFIG.objective.radius).length;
-              const result = obj.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested, 1 + helpers * 0.5);
-              if (obj.state.done && !wasDone){
-                net.sendEvent({ kind: 'objectiveDone', index });
-                checkWinFromObjectives();
+            const nearHideout = nearestHideoutSpot(localEntry.char.state.pos, Game.CONFIG.hideout.radius);
+            const hookedAlly = activeSurvivors().find((e) => e !== localEntry && e.capture && e.capture.state.hooked &&
+              Math.hypot(e.char.state.pos.x - localEntry.char.state.pos.x, e.char.state.pos.y - localEntry.char.state.pos.y) <= Game.CONFIG.capture.rescueRange);
+            const droppablePallet = nearestPallet(localEntry.char.state.pos, Game.CONFIG.pallet.radius);
+            const engageTarget = nearestEngageableObjective(localEntry.char.state.pos);
+            if (attackRequested && hookedAlly){
+              net.sendEvent({ kind: 'rescued', targetId: hookedAlly.info.id });
+            } else if (attackRequested && nearHideout){
+              localEntry.hideout.enter();
+            } else if (attackRequested && droppablePallet && droppablePallet.drop()){
+              const index = pallets.indexOf(droppablePallet);
+              net.sendEvent({ kind: 'palletDropped', index });
+              emitNoiseOnline(net, droppablePallet.center.x, droppablePallet.center.y, { radius: Game.CONFIG.noise.palletDropRadius, ping: 1.2 });
+              if (killerEntry && !killerEntry.eliminated){
+                attemptPalletStun(droppablePallet, killerEntry.char.state.pos, () => {
+                  net.sendEvent({ kind: 'palletStun', targetId: killerEntry.info.id });
+                });
               }
-              // igual ao original: errar o skill check faz barulho alto e
-              // entrega a posição pro Assassino (e marca o ponto pra
-              // todo mundo, mesma técnica do ping de Distrair)
-              if (result.justFailed){
-                emitNoiseOnline(net, obj.state.pos.x, obj.state.pos.y, { radius: Game.CONFIG.noise.skillCheckFailRadius, ping: 2.5 });
-              }
+            } else if (attackRequested && engageTarget){
+              engageTarget.engage();
               // aviso discreto sem posição — só avisa que "algo está
               // acontecendo em algum gerador", pedido do usuário
-              if (result.justStarted){
-                emitNoiseOnline(net, obj.state.pos.x, obj.state.pos.y, { radius: Infinity, ping: 0, sound: 'objectiveStart' });
-              }
-            });
+              emitNoiseOnline(net, engageTarget.state.pos.x, engageTarget.state.pos.y, { radius: Infinity, ping: 0, sound: 'objectiveStart' });
+            }
           }
 
           doors.forEach((d, index) => {
@@ -1779,8 +1827,12 @@ window.Game = window.Game || {};
           });
         }
 
-        if (stunned){
+        if (stunned || engagedObjective){
           localEntry.char.setMoving(false);
+          if (isSurvivor){
+            localEntry.health.update(delta, true);
+            localEntry.char.setSprinting(false);
+          }
         } else if (!localEntry.char.state.isAttacking){
           const dir = Game.Input.readMovement();
           const cfg = localEntry.char.characterConfig();
@@ -1811,6 +1863,10 @@ window.Game = window.Game || {};
       }
 
       if (isSurvivor) localEntry.el.classList.toggle('hidden-in-spot', localEntry.hideout.state.hidden);
+      // botão 2 (ability2/Q): pro Assassino é sempre a Investida; pro
+      // Sobrevivente vira o "X" de sair do reparo, só aparece enquanto
+      // engajado num gerador
+      Game.Input.setAbilityButtonsVisible(true, isSurvivor ? !!engagedObjective : true, isSurvivor ? 'X' : 'Q');
       localEntry.char.render();
       const senseActive = !isSurvivor && localAbility1.state.activeLeft > 0;
       updateCamera(localEntry.char.state.pos, senseActive);

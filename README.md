@@ -170,18 +170,25 @@ escopo (não do jeito "ainda não fizemos", e sim "não vamos fazer por agora").
       OR entre os três — testado que apertar tecla e usar gamepad junto não
       trava nada
 - [x] Sensibilidade do joystick virtual configurável (menu Configurações)
-- [x] **Joystick touch com rede de segurança contra "travar"**: reportado
-      pelo usuário testando no celular real (modo Online) — o personagem
-      parava de responder ao joystick de vez em quando (sem mudar de
-      aparência, então não era o estado "derrubado"). Hipótese: o
-      navegador do celular às vezes não entrega o `touchend`/`touchcancel`
-      do dedo que abriu o arrasto (foco roubado, engasgo de performance),
-      e o joystick fica com estado interno desincronizado do toque real.
-      Corrigido com um listener global (`document`, não só o próprio
-      joystick) que confere a cada toque na página se o toque que abriu o
-      arrasto ainda existe de verdade na lista de toques ativos — se não
-      existir mais, solta o joystick sozinho (`verifyActiveTouch` em
-      `js/input.js`). Só reseta estado preso, nunca bloqueia toque válido.
+- [x] **Joystick touch reescrito com Pointer Events (2ª correção do bug de
+      "travar")**: reportado pelo usuário testando no celular real (modo
+      Online, site publicado) — o personagem parava de responder ao
+      joystick de vez em quando, mesmo longe de qualquer gerador (sem
+      mudar de aparência, então não era o estado "derrubado", e o resto do
+      jogo continuava respondendo normal). Uma 1ª correção (rede de
+      segurança ouvindo `touchend`/`touchcancel` em qualquer lugar da
+      página) não resolveu — só se recuperava se algum outro toque
+      acontecesse depois em algum lugar da página; se o sistema operacional
+      roubasse o gesto inteiro (troca de app, gesto de navegação,
+      notificação) sem nenhum toque subsequente, o joystick ficava preso do
+      mesmo jeito. Corrigido de verdade trocando Touch Events por **Pointer
+      Events com `setPointerCapture`** (`setupTouchControls` em
+      `js/input.js`): o navegador garante que `lostpointercapture` dispara
+      nesse elemento sempre que a captura é perdida por qualquer motivo,
+      mesmo sem nenhum outro toque acontecer depois — a garantia que faltava
+      na correção anterior. Testado via toque sintético incluindo um
+      `touchCancel` sem `touchEnd` depois (o cenário exato que a 1ª correção
+      não cobria).
 
 ### Menu e seleção de personagem
 - [ ] Menu inicial para escolher: Assassino ou Sobrevivente
@@ -329,8 +336,22 @@ por quem escolheu esse papel na sala.
       a partida inteira acabava em segundos; 35s é bem mais perto da
       proporção real do jogo original, ~80s, ajustada pro ritmo mais curto
       deste projeto)
-- [x] Ao interagir com um objetivo, preencher uma barra de progresso ficando
-      por perto (raio/duração configuráveis em `Game.CONFIG.objective`)
+- [x] **Modo de reparo engajado**: chegar perto de um gerador **não**
+      progride mais nada sozinho — precisa apertar o botão de ação por
+      perto pra entrar no modo de reparo (`js/objective.js`, estado
+      `engaged`/`engage()`/`disengage()`). Uma vez engajado, o
+      Sobrevivente fica **travado no lugar** (sem movimento) até sair —
+      apertando o botão "X" (reaproveita o slot de habilidade 2/tecla Q,
+      só aparece enquanto engajado) ou saindo do alcance do gerador, que
+      desengaja sozinho. A barra de progresso e o skill check continuam
+      exatamente iguais a antes, só a entrada no modo é que mudou —
+      pedido do usuário depois de relatar que o Sobrevivente "ficava
+      preso" perto de gerador no celular; a suspeita é que isso também
+      resolve esse bug de outra forma, trocando "fica parado sozinho ao
+      chegar perto" por uma ação explícita do jogador. A IA Sobrevivente
+      (modo solo-como-Assassino) não tem conceito de apertar botão — ela
+      engaja e desengaja sozinha, automaticamente (raio/duração/progressão
+      configuráveis em `Game.CONFIG.objective`)
 - [x] Skill check circular (estilo Dead by Daylight): um ponteiro giratório,
       o jogador precisa clicar/apertar no momento certo pra não falhar —
       dispara sozinho de vez em quando enquanto o objetivo enche, reaproveita

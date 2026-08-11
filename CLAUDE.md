@@ -154,33 +154,56 @@ deveria contar pro raycasting de luz, só pra colisão física; e Sentido do
 Assassino sem efeito visível — o overlay de escuridão não sabia que a
 habilidade estava ativa e continuava pintando por cima do Sobrevivente
 "revelado" — ver README "Câmera e iluminação" pro diagnóstico completo de
-cada um), nome do jogo decidido pelo usuário: **"Until Dawn"**.
+cada um), nome do jogo decidido pelo usuário: **"Until Dawn"**, **modo de
+reparo engajado nos geradores** (`js/objective.js` — novo estado
+`engaged`/`engage()`/`disengage()`; chegar perto de um gerador não
+progride mais nada sozinho, precisa apertar o botão de ação, e o
+Sobrevivente fica travado no lugar até sair pelo botão "X" — reaproveita
+o slot de habilidade 2/tecla Q, só aparece enquanto engajado — ou até
+sair do alcance, que desengaja sozinho; a IA Sobrevivente engaja/desengaja
+sozinha, sem conceito de botão; ver README "Objetivos e skill checks").
+Pedido pelo usuário como possível solução alternativa/complementar ao bug
+descrito abaixo — mudar "fica parado perto de gerador sozinho" pra uma
+ação explícita do jogador reduz a chance desse estado acontecer sem querer,
+mesmo que não seja a mesma causa raiz do joystick.
 
-**Bug do Sobrevivente travado — mais detalhado pelo usuário, causa provável
-identificada** (`js/input.js`): não é a mecânica de "derrubado" (o usuário
-confirmou que o personagem continua com a aparência normal, em pé — se
-fosse `capture.down()`, a sprite mudaria pra pose de derrubado, que já
-funciona desde a correção anterior). Confirmado: acontece **no celular
-real**, **modo Online**, joystick touch vira de vez em quando (não só perto
-de gerador — "em outros momentos" também). Hipótese mais provável: o
-joystick virtual (`setupTouchControls` em `js/input.js`) rastreia um único
-`activeTouchId`; se o navegador do celular perder/não disparar o
-`touchend`/`touchcancel` desse toque específico (foco roubado por outro
-elemento, notificação, engasgo de performance) sem que o listener local
-perceba, `touchDir` fica travado achando que ainda está sendo arrastado (ou
-o inverso: acha que soltou e ignora o dedo que continua no mesmo lugar),
-e `Game.Input.readMovement()` para de responder até soltar e tocar de novo.
-**Corrigido**: adicionado um listener global de `touchend`/`touchcancel` no
-`document` que, a cada evento de toque em QUALQUER lugar da página, confere
-se o toque que abriu o arrasto do joystick ainda existe na lista global de
-toques ativos — se não existir mais, solta o joystick sozinho
-(`verifyActiveTouch`). É uma rede de segurança pura (só reseta estado
-travado, nunca bloqueia input válido) — testado que o joystick continua
-funcionando normal (arrasta e solta certinho) via toque sintético
-(`CDP Input.dispatchTouchEvent`), mas **não foi confirmado num celular
-real ainda** (a causa raiz é inerente a hardware/navegador mobile, difícil
-de reproduzir em teste automatizado) — pedir confirmação do usuário depois
-do deploy.
+**Bug do Sobrevivente travado — 2ª rodada de correção, causa raiz mais bem
+delimitada** (`js/input.js`): não é a mecânica de "derrubado" (personagem
+continua com aparência normal, em pé). Acontece **no celular real**, no
+site publicado, **antes mesmo de chegar perto de um gerador** (confirmado
+pelo usuário depois do modo de reparo engajado — ver acima — já estar
+implementado: ele testou de novo e travou "ainda vindo de longe", ou seja,
+**não tem nada a ver com gerador**, é só coincidência de o jogador
+costumar estar andando na direção de um quando reparava antes). Também
+confirmado: só o movimento do próprio personagem trava, o resto do jogo
+(Assassino, outros botões) continua respondendo normal — não é um freeze
+de página, é especificamente o joystick virtual ficando preso.
+
+A 1ª tentativa de correção (rede de segurança ouvindo `touchend`/
+`touchcancel` em qualquer lugar da página, `verifyActiveTouch`) **não
+resolveu** — o usuário reproduziu o mesmo travamento depois dela já estar
+publicada. Causa provável do porquê não resolveu: aquela rede de segurança
+só disparava se ALGUM outro evento de toque acontecesse em qualquer lugar
+da página depois do toque perdido — se o sistema operacional roubar o
+gesto inteiro (troca de app, gesto de navegação, notificação) sem nenhum
+toque subsequente em lugar nenhum, a rede de segurança nunca era acionada
+e o joystick ficava preso do mesmo jeito.
+
+**Corrigido (2ª tentativa)**: trocado Touch Events por **Pointer Events com
+`setPointerCapture`** no joystick virtual (`setupTouchControls` em
+`js/input.js`) — `pointerdown` chama `joystickBase.setPointerCapture(id)`,
+e o elemento escuta `pointerup`/`pointercancel`/`lostpointercapture`.
+`lostpointercapture` é a peça nova: o navegador garante que esse evento
+dispara nesse elemento sempre que a captura é perdida por QUALQUER motivo
+(incluindo interrupção do sistema operacional), sem depender de nenhum
+outro toque acontecer depois — é a garantia que a rede de segurança
+anterior não tinha. Testado via toque sintético (`CDP
+Input.dispatchTouchEvent`, incluindo um `touchCancel` sem `touchEnd`
+depois — o cenário exato que a 1ª correção não cobria) — solta e volta a
+responder normal em todos os casos testados, mas **ainda não confirmado
+num celular real** (a causa raiz é inerente a hardware/navegador mobile,
+impossível reproduzir 100% em teste automatizado) — pedir confirmação do
+usuário depois do deploy, de novo.
 
 **Ainda em aberto sobre os sprites** (perguntar ao usuário antes de decidir
 sozinho): pose de "parado" dedicada do Sobrevivente — não foi confirmada
