@@ -132,6 +132,18 @@ window.Game = window.Game || {};
     return extra.length ? currentLayoutWalls.concat(extra) : currentLayoutWalls;
   }
 
+  // só pra colisão (allWalls acima) o pallet derrubado bloqueia igual
+  // parede — pra ILUMINAÇÃO ele NÃO deveria (é baixo, dá pra ver por cima,
+  // igual o pallet de verdade do jogo original). Incluí-lo no raycasting
+  // de luz criava uma sombra desproporcional bem perto da câmera (o
+  // pallet cai a poucos px do jogador) — um objeto pequeno "tampando"
+  // metade da tela, parecendo bug de iluminação. Portas trancadas
+  // continuam bloqueando visão normalmente (são paredes de verdade).
+  function visionBlockingWalls(){
+    const lockedDoorWalls = doors.filter((d) => d.state.locked).map((d) => d.state.rect);
+    return lockedDoorWalls.length ? currentLayoutWalls.concat(lockedDoorWalls) : currentLayoutWalls;
+  }
+
   function nearestDoor(pos, maxDist){
     let best = null, bestDist = Infinity;
     doors.forEach((d) => {
@@ -352,7 +364,12 @@ window.Game = window.Game || {};
     return Game.Input.isTouchDevice ? CAMERA_ZOOM_MOBILE : CAMERA_ZOOM_DESKTOP;
   }
 
-  function updateCamera(followPos){
+  // revealAll: true só quando o Assassino local está com Sentido ativo no
+  // modo online — some com a escuridão por completo enquanto durar (a
+  // habilidade promete "revela através das paredes", então a própria
+  // sobreposição de escuridão precisa sumir, senão o Sobrevivente continua
+  // pintado de preto por cima mesmo já estando "visível" na lógica do jogo)
+  function updateCamera(followPos, revealAll){
     const zoom = currentZoom();
     const viewW = window.innerWidth;
     const viewH = window.innerHeight;
@@ -372,7 +389,7 @@ window.Game = window.Game || {};
 
     const screenX = offsetX + followPos.x * zoom;
     const screenY = offsetY + followPos.y * zoom;
-    drawLighting(followPos, screenX, screenY, offsetX, offsetY, zoom);
+    drawLighting(followPos, screenX, screenY, offsetX, offsetY, zoom, revealAll);
   }
 
   // ---------- iluminação por linha de visão (paredes bloqueiam a luz) ----------
@@ -432,7 +449,7 @@ window.Game = window.Game || {};
   let lightingCanvasW = 0, lightingCanvasH = 0;
   const lightingCtx = lightingEl.getContext ? lightingEl.getContext('2d') : null;
 
-  function drawLighting(followWorldPos, followScreenX, followScreenY, offsetX, offsetY, zoom){
+  function drawLighting(followWorldPos, followScreenX, followScreenY, offsetX, offsetY, zoom, revealAll){
     if (!lightingCtx) return; // navegador sem canvas: fica sem o efeito, sem quebrar o jogo
     const w = window.innerWidth, h = window.innerHeight;
     if (w !== lightingCanvasW || h !== lightingCanvasH){
@@ -440,6 +457,14 @@ window.Game = window.Game || {};
       lightingCanvasW = w; lightingCanvasH = h;
     }
     const ctx = lightingCtx;
+    // Sentido ativo: a escuridão em si precisa sumir, senão o Sobrevivente
+    // continua "revelado através da parede" só na lógica do jogo (ver
+    // updateKillerVision), mas visualmente pintado de preto por cima —
+    // exatamente o bug relatado ("aperto Sentido mas não vejo nada mudar")
+    if (revealAll){
+      ctx.clearRect(0, 0, w, h);
+      return;
+    }
     const zoomPx = Game.CONFIG.visionRadius * zoom;
     const maxRadius = zoomPx + 220;
 
@@ -448,7 +473,7 @@ window.Game = window.Game || {};
     // mapa (importante com mapas grandes/muitas salas) e deixa a
     // iluminação mais leve em celulares fracos
     const maxRadiusWorld = maxRadius / zoom;
-    const nearbyWalls = allWalls().filter((wl) => {
+    const nearbyWalls = visionBlockingWalls().filter((wl) => {
       const cx = Math.max(wl.x, Math.min(followWorldPos.x, wl.x + wl.w));
       const cy = Math.max(wl.y, Math.min(followWorldPos.y, wl.y + wl.h));
       return Math.hypot(followWorldPos.x - cx, followWorldPos.y - cy) <= maxRadiusWorld;
@@ -1787,7 +1812,8 @@ window.Game = window.Game || {};
 
       if (isSurvivor) localEntry.el.classList.toggle('hidden-in-spot', localEntry.hideout.state.hidden);
       localEntry.char.render();
-      updateCamera(localEntry.char.state.pos);
+      const senseActive = !isSurvivor && localAbility1.state.activeLeft > 0;
+      updateCamera(localEntry.char.state.pos, senseActive);
 
       if (now - lastStateSent > 70){
         lastStateSent = now;

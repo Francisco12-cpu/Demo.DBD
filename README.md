@@ -6,9 +6,11 @@ Este arquivo orienta o Claude Code ao trabalhar neste repositório.
 
 ## Visão geral do projeto
 
-**Assassino vs Sobreviventes** — jogo assimétrico competitivo (estilo Dead by
-Daylight simplificado): 1 jogador é o Assassino, os demais são Sobreviventes
-tentando completar objetivos e escapar de uma mansão abandonada.
+**Until Dawn** (nome escolhido pelo usuário — jogo assimétrico competitivo,
+estilo Dead by Daylight simplificado, "Assassino vs Sobreviventes" continua
+sendo a descrição mecânica do formato): 1 jogador é o Assassino, os demais
+são Sobreviventes tentando completar objetivos e escapar de uma mansão
+abandonada.
 
 - **Plataforma:** HTML/CSS/JS puro, rodando direto no navegador (sem build
   step, sem framework pesado — simples de rodar abrindo o `index.html`)
@@ -587,6 +589,32 @@ a distância).
       distinguir maiúscula de minúscula de longe
 - [x] Rastro de poeira ao correr — efeito visual simples via CSS
       (`.dust`/`@keyframes dustFade`), sem imagem nenhuma, some sozinho
+- [x] **Bug corrigido: pallet derrubado "tampava a tela"** — quando os
+      pallets foram adicionados, a colisão deles passou a contar também
+      pro raycasting da iluminação (`allWalls()`, usada tanto pra colisão
+      quanto pra luz). Como o pallet cai bem perto do jogador (a poucos
+      px, é uma ação de curto alcance), o raycasting tratava esse objeto
+      pequeno igual a uma parede de verdade — só que muito mais perto da
+      câmera do que qualquer parede real costuma estar — e a sombra
+      resultante cobria a maior parte da tela, parecendo um bug grave de
+      iluminação. Corrigido separando as duas listas: `allWalls()`
+      continua incluindo pallets derrubados pra **colisão** (é um
+      obstáculo físico de verdade), mas a iluminação agora usa
+      `visionBlockingWalls()`, que só tem paredes de sala e portas
+      trancadas — pallet (baixo, dá pra ver por cima, igual no jogo
+      original) não bloqueia mais visão, só passagem
+- [x] **Bug corrigido: Sentido do Assassino sem efeito visível** — a
+      habilidade já revelava os Sobreviventes na lógica do jogo
+      (`updateKillerVision`, `entry.el.style.display`), mas o
+      **overlay de escuridão** (`#lighting`, por cima de tudo,
+      `z-index:15`) nunca sabia que o Sentido estava ativo — continuava
+      pintando a tela de preto por cima do Sobrevivente "revelado",
+      então na prática nada parecia mudar. Corrigido: `updateCamera`/
+      `drawLighting` agora recebem um sinalizador (`revealAll`) que,
+      quando o Sentido do Assassino local está ativo (modo online), some
+      com a escuridão por completo enquanto durar — confirmado
+      visualmente (screenshot antes/depois) que a tela realmente
+      escurece/clareia junto com a ativação da habilidade
 
 ### Configurações e progressão
 - [x] Menu de Configurações: volume master e sensibilidade do joystick

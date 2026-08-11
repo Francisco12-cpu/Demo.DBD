@@ -1,6 +1,6 @@
 {
-  "name": "Assassino vs Sobreviventes",
-  "short_name": "Assassino vs Sobrev.",
+  "name": "Until Dawn",
+  "short_name": "Until Dawn",
   "description": "Jogo assimétrico estilo Dead by Daylight — Assassino contra Sobreviventes, direto no navegador.",
   "start_url": "./index.html",
   "scope": "./",

@@ -22,7 +22,7 @@ const RECONNECT_GRACE_MS = 25000; // tempo pra quem caiu no meio da partida volt
 
 const wss = new WebSocketServer({ port: PORT });
 
-console.log('Assassino vs Sobreviventes — servidor da sala');
+console.log('Until Dawn — servidor da sala');
 console.log(`Porta: ${PORT}`);
 console.log(`Senha: ${PASSWORD}`);
 console.log('Os outros jogadores entram pelo navegador usando o IP desta máquina na rede local, essa porta e essa senha.');

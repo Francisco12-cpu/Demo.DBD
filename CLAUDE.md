@@ -14,12 +14,14 @@ padrões que **têm** que ser seguidos, e as pegadinhas já conhecidas.
 
 ## O que é o projeto
 
-**Assassino vs Sobreviventes** — jogo assimétrico competitivo estilo Dead by
-Daylight simplificado, rodando 100% no navegador (HTML/CSS/JS puro, sem
-build step, sem framework). 1 jogador é o Assassino, até 4 são Sobreviventes
-tentando reparar geradores e escapar. Feito pra jogar com celular, incluindo
-com amigos pela mesma rede Wi-Fi (LAN) ou por P2P sem precisar de servidor
-dedicado. Autor: Francisco Audir (@filho.af).
+**Until Dawn** (nome escolhido pelo usuário — a mecânica interna continua
+sendo referida como "Assassino vs Sobreviventes", jogo assimétrico
+competitivo estilo Dead by Daylight simplificado), rodando 100% no
+navegador (HTML/CSS/JS puro, sem build step, sem framework). 1 jogador é o
+Assassino, até 4 são Sobreviventes tentando reparar geradores e escapar.
+Feito pra jogar com celular, incluindo com amigos pela mesma rede Wi-Fi
+(LAN) ou por P2P sem precisar de servidor dedicado. Autor: Francisco Audir
+(@filho.af).
 
 Repositório: `Francisco12-cpu/Demo.DBD`. Branch de trabalho principal desta
 fase: `claude/dbd-simple-analysis-roadmap-7n3psv` (verificar com `git branch`
@@ -146,7 +148,30 @@ barulho de verdade), **áudio 3D corrigido** (o contexto agora reativa
 sozinho quando o navegador suspende no meio da partida, batimento sem
 atenuação dupla, frequência mais audível em alto-falante mono — ver README
 "Áudio" pro diagnóstico completo), aviso de gerador ativado agora também
-nos 2 modos solo (antes só existia no Online).
+nos 2 modos solo (antes só existia no Online), **2 bugs de iluminação
+corrigidos** (pallet derrubado tampando a tela — a colisão dele não
+deveria contar pro raycasting de luz, só pra colisão física; e Sentido do
+Assassino sem efeito visível — o overlay de escuridão não sabia que a
+habilidade estava ativa e continuava pintando por cima do Sobrevivente
+"revelado" — ver README "Câmera e iluminação" pro diagnóstico completo de
+cada um), nome do jogo decidido pelo usuário: **"Until Dawn"**.
+
+**Reportado pelo usuário mas NÃO reproduzido ainda** (investigar numa
+próxima sessão, com mais detalhe do usuário sobre como reproduzir): "o
+Sobrevivente ficou preso perto de um gerador, sem conseguir se mover".
+Testado diretamente — parado reparando, com e sem skill check ativo, e
+tentando se mover em todas as direções depois — sem conseguir reproduzir
+nenhum travamento. Hipóteses já descartadas: sobreposição geométrica de
+pallet/janela com algum `objectiveSpots` (checado numericamente pros 2
+layouts, nenhuma sobreposição perigosa), e o campo `stunnedUntil`
+(adicionado a todo personagem via `js/character.js`, mas só é setado pro
+Assassino) afetando o Sobrevivente por engano. Hipótese ainda não
+descartada: confusão do usuário entre o **esconderijo** (que trava
+movimento de propósito enquanto escondido, saindo só com o botão de ação)
+e o gerador — os dois são "fica parado perto" e podem ter sido
+confundidos. Perguntar ao usuário: em qual modo (solo/online), jogando de
+quê, e se aparecia algum indicador na tela (esconderijo tem uma barra/ícone
+diferente do gerador).
 
 **Ainda em aberto sobre os sprites** (perguntar ao usuário antes de decidir
 sozinho): pose de "parado" dedicada do Sobrevivente — não foi confirmada
@@ -168,12 +193,13 @@ estágio, simplificação consciente), IA Sobrevivente (modo solo-como-
 Assassino) ainda não derruba pallets sozinha (limitação conhecida, ver
 README).
 
-**Nome e ícone do jogo**: o usuário pediu ideias de nome (3 direções:
-tradução do tema original, polir o nome descritivo atual, ou marca própria
-— várias opções já sugeridas numa rodada de planejamento) mas **ainda não
-escolheu nenhuma** — perguntar antes de trocar o nome/título em qualquer
-lugar do código ou do PWA. O ícone atual deve continuar servindo de base
-(usuário gostou), só refinar se pedido.
+**Nome do jogo: decidido — "Until Dawn"**. Já trocado em `index.html`
+(`<title>`, `<h1>`, `apple-mobile-web-app-title`, título do HUD),
+`manifest.json` (`name`/`short_name`), `server/server.js` (log de boot),
+`server/package.json` (description), `README.md` e `CLAUDE.md`. "Assassino
+vs Sobreviventes" continua usado como descrição mecânica do formato em
+alguns lugares (não é mais o nome do jogo). Ícone atual (`assets/icon-
+*.png`) continua servindo de base (usuário gostou), só refinar se pedido.
 
 **Ideias já discutidas mas propositalmente NÃO implementadas ainda**
 (usuário pediu só análise escrita, não construir): editor visual de
