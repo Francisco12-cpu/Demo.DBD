@@ -92,6 +92,24 @@ window.Game = window.Game || {};
     });
     joystickBase.addEventListener('touchcancel', endDrag);
 
+    // rede de segurança: em alguns celulares, um touchend/touchcancel do
+    // dedo que estava segurando o joystick às vezes não chega no listener
+    // acima (perdido por foco roubado por outro elemento, notificação,
+    // etc.) — o joystick fica "preso" achando que ainda está sendo
+    // arrastado, e o personagem para de responder até soltar e tocar de
+    // novo. Checando a lista global de toques ativos a cada evento de
+    // toque na página, confirma se o toque que abriu o arrasto ainda
+    // existe de verdade — se não existir mais em lugar nenhum, solta.
+    function verifyActiveTouch(e){
+      if (activeTouchId === null) return;
+      for (const t of e.touches){
+        if (t.identifier === activeTouchId) return; // ainda existe, tudo bem
+      }
+      endDrag(); // sumiu sem avisar o joystick — libera
+    }
+    document.addEventListener('touchend', verifyActiveTouch, { passive: true });
+    document.addEventListener('touchcancel', verifyActiveTouch, { passive: true });
+
     attackBtn.addEventListener('touchstart', (e) => {
       e.preventDefault();
       touchAttackRequested = true;

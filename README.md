@@ -170,6 +170,18 @@ escopo (não do jeito "ainda não fizemos", e sim "não vamos fazer por agora").
       OR entre os três — testado que apertar tecla e usar gamepad junto não
       trava nada
 - [x] Sensibilidade do joystick virtual configurável (menu Configurações)
+- [x] **Joystick touch com rede de segurança contra "travar"**: reportado
+      pelo usuário testando no celular real (modo Online) — o personagem
+      parava de responder ao joystick de vez em quando (sem mudar de
+      aparência, então não era o estado "derrubado"). Hipótese: o
+      navegador do celular às vezes não entrega o `touchend`/`touchcancel`
+      do dedo que abriu o arrasto (foco roubado, engasgo de performance),
+      e o joystick fica com estado interno desincronizado do toque real.
+      Corrigido com um listener global (`document`, não só o próprio
+      joystick) que confere a cada toque na página se o toque que abriu o
+      arrasto ainda existe de verdade na lista de toques ativos — se não
+      existir mais, solta o joystick sozinho (`verifyActiveTouch` em
+      `js/input.js`). Só reseta estado preso, nunca bloqueia toque válido.
 
 ### Menu e seleção de personagem
 - [ ] Menu inicial para escolher: Assassino ou Sobrevivente
