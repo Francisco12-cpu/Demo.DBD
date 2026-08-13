@@ -28,6 +28,20 @@ window.Game = window.Game || {};
     el.appendChild(bar);
     const fill = bar.querySelector('.struggle-fill');
 
+    /**
+     * @typedef {Object} CaptureState
+     * @property {boolean} captured - true durante as 3 fases (downed/carried/hooked)
+     * @property {boolean} downed
+     * @property {boolean} carried
+     * @property {boolean} hooked
+     * @property {boolean} eliminated
+     * @property {number} wiggleProgress - 0..1, progresso de soltar-se enquanto carried
+     * @property {number} hookProgress - 0..1, progresso da struggle bar enquanto hooked
+     * @property {{x:number,y:number}|null} hookPos
+     * @property {number} timeLeft - segundos até o sacrifício, enquanto hooked
+     * @property {number} immunity - segundos de imunidade após escapar/ser resgatado
+     */
+    /** @type {CaptureState} */
     const state = {
       captured: false, downed: false, carried: false, hooked: false, eliminated: false,
       wiggleProgress: 0, hookProgress: 0, hookPos: null, timeLeft: 0, immunity: 0,
