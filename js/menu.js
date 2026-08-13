@@ -170,6 +170,7 @@ window.Game = window.Game || {};
   let localId = null;
   let lastLobby = null;
   let lastServerErrorAt = 0;
+  let lastServerErrorMessage = '';
   let hostingRoomCode = null;
 
   function renderRoomCode(){
@@ -207,6 +208,7 @@ window.Game = window.Game || {};
       },
       onServerError(message){
         lastServerErrorAt = Date.now();
+        lastServerErrorMessage = message;
         Game.Audio.playError();
         if (screens.lobby.style.display === 'flex') lobbyError.textContent = message;
         else errorTarget.textContent = message;
@@ -216,9 +218,19 @@ window.Game = window.Game || {};
         errorTarget.textContent = message;
       },
       onClose(){
-        if (Date.now() - lastServerErrorAt < 500) return;
+        // erro recente (senha errada, sala cheia, kick etc.) — se ainda
+        // estamos no formulário de conexão, a mensagem já apareceu ali
+        // mesmo, sem precisar navegar de novo (senão pisca "conexão caiu"
+        // por cima). Se já tínhamos saído do formulário (ex: lobby,
+        // kickado pelo host), precisa navegar de volta — mas carregando a
+        // mensagem específica que já tínhamos (não a genérica), senão ela
+        // se perde no elemento de erro da tela antiga (lobbyError) que vai
+        // ficar escondida.
+        const onConnectForm = screens.join.style.display === 'flex' || screens.p2pChoice.style.display === 'flex';
+        const recentServerError = Date.now() - lastServerErrorAt < 1000;
+        if (onConnectForm && recentServerError) return;
         if (screens.result.style.display !== 'flex'){
-          errorTarget.textContent = 'A conexão com a sala caiu.';
+          errorTarget.textContent = recentServerError ? lastServerErrorMessage : 'A conexão com a sala caiu.';
           hostingRoomCode = null;
           showScreen(errorTarget === p2pHostError || errorTarget === p2pJoinError ? 'p2pChoice' : 'join');
         }
@@ -297,11 +309,28 @@ window.Game = window.Game || {};
   // ---------- lobby (comum aos dois transportes online) ----------
   function renderLobby(msg){
     lobbyPlayers.innerHTML = '';
+    // host = primeiro a entrar na sala ainda conectado (servidor decide,
+    // ver hostId() em server.js/net-webrtc.js — aqui só lê o que já veio)
+    const amIHost = !!msg.hostId && msg.hostId === localId;
     msg.players.forEach((p) => {
       const row = document.createElement('div');
       row.className = 'lobby-player' + (p.role ? ' role-' + p.role : '');
       const roleLabel = p.role === 'killer' ? 'Assassino' : (p.role === 'survivor' ? 'Sobrevivente' : 'sem papel');
-      row.innerHTML = `<span>${escapeHtml(p.name)}${p.id === localId ? ' (você)' : ''}</span><span class="role-tag">${roleLabel}</span>`;
+      const isHostTag = p.id === msg.hostId ? ' · host' : '';
+      row.innerHTML = `<span>${escapeHtml(p.name)}${p.id === localId ? ' (você)' : ''}${isHostTag}</span><span class="role-tag">${roleLabel}</span>`;
+      // só o host vê o botão de kickar, e não em si mesmo — remover alguém
+      // no meio da partida abriria caso de borda demais pro benefício, por
+      // isso só aparece na sala (matchState !== 'playing', que é a única
+      // hora em que a tela de lobby fica visível de qualquer forma)
+      if (amIHost && p.id !== localId){
+        const kickBtn = document.createElement('button');
+        kickBtn.type = 'button';
+        kickBtn.className = 'lobby-kick-btn';
+        kickBtn.textContent = '✕';
+        kickBtn.title = 'Remover da sala';
+        kickBtn.dataset.kickId = p.id;
+        row.appendChild(kickBtn);
+      }
       lobbyPlayers.appendChild(row);
     });
 
@@ -310,6 +339,14 @@ window.Game = window.Game || {};
     lobbyBeSurvivor.classList.toggle('active', !!me && me.role === 'survivor');
     lobbyAbilityRow.style.display = !!me && me.role === 'survivor' ? 'flex' : 'none';
   }
+
+  // delegação de evento: 1 listener só, em vez de 1 por botão de kick
+  // recriado a cada renderLobby()
+  lobbyPlayers.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-kick-id]');
+    if (!btn || !net) return;
+    net.kick(btn.dataset.kickId);
+  });
 
   function escapeHtml(str){
     const div = document.createElement('div');
