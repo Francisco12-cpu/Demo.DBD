@@ -185,6 +185,33 @@ window.Game = window.Game || {};
   let lastServerErrorAt = 0;
   let hostingRoomCode = null;
 
+  // reconexão automática: queda de rede (não senha errada/sala cheia — essas
+  // vêm por onServerError/onError, guardadas por lastServerErrorAt, e não
+  // adianta tentar de novo com os mesmos dados errados) tenta reconectar
+  // sozinha algumas vezes antes de devolver o jogador pro formulário manual.
+  // O servidor já guarda o lugar de quem caiu no meio de uma partida por um
+  // tempo (RECONNECT_GRACE_MS em server.js/net-webrtc.js) via reconnectToken()
+  // — só faltava o cliente tentar reconectar sozinho nesse intervalo.
+  const RECONNECT_ATTEMPTS = 3;
+  const RECONNECT_DELAY_MS = 2000;
+  let reconnectAttemptsLeft = 0;
+  let lastConnectFn = null; // () => net — refaz a MESMA conexão (mesmos host/porta/senha ou código/senha)
+
+  function attemptAutoReconnect(errorTarget){
+    if (reconnectAttemptsLeft <= 0 || !lastConnectFn){
+      errorTarget.textContent = 'A conexão com a sala caiu.';
+      hostingRoomCode = null;
+      showScreen(errorTarget === p2pHostError || errorTarget === p2pJoinError ? 'p2pChoice' : 'join');
+      return;
+    }
+    const attemptNumber = RECONNECT_ATTEMPTS - reconnectAttemptsLeft + 1;
+    reconnectAttemptsLeft -= 1;
+    errorTarget.textContent = `Conexão caiu — tentando reconectar (${attemptNumber}/${RECONNECT_ATTEMPTS})...`;
+    setTimeout(() => {
+      if (lastConnectFn) net = lastConnectFn();
+    }, RECONNECT_DELAY_MS);
+  }
+
   function renderRoomCode(){
     if (!hostingRoomCode){
       lobbyRoomCode.style.display = 'none';
@@ -211,6 +238,7 @@ window.Game = window.Game || {};
       onJoined(id){
         localId = id;
         errorTarget.textContent = '';
+        reconnectAttemptsLeft = RECONNECT_ATTEMPTS; // conectou (de 1ª ou reconectando) — zera o contador pra próxima queda
         showScreen('lobby');
         renderRoomCode();
       },
@@ -230,11 +258,7 @@ window.Game = window.Game || {};
       },
       onClose(){
         if (Date.now() - lastServerErrorAt < 500) return;
-        if (screens.result.style.display !== 'flex'){
-          errorTarget.textContent = 'A conexão com a sala caiu.';
-          hostingRoomCode = null;
-          showScreen(errorTarget === p2pHostError || errorTarget === p2pJoinError ? 'p2pChoice' : 'join');
-        }
+        if (screens.result.style.display !== 'flex') attemptAutoReconnect(errorTarget);
       },
       onMatchStart(players, mapLayoutIndex){
         menu.style.display = 'none';
@@ -267,7 +291,9 @@ window.Game = window.Game || {};
     }
     joinError.textContent = 'Conectando...';
     hostingRoomCode = null;
-    net = Game.Net.connect({ host: hostIp, port, password, name: playerName(), token: reconnectToken() }, makeHandlers(joinError));
+    reconnectAttemptsLeft = RECONNECT_ATTEMPTS;
+    lastConnectFn = () => Game.Net.connect({ host: hostIp, port, password, name: playerName(), token: reconnectToken() }, makeHandlers(joinError));
+    net = lastConnectFn();
   });
 
   // ---------- P2P (WebRTC, celular vira host) ----------
@@ -295,7 +321,9 @@ window.Game = window.Game || {};
     }
     p2pJoinError.textContent = 'Conectando...';
     hostingRoomCode = null;
-    net = Game.NetWebRTC.join({ code, password: p2pJoinPassword.value, name: playerName(), token: reconnectToken() }, makeHandlers(p2pJoinError));
+    reconnectAttemptsLeft = RECONNECT_ATTEMPTS;
+    lastConnectFn = () => Game.NetWebRTC.join({ code, password: p2pJoinPassword.value, name: playerName(), token: reconnectToken() }, makeHandlers(p2pJoinError));
+    net = lastConnectFn();
   });
 
   // Se chegou aqui por um QR code (link com ?p2p=codigo), já abre direto
