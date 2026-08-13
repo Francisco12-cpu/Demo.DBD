@@ -9,6 +9,12 @@ window.Game = window.Game || {};
   // barra de struggle de js/capture.js, que continua sem mudança nenhuma).
   // Escapar da struggle NÃO cura sozinho — continua ferido até curar.
   function createHealth(el){
+    /**
+     * @typedef {Object} HealthState
+     * @property {boolean} injured - true após o 1º golpe (mais lento, cura sozinho parado)
+     * @property {number} healProgress - 0..1
+     */
+    /** @type {HealthState} */
     const state = { injured: false, healProgress: 0 };
 
     function hit(){

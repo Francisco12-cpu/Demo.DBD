@@ -9,6 +9,13 @@ window.Game = window.Game || {};
   // geradores já terminaram). Uma vez aberto, fica aberto pro resto da
   // partida — não tem "fechar de novo".
   function createGate(pos, el){
+    /**
+     * @typedef {Object} GateState
+     * @property {{x:number,y:number}} pos
+     * @property {boolean} open - uma vez true, fica assim pro resto da partida
+     * @property {number} progress - 0..1, canalização do Sobrevivente
+     */
+    /** @type {GateState} */
     const state = { pos, open: false, progress: 0 };
 
     function render(){
