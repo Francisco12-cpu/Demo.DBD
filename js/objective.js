@@ -18,6 +18,24 @@ window.Game = window.Game || {};
     // o anterior). Errar não muda o nível, só obriga repetir no mesmo nível.
     // engaged: só progride enquanto true — precisa apertar o botão de ação
     // pra entrar nesse modo (engage()), não basta mais só chegar perto.
+    /**
+     * @typedef {Object} SkillCheck
+     * @property {number} angle - 0..360, posição atual do ponteiro
+     * @property {number} zoneStart - início da zona de acerto, em graus
+     * @property {number} zoneEnd - fim da zona de acerto, em graus
+     * @property {number} speedDegPerSec
+     */
+    /**
+     * @typedef {Object} ObjectiveState
+     * @property {{x:number,y:number}} pos
+     * @property {number} progress - 0..1
+     * @property {boolean} done
+     * @property {SkillCheck|null} skillCheck
+     * @property {boolean} active - true quando engaged e ainda não done (só pra CSS)
+     * @property {number} skillCheckLevel - sobe a cada acerto, aumenta a dificuldade
+     * @property {boolean} engaged - true só depois do jogador apertar o botão de ação (engage())
+     */
+    /** @type {ObjectiveState} */
     const state = { pos, progress: 0, done: false, skillCheck: null, active: false, skillCheckLevel: 0, engaged: false };
     let nextCheckIn = randomCheckDelay();
 
