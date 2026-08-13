@@ -121,21 +121,34 @@ window.Game = window.Game || {};
   // ---------- progressão leve entre partidas (só contador local, sem perks) ----------
   const menuProgressEl = document.getElementById('menu-progress');
   const resultProgressEl = document.getElementById('result-progress');
+  // survivorEscapes/survivorSacrifices: quebra do won/lost só pra quando o
+  // papel local era Sobrevivente (won/played continuam contando os 2 papéis
+  // juntos, como sempre foi) — spread com STATS_DEFAULTS cobre quem já tinha
+  // dbd_stats salvo antes desses 2 campos existirem (senão viraria NaN).
+  const STATS_DEFAULTS = { played: 0, won: 0, survivorEscapes: 0, survivorSacrifices: 0 };
   function readStats(){
     try {
-      return JSON.parse(localStorage.getItem('dbd_stats')) || { played: 0, won: 0 };
-    } catch { return { played: 0, won: 0 }; }
+      return { ...STATS_DEFAULTS, ...(JSON.parse(localStorage.getItem('dbd_stats')) || {}) };
+    } catch { return { ...STATS_DEFAULTS }; }
   }
   function renderStats(){
     const stats = readStats();
-    const text = `Partidas jogadas: ${stats.played} · Vitórias: ${stats.won}`;
+    const text = `Partidas jogadas: ${stats.played} · Vitórias: ${stats.won} · `
+      + `Fugas: ${stats.survivorEscapes} · Sacrifícios: ${stats.survivorSacrifices}`;
     menuProgressEl.textContent = text;
     return text;
   }
-  function recordMatchResult(won){
+  // role: papel do jogador LOCAL nessa partida ('survivor'|'killer') — só
+  // usado pra alimentar o contador de fugas/sacrifícios, que só faz sentido
+  // pro lado Sobrevivente (o Assassino já tem won/played contando por ele)
+  function recordMatchResult(won, role){
     const stats = readStats();
     stats.played += 1;
     if (won) stats.won += 1;
+    if (role === 'survivor'){
+      if (won) stats.survivorEscapes += 1;
+      else stats.survivorSacrifices += 1;
+    }
     localStorage.setItem('dbd_stats', JSON.stringify(stats));
     resultProgressEl.textContent = renderStats();
   }
@@ -342,7 +355,7 @@ window.Game = window.Game || {};
   // em vez de recarregar a página.
   let playAgainSolo = null;
 
-  function showResult(won, detail, onPlayAgain){
+  function showResult(won, detail, onPlayAgain, role){
     playAgainSolo = onPlayAgain || null;
     Game.hideMatchUi();
     menu.style.display = 'flex';
@@ -350,7 +363,7 @@ window.Game = window.Game || {};
     resultTitle.textContent = won ? 'Vitória!' : 'Derrota';
     resultTitle.className = won ? 'won' : 'lost';
     resultDetail.textContent = detail || '';
-    recordMatchResult(won);
+    recordMatchResult(won, role);
   }
 
   resultAgain.addEventListener('click', () => {

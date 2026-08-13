@@ -443,7 +443,7 @@ window.Game = window.Game || {};
       const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
       const doneCount = updateObjectivesStatus();
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
-      Game.Menu.showResult(won, fullDetail, () => startSolo(name, abilityKey));
+      Game.Menu.showResult(won, fullDetail, () => startSolo(name, abilityKey), 'survivor');
     }
 
     function attemptKillerHit(){
@@ -835,7 +835,7 @@ window.Game = window.Game || {};
       const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
       const doneCount = updateObjectivesStatus();
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
-      Game.Menu.showResult(won, fullDetail, () => startSoloAsKiller(name));
+      Game.Menu.showResult(won, fullDetail, () => startSoloAsKiller(name), 'killer');
     }
 
     function attemptKillerHit(){
@@ -1183,7 +1183,7 @@ window.Game = window.Game || {};
       const doneCount = updateObjectivesStatus();
       const aliveCount = activeSurvivors().length;
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length} · Sobreviventes restantes: ${aliveCount}/${survivors.length}`;
-      Game.Menu.showResult(localWon, fullDetail, null); // "jogar de novo" online volta pro lobby (ver menu.js)
+      Game.Menu.showResult(localWon, fullDetail, null, localEntry.info.role); // "jogar de novo" online volta pro lobby (ver menu.js)
     }
 
     // "ativos" = ainda em jogo (não eliminados nem já escaparam) — só esses
