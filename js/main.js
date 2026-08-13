@@ -667,6 +667,18 @@ window.Game = window.Game || {};
       const attackPressed = Game.Input.consumeAttackRequest();
       let engagedObjective = null; // gerador engajado pra reparar, se houver
 
+      // segurança: se o Assassino derrubou o jogador ENQUANTO ele estava
+      // engajado num gerador, o bloco de baixo nunca roda (captured entra
+      // no branch de cima) e o gerador ficava com engaged:true travado pra
+      // sempre — ao ser resgatado, o jogador reengajava sozinho nesse
+      // mesmo gerador (agora longe dele), travado nele de novo sem
+      // conseguir sair a não ser pelo botão X. Desengaja aqui, sempre que
+      // captured, antes de mais nada.
+      if (capture.state.captured){
+        const staleEngaged = objectives.find((o) => o.state.engaged);
+        if (staleEngaged) staleEngaged.disengage();
+      }
+
       if (capture.state.captured){
         if (attackPressed) capture.pulse();
       } else if (!capture.state.eliminated && hideout.state.hidden){
@@ -691,7 +703,15 @@ window.Game = window.Game || {};
         // Apertar o X (ability2) sai do modo de reparo a qualquer momento.
         engagedObjective = objectives.find((o) => o.state.engaged);
         if (engagedObjective){
-          if (ability2Requested) engagedObjective.disengage();
+          // botão X sempre funciona, mas não pode ser o ÚNICO jeito de
+          // sair — qualquer intenção de andar (WASD/joystick/gamepad)
+          // também desengaja na hora. Sem isso, engajar virava uma
+          // armadilha de ponto único de falha: se o X por qualquer motivo
+          // não registrasse (touch target, foco perdido, etc.), o jogador
+          // ficava preso ali pro resto da partida, sem nenhum jeito de sair.
+          const moveDir = Game.Input.readMovement();
+          const movementIntent = Math.hypot(moveDir.x, moveDir.y) > 0.05;
+          if (ability2Requested || movementIntent) engagedObjective.disengage();
           const wasDone = engagedObjective.state.done;
           const hadSkillCheck = !!engagedObjective.state.skillCheck;
           const result = engagedObjective.update(delta, player.state.pos, hadSkillCheck && attackPressed);
@@ -1550,6 +1570,18 @@ window.Game = window.Game || {};
       const eliminated = isSurvivor && (localEntry.capture.state.eliminated || localEntry.escaped);
       let engagedObjective = null; // gerador que o Sobrevivente engajou pra reparar, se houver
 
+      // segurança: se o Assassino derrubou o jogador ENQUANTO ele estava
+      // engajado num gerador, o bloco de baixo nunca roda (captured entra
+      // no branch de cima) e o gerador ficava com engaged:true travado pra
+      // sempre — ao ser resgatado, o jogador reengajava sozinho nesse
+      // mesmo gerador (agora longe dele), travado nele de novo sem
+      // conseguir sair a não ser pelo botão X. Desengaja aqui, sempre que
+      // captured, antes de mais nada.
+      if (captured){
+        const staleEngaged = objectives.find((o) => o.state.engaged);
+        if (staleEngaged) staleEngaged.disengage();
+      }
+
       if (captured){
         if (attackRequested){
           const wasCarried = localEntry.capture.state.carried;
@@ -1579,7 +1611,12 @@ window.Game = window.Game || {};
           // (ability2) sai do modo de reparo a qualquer momento.
           engagedObjective = objectives.find((o) => o.state.engaged);
           if (engagedObjective){
-            if (ability2Requested) engagedObjective.disengage();
+            // botão X sempre funciona, mas não pode ser o ÚNICO jeito de
+            // sair — qualquer intenção de andar também desengaja na hora
+            // (ver mesma lógica/comentário em startSolo)
+            const moveDir = Game.Input.readMovement();
+            const movementIntent = Math.hypot(moveDir.x, moveDir.y) > 0.05;
+            if (ability2Requested || movementIntent) engagedObjective.disengage();
             const wasDone = engagedObjective.state.done;
             const hadSkillCheck = !!engagedObjective.state.skillCheck;
             const index = objectives.indexOf(engagedObjective);

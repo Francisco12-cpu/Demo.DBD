@@ -89,12 +89,18 @@ window.Game = window.Game || {};
       state.engaged = true;
     }
 
-    // sai do modo de reparo — tanto por escolha (botão X) quanto sozinho,
-    // se o jogador sair do alcance sem apertar nada.
+    // sai do modo de reparo — por escolha (botão X), sozinho se o jogador
+    // sair do alcance sem apertar nada, ou forçado de fora (ex: jogador foi
+    // capturado no meio do reparo — main.js chama isso direto, sem passar
+    // por update() de novo, então precisa limpar a classe .active aqui
+    // também — não dá pra confiar só no próximo update() pra isso, porque
+    // pode não haver um próximo update() tão cedo).
     function disengage(){
       state.engaged = false;
+      state.active = false;
       state.skillCheck = null;
       scRing.style.display = 'none';
+      el.classList.remove('active');
     }
 
     // interactPressed só deve ser passado como true quando ESTE objetivo já
