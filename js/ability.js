@@ -9,6 +9,13 @@ window.Game = window.Game || {};
   // acontece enquanto está ativa) fica por conta de quem chama — esse
   // objeto só cuida do tempo, igual pro Assassino e pro Sobrevivente.
   function createAbility(cfg){
+    /**
+     * @typedef {Object} AbilityState
+     * @property {number} cooldownLeft - segundos até poder ativar de novo
+     * @property {number} activeLeft - segundos restantes do efeito, enquanto ativa
+     * @property {number} usesLeft - Infinity se cfg.maxUses não foi definido
+     */
+    /** @type {AbilityState} */
     const state = {
       cooldownLeft: 0,
       activeLeft: 0,

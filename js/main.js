@@ -30,6 +30,16 @@ window.Game = window.Game || {};
   let hooks = [];
   let currentLayoutWalls = [];
 
+  // incrementado a cada startOnline/resumeOnline — cada loop guarda o valor
+  // que estava vigente quando ele nasceu e para sozinho se um mais novo
+  // assumir (ver `loop()` dentro de startOnline). Existe pra reconexão
+  // automática (menu.js): quando a rede cai e reconecta sozinha no meio de
+  // uma partida, o servidor manda matchResume de novo, chamando startOnline
+  // uma 2ª vez — sem isso, o loop antigo (cego pra rede caída, mas não
+  // travado) continuava rodando em paralelo, consumindo input junto com o
+  // novo.
+  let onlineSessionId = 0;
+
   // ---------- mundo (mapa + objetivos + portas + esconderijos + portões + ganchos), compartilhado entre solo e online ----------
   function buildWorld(objectiveCount, layoutIndex){
     arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .door, .pallet, .window, .hideout-spot, .gate, .hook').forEach((n) => n.remove());
@@ -144,38 +154,37 @@ window.Game = window.Game || {};
     return lockedDoorWalls.length ? currentLayoutWalls.concat(lockedDoorWalls) : currentLayoutWalls;
   }
 
-  function nearestDoor(pos, maxDist){
+  // helper genérico pro padrão repetido "o item mais próximo de pos, dentro
+  // de um raio máximo (padrão infinito), que passa num filtro opcional" —
+  // usado por toda a família nearestX abaixo (porta, pallet, esconderijo,
+  // gancho, gerador, portão). getPos extrai a posição de cada item porque
+  // cada lista guarda isso num lugar diferente (d.center, o.state.pos, etc).
+  function nearestBy(list, pos, getPos, { maxDist = Infinity, filter } = {}){
     let best = null, bestDist = Infinity;
-    doors.forEach((d) => {
-      const dist = Math.hypot(pos.x - d.center.x, pos.y - d.center.y);
-      if (dist <= maxDist && dist < bestDist){ best = d; bestDist = dist; }
+    list.forEach((item) => {
+      if (filter && !filter(item)) return;
+      const p = getPos(item);
+      const dist = Math.hypot(pos.x - p.x, pos.y - p.y);
+      if (dist <= maxDist && dist < bestDist){ best = item; bestDist = dist; }
     });
     return best;
+  }
+
+  function nearestDoor(pos, maxDist){
+    return nearestBy(doors, pos, (d) => d.center, { maxDist });
   }
 
   // pallet mais perto ainda "em pé" (só esses contam pra derrubar — um já
   // caído ou quebrado não é candidato de novo)
   function nearestPallet(pos, maxDist){
-    let best = null, bestDist = Infinity;
-    pallets.forEach((p) => {
-      if (p.state.dropped || p.state.broken) return;
-      const dist = Math.hypot(pos.x - p.center.x, pos.y - p.center.y);
-      if (dist <= maxDist && dist < bestDist){ best = p; bestDist = dist; }
-    });
-    return best;
+    return nearestBy(pallets, pos, (p) => p.center, { maxDist, filter: (p) => !p.state.dropped && !p.state.broken });
   }
 
   // gerador mais perto que ainda pode ser engajado (não terminado, fora do
   // alcance não conta) — usado pelo botão de ação pra entrar no modo de
   // reparo (engage()), última prioridade da cadeia de ações do Sobrevivente.
   function nearestEngageableObjective(pos){
-    let best = null, bestDist = Infinity;
-    objectives.forEach((o) => {
-      if (!o.canEngage(pos)) return;
-      const dist = Math.hypot(pos.x - o.state.pos.x, pos.y - o.state.pos.y);
-      if (dist < bestDist){ best = o; bestDist = dist; }
-    });
-    return best;
+    return nearestBy(objectives, pos, (o) => o.state.pos, { filter: (o) => o.canEngage(pos) });
   }
 
   // janela: nunca bloqueia ninguém, só muda a velocidade de quem está perto
@@ -189,12 +198,7 @@ window.Game = window.Game || {};
   }
 
   function nearestHideoutSpot(pos, maxDist){
-    let best = null, bestDist = Infinity;
-    MAP.hideoutSpots.forEach((spot) => {
-      const dist = Math.hypot(pos.x - spot.x, pos.y - spot.y);
-      if (dist <= maxDist && dist < bestDist){ best = spot; bestDist = dist; }
-    });
-    return best;
+    return nearestBy(MAP.hideoutSpots, pos, (spot) => spot, { maxDist });
   }
 
   // true se pos está perto o bastante de um portão JÁ ABERTO pra escapar
@@ -206,13 +210,7 @@ window.Game = window.Game || {};
   // gancho livre mais perto, dentro do alcance — um gancho já ocupado não
   // conta (só 1 corpo por gancho de cada vez)
   function nearestFreeHook(pos, maxDist){
-    let best = null, bestDist = Infinity;
-    hooks.forEach((h) => {
-      if (h.occupiedBy) return;
-      const dist = Math.hypot(pos.x - h.pos.x, pos.y - h.pos.y);
-      if (dist <= maxDist && dist < bestDist){ best = h; bestDist = dist; }
-    });
-    return best;
+    return nearestBy(hooks, pos, (h) => h.pos, { maxDist, filter: (h) => !h.occupiedBy });
   }
 
   function setHookOccupied(hook, entryOrId){
@@ -364,174 +362,12 @@ window.Game = window.Game || {};
     dangerVignetteEl.style.setProperty('--danger', (proximity * proximity).toFixed(2));
   }
 
-  // ---------- câmera ----------
-  // Em vez de encolher o mapa inteiro pra caber na tela (ficava minúsculo
-  // no celular), a câmera segue o personagem local com um zoom fixo — o
-  // mapa é maior que a tela de propósito, só uma janela ao redor do
-  // personagem fica visível (dá pra sobrar um "spotlight" de #lighting
-  // por cima, ver updateCamera).
-  const CAMERA_ZOOM_DESKTOP = 1.3;
-  const CAMERA_ZOOM_MOBILE = 1.7;
-
-  function currentZoom(){
-    return Game.Input.isTouchDevice ? CAMERA_ZOOM_MOBILE : CAMERA_ZOOM_DESKTOP;
-  }
-
-  // revealAll: true só quando o Assassino local está com Sentido ativo no
-  // modo online — some com a escuridão por completo enquanto durar (a
-  // habilidade promete "revela através das paredes", então a própria
-  // sobreposição de escuridão precisa sumir, senão o Sobrevivente continua
-  // pintado de preto por cima mesmo já estando "visível" na lógica do jogo)
-  function updateCamera(followPos, revealAll){
-    const zoom = currentZoom();
-    const viewW = window.innerWidth;
-    const viewH = window.innerHeight;
-    const halfW = viewW / zoom / 2;
-    const halfH = viewH / zoom / 2;
-
-    const camX = MAP.width > halfW * 2
-      ? Math.max(halfW, Math.min(MAP.width - halfW, followPos.x))
-      : MAP.width / 2;
-    const camY = MAP.height > halfH * 2
-      ? Math.max(halfH, Math.min(MAP.height - halfH, followPos.y))
-      : MAP.height / 2;
-
-    const offsetX = viewW / 2 - camX * zoom;
-    const offsetY = viewH / 2 - camY * zoom;
-    arena.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
-
-    const screenX = offsetX + followPos.x * zoom;
-    const screenY = offsetY + followPos.y * zoom;
-    drawLighting(followPos, screenX, screenY, offsetX, offsetY, zoom, revealAll);
-  }
-
-  // ---------- iluminação por linha de visão (paredes bloqueiam a luz) ----------
-  // Polígono de visibilidade calculado por raycasting em espaço de tela:
-  // um raio pra cada canto de parede (± uma fração de grau, pra pegar a
-  // sombra "colada" na quina) mais um leque de raios uniformes pra manter a
-  // borda arredondada onde não tem parede nenhuma por perto. Cada raio para
-  // na primeira parede que encontrar (ou no raio máximo de visão).
-  function wallSegmentsScreen(walls, offsetX, offsetY, zoom){
-    const segs = [];
-    walls.forEach((w) => {
-      const x1 = offsetX + w.x * zoom, y1 = offsetY + w.y * zoom;
-      const x2 = offsetX + (w.x + w.w) * zoom, y2 = offsetY + (w.y + w.h) * zoom;
-      segs.push({ x1, y1, x2, y2: y1 });
-      segs.push({ x1: x2, y1, x2, y2 });
-      segs.push({ x1: x2, y1: y2, x2: x1, y2 });
-      segs.push({ x1, y1: y2, x2: x1, y2: y1 });
-    });
-    return segs;
-  }
-
-  function raySegmentT(ox, oy, dx, dy, seg){
-    const sx = seg.x2 - seg.x1, sy = seg.y2 - seg.y1;
-    const denom = dx * sy - dy * sx;
-    if (Math.abs(denom) < 1e-10) return null;
-    const t = ((seg.x1 - ox) * sy - (seg.y1 - oy) * sx) / denom;
-    const u = ((seg.x1 - ox) * dy - (seg.y1 - oy) * dx) / denom;
-    if (t >= 0 && u >= 0 && u <= 1) return t;
-    return null;
-  }
-
-  function visibilityPolygon(originX, originY, segments, maxRadius){
-    const EPS = 0.00005;
-    const angles = new Set();
-    const RAYS = 60;
-    for (let i = 0; i < RAYS; i++) angles.add((i / RAYS) * Math.PI * 2);
-    segments.forEach((seg) => {
-      [[seg.x1, seg.y1], [seg.x2, seg.y2]].forEach(([px, py]) => {
-        const a = Math.atan2(py - originY, px - originX);
-        angles.add(a - EPS); angles.add(a); angles.add(a + EPS);
-      });
-    });
-
-    const points = [...angles].map((angle) => {
-      const dx = Math.cos(angle), dy = Math.sin(angle);
-      let minT = maxRadius;
-      segments.forEach((seg) => {
-        const t = raySegmentT(originX, originY, dx, dy, seg);
-        if (t !== null && t < minT) minT = t;
-      });
-      return { x: originX + dx * minT, y: originY + dy * minT, angle };
-    });
-    points.sort((a, b) => a.angle - b.angle);
-    return points;
-  }
-
-  let lightingCanvasW = 0, lightingCanvasH = 0;
-  const lightingCtx = lightingEl.getContext ? lightingEl.getContext('2d') : null;
-
-  function drawLighting(followWorldPos, followScreenX, followScreenY, offsetX, offsetY, zoom, revealAll){
-    if (!lightingCtx) return; // navegador sem canvas: fica sem o efeito, sem quebrar o jogo
-    const w = window.innerWidth, h = window.innerHeight;
-    if (w !== lightingCanvasW || h !== lightingCanvasH){
-      lightingEl.width = w; lightingEl.height = h;
-      lightingCanvasW = w; lightingCanvasH = h;
-    }
-    const ctx = lightingCtx;
-    // Sentido ativo: a escuridão em si precisa sumir, senão o Sobrevivente
-    // continua "revelado através da parede" só na lógica do jogo (ver
-    // updateKillerVision), mas visualmente pintado de preto por cima —
-    // exatamente o bug relatado ("aperto Sentido mas não vejo nada mudar")
-    if (revealAll){
-      ctx.clearRect(0, 0, w, h);
-      return;
-    }
-    const zoomPx = Game.CONFIG.visionRadius * zoom;
-    const maxRadius = zoomPx + 220;
-
-    // otimização: só considera paredes que realmente podem tocar o raio
-    // máximo de visão — evita gastar tempo com paredes do outro lado do
-    // mapa (importante com mapas grandes/muitas salas) e deixa a
-    // iluminação mais leve em celulares fracos
-    const maxRadiusWorld = maxRadius / zoom;
-    const nearbyWalls = visionBlockingWalls().filter((wl) => {
-      const cx = Math.max(wl.x, Math.min(followWorldPos.x, wl.x + wl.w));
-      const cy = Math.max(wl.y, Math.min(followWorldPos.y, wl.y + wl.h));
-      return Math.hypot(followWorldPos.x - cx, followWorldPos.y - cy) <= maxRadiusWorld;
-    });
-
-    const segs = wallSegmentsScreen(nearbyWalls, offsetX, offsetY, zoom);
-    const poly = visibilityPolygon(followScreenX, followScreenY, segs, maxRadius);
-
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(4,3,6,0.98)';
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.save();
-    ctx.beginPath();
-    poly.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
-    ctx.closePath();
-    ctx.clip();
-
-    ctx.globalCompositeOperation = 'destination-out';
-    const grad = ctx.createRadialGradient(followScreenX, followScreenY, 0, followScreenX, followScreenY, zoomPx + 60);
-    grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(Math.min(1, zoomPx / (zoomPx + 60)), 'rgba(255,255,255,0.9)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
-    // reforço de contorno nas paredes perto: a queda de luz do gradiente
-    // deixa a face da parede fraca demais bem na borda da visão, fazendo
-    // ela "sumir" junto com o cômodo escondido atrás — mesmo estando
-    // dentro do polígono visível. Isso aqui só reforça o traço da própria
-    // parede; como ainda está dentro do clip do polígono, o que sobrar do
-    // traço do lado de fora (atrás da parede, fora de visão) continua
-    // cortado — não revela o cômodo escondido, só deixa a parede em si
-    // legível.
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-    segs.forEach((seg) => {
-      ctx.beginPath();
-      ctx.moveTo(seg.x1, seg.y1);
-      ctx.lineTo(seg.x2, seg.y2);
-      ctx.stroke();
-    });
-
-    ctx.restore();
-  }
+  // ---------- câmera + iluminação ----------
+  // Extraído para js/lighting.js (Game.createLighting) — não tem nenhuma
+  // dependência de qual modo de jogo está rodando, só do personagem local e
+  // das paredes que bloqueiam visão naquele instante (visionBlockingWalls()
+  // abaixo, que É específico do mundo desta partida e continua aqui).
+  const lighting = Game.createLighting(arena, lightingEl);
 
   function beginMatchUi(){
     stage.style.display = 'flex';
@@ -617,7 +453,7 @@ window.Game = window.Game || {};
       const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
       const doneCount = updateObjectivesStatus();
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
-      Game.Menu.showResult(won, fullDetail, () => startSolo(name, abilityKey));
+      Game.Menu.showResult(won, fullDetail, () => startSolo(name, abilityKey), 'survivor');
     }
 
     function attemptKillerHit(){
@@ -633,6 +469,8 @@ window.Game = window.Game || {};
       if (!health.state.injured){
         Game.Audio.playAttackSwing();
         health.hit();
+        Game.Input.vibrate(120);
+        player.playHit();
         playerEl.classList.add('hit-flash');
         setTimeout(() => playerEl.classList.remove('hit-flash'), 200);
         return;
@@ -690,6 +528,7 @@ window.Game = window.Game || {};
           const speed = cfg.speed * cCfg.carrySpeedMultiplier;
           if (dist <= cCfg.hookRange){
             capture.hook(hook.pos);
+            Game.Input.vibrate(250);
             player.state.pos.x = hook.pos.x;
             player.state.pos.y = hook.pos.y - 10; // um pouco acima do poste, parece pendurado nele
             setHookOccupied(hook, 'ai-survivor');
@@ -868,6 +707,7 @@ window.Game = window.Game || {};
           // estiver perto o bastante pra ouvir
           if (result.justFailed){
             Game.Audio.playError();
+            Game.Input.vibrate([40, 40, 40]);
             emitNoiseSolo(engagedObjective.state.pos, killer.state.pos, Game.CONFIG.noise.skillCheckFailRadius, () => {
               distraction = { x: engagedObjective.state.pos.x, y: engagedObjective.state.pos.y, until: performance.now() + 3000 };
             });
@@ -952,7 +792,7 @@ window.Game = window.Game || {};
       Game.Input.setAbilityButtonsVisible(true, !!engagedObjective, 'X');
       updateKillerAI(delta);
       player.render();
-      updateCamera(player.state.pos);
+      lighting.update(player.state.pos, false, visionBlockingWalls());
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
@@ -1005,7 +845,7 @@ window.Game = window.Game || {};
       const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
       const doneCount = updateObjectivesStatus();
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
-      Game.Menu.showResult(won, fullDetail, () => startSoloAsKiller(name));
+      Game.Menu.showResult(won, fullDetail, () => startSoloAsKiller(name), 'killer');
     }
 
     function attemptKillerHit(){
@@ -1018,6 +858,7 @@ window.Game = window.Game || {};
       if (!aiHealth.state.injured){
         Game.Audio.playAttackSwing();
         aiHealth.hit();
+        survivor.playHit();
         survivorEl.classList.add('hit-flash');
         setTimeout(() => survivorEl.classList.remove('hit-flash'), 200);
         return;
@@ -1038,22 +879,11 @@ window.Game = window.Game || {};
     let aiNudgeDir = 1;
 
     function nearestIncompleteObjective(pos){
-      let best = null, bestDist = Infinity;
-      objectives.forEach((obj) => {
-        if (obj.state.done) return;
-        const dist = Math.hypot(pos.x - obj.state.pos.x, pos.y - obj.state.pos.y);
-        if (dist < bestDist){ best = obj; bestDist = dist; }
-      });
-      return best;
+      return nearestBy(objectives, pos, (o) => o.state.pos, { filter: (o) => !o.state.done });
     }
 
     function nearestGate(pos){
-      let best = null, bestDist = Infinity;
-      gates.forEach((g) => {
-        const dist = Math.hypot(pos.x - g.state.pos.x, pos.y - g.state.pos.y);
-        if (dist < bestDist){ best = g; bestDist = dist; }
-      });
-      return best;
+      return nearestBy(gates, pos, (g) => g.state.pos);
     }
 
     function updateSurvivorAI(delta){
@@ -1091,6 +921,20 @@ window.Game = window.Game || {};
         // não é pathfinding, só "pra longe dele"
         const len = distToKiller || 1;
         target = { x: survivor.state.pos.x + (dxKiller / len) * 400, y: survivor.state.pos.y + (dyKiller / len) * 400 };
+
+        // se tiver um pallet em pé bem perto enquanto foge, derruba —
+        // mesma ação que o Sobrevivente humano faria (nearestPallet +
+        // drop()), incluindo atordoar o Assassino se ele estava perto o
+        // bastante no instante da queda. Sem isso a IA nunca usava os
+        // pallets pra se defender, um dos loops de perseguição do jogo
+        // ficava incompleto quando o Assassino é o jogador humano.
+        const droppablePallet = nearestPallet(survivor.state.pos, Game.CONFIG.pallet.radius);
+        if (droppablePallet && droppablePallet.drop()){
+          Game.Audio.playError(); // feedback local pro jogador-Assassino: "o pallet caiu"
+          attemptPalletStun(droppablePallet, killer.state.pos, () => {
+            killer.state.stunnedUntil = performance.now() + Game.CONFIG.pallet.stunDuration * 1000;
+          });
+        }
       } else if (gatesActive){
         const g = nearestGate(survivor.state.pos);
         target = g ? g.state.pos : survivor.state.pos;
@@ -1248,7 +1092,7 @@ window.Game = window.Game || {};
 
       updateSurvivorAI(delta);
       killer.render();
-      updateCamera(killer.state.pos);
+      lighting.update(killer.state.pos, false, visionBlockingWalls());
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
@@ -1258,6 +1102,7 @@ window.Game = window.Game || {};
   // MODO ONLINE — N jogadores reais conectados via LAN ou P2P
   // =====================================================================
   function startOnline(net, localId, roster, mapLayoutIndex, resumeData){
+    const sessionId = ++onlineSessionId;
     panel.style.display = 'none';
     const survivors = roster.filter((p) => p.role === 'survivor');
     buildWorld(Game.CONFIG.generatorCount, mapLayoutIndex || 0);
@@ -1349,13 +1194,26 @@ window.Game = window.Game || {};
       const doneCount = updateObjectivesStatus();
       const aliveCount = activeSurvivors().length;
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length} · Sobreviventes restantes: ${aliveCount}/${survivors.length}`;
-      Game.Menu.showResult(localWon, fullDetail, null); // "jogar de novo" online volta pro lobby (ver menu.js)
+      Game.Menu.showResult(localWon, fullDetail, null, localEntry.info.role); // "jogar de novo" online volta pro lobby (ver menu.js)
     }
 
     // "ativos" = ainda em jogo (não eliminados nem já escaparam) — só esses
     // continuam sendo perseguidos/capturáveis
     function activeSurvivors(){
       return [...entries.values()].filter((e) => e.info.role === 'survivor' && !e.eliminated && !e.escaped);
+    }
+
+    // Sobrevivente já eliminado/escapado: em vez da câmera dele travar
+    // olhando pro próprio cadáver pelo resto da partida (o que acontecia
+    // antes — o loop continuava rodando, só sem mais input dele), passa a
+    // seguir quem ainda está em jogo, tipo o "modo fantasma" do jogo
+    // original. null quando quem está vendo ainda está ativo (câmera normal).
+    function spectatorFollowEntry(){
+      if (!isSurvivor || !(localEntry.eliminated || localEntry.escaped)) return null;
+      const alive = activeSurvivors().find((e) => e !== localEntry);
+      if (alive) return alive;
+      if (killerEntry && !killerEntry.eliminated) return killerEntry;
+      return null;
     }
 
     function checkWinFromObjectives(){
@@ -1417,6 +1275,8 @@ window.Game = window.Game || {};
         if (localEntry.health && !localEntry.health.state.injured){
           Game.Audio.playAttackSwing();
           localEntry.health.hit();
+          Game.Input.vibrate(120);
+          localEntry.char.playHit();
           localEntry.el.classList.add('hit-flash');
           setTimeout(() => localEntry.el.classList.remove('hit-flash'), 200);
           return;
@@ -1482,6 +1342,7 @@ window.Game = window.Game || {};
           // sou eu que fui pendurado — a partir daqui EU sou dono do
           // desfecho (hookPulse/timeout), igual downed/captureStart
           entry.capture.hook(hook.pos);
+          Game.Input.vibrate(250);
         } else {
           entry.capture.state.carried = false;
           entry.capture.state.hooked = true;
@@ -1651,6 +1512,10 @@ window.Game = window.Game || {};
 
     function loop(now){
       if (matchOver) return;
+      // uma sessão mais nova assumiu (reconexão automática no meio da
+      // partida chamou startOnline de novo) — essa aqui para sozinha, sem
+      // precisar de nenhum sinal explícito de "desliga"
+      if (sessionId !== onlineSessionId) return;
       const delta = (now - lastTime) / 1000;
       lastTime = now;
 
@@ -1731,6 +1596,7 @@ window.Game = window.Game || {};
             // entrega a posição pro Assassino (e marca o ponto pra
             // todo mundo, mesma técnica do ping de Distrair)
             if (result.justFailed){
+              Game.Input.vibrate([40, 40, 40]);
               emitNoiseOnline(net, engagedObjective.state.pos.x, engagedObjective.state.pos.y, { radius: Game.CONFIG.noise.skillCheckFailRadius, ping: 2.5 });
             }
           } else {
@@ -1869,7 +1735,8 @@ window.Game = window.Game || {};
       Game.Input.setAbilityButtonsVisible(true, isSurvivor ? !!engagedObjective : true, isSurvivor ? 'X' : 'Q');
       localEntry.char.render();
       const senseActive = !isSurvivor && localAbility1.state.activeLeft > 0;
-      updateCamera(localEntry.char.state.pos, senseActive);
+      const spectating = spectatorFollowEntry();
+      lighting.update(spectating ? spectating.char.state.pos : localEntry.char.state.pos, senseActive, visionBlockingWalls());
 
       if (now - lastStateSent > 70){
         lastStateSent = now;

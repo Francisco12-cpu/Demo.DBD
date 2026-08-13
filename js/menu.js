@@ -121,21 +121,34 @@ window.Game = window.Game || {};
   // ---------- progressão leve entre partidas (só contador local, sem perks) ----------
   const menuProgressEl = document.getElementById('menu-progress');
   const resultProgressEl = document.getElementById('result-progress');
+  // survivorEscapes/survivorSacrifices: quebra do won/lost só pra quando o
+  // papel local era Sobrevivente (won/played continuam contando os 2 papéis
+  // juntos, como sempre foi) — spread com STATS_DEFAULTS cobre quem já tinha
+  // dbd_stats salvo antes desses 2 campos existirem (senão viraria NaN).
+  const STATS_DEFAULTS = { played: 0, won: 0, survivorEscapes: 0, survivorSacrifices: 0 };
   function readStats(){
     try {
-      return JSON.parse(localStorage.getItem('dbd_stats')) || { played: 0, won: 0 };
-    } catch { return { played: 0, won: 0 }; }
+      return { ...STATS_DEFAULTS, ...(JSON.parse(localStorage.getItem('dbd_stats')) || {}) };
+    } catch { return { ...STATS_DEFAULTS }; }
   }
   function renderStats(){
     const stats = readStats();
-    const text = `Partidas jogadas: ${stats.played} · Vitórias: ${stats.won}`;
+    const text = `Partidas jogadas: ${stats.played} · Vitórias: ${stats.won} · `
+      + `Fugas: ${stats.survivorEscapes} · Sacrifícios: ${stats.survivorSacrifices}`;
     menuProgressEl.textContent = text;
     return text;
   }
-  function recordMatchResult(won){
+  // role: papel do jogador LOCAL nessa partida ('survivor'|'killer') — só
+  // usado pra alimentar o contador de fugas/sacrifícios, que só faz sentido
+  // pro lado Sobrevivente (o Assassino já tem won/played contando por ele)
+  function recordMatchResult(won, role){
     const stats = readStats();
     stats.played += 1;
     if (won) stats.won += 1;
+    if (role === 'survivor'){
+      if (won) stats.survivorEscapes += 1;
+      else stats.survivorSacrifices += 1;
+    }
     localStorage.setItem('dbd_stats', JSON.stringify(stats));
     resultProgressEl.textContent = renderStats();
   }
@@ -173,6 +186,33 @@ window.Game = window.Game || {};
   let lastServerErrorMessage = '';
   let hostingRoomCode = null;
 
+  // reconexão automática: queda de rede (não senha errada/sala cheia — essas
+  // vêm por onServerError/onError, guardadas por lastServerErrorAt, e não
+  // adianta tentar de novo com os mesmos dados errados) tenta reconectar
+  // sozinha algumas vezes antes de devolver o jogador pro formulário manual.
+  // O servidor já guarda o lugar de quem caiu no meio de uma partida por um
+  // tempo (RECONNECT_GRACE_MS em server.js/net-webrtc.js) via reconnectToken()
+  // — só faltava o cliente tentar reconectar sozinho nesse intervalo.
+  const RECONNECT_ATTEMPTS = 3;
+  const RECONNECT_DELAY_MS = 2000;
+  let reconnectAttemptsLeft = 0;
+  let lastConnectFn = null; // () => net — refaz a MESMA conexão (mesmos host/porta/senha ou código/senha)
+
+  function attemptAutoReconnect(errorTarget){
+    if (reconnectAttemptsLeft <= 0 || !lastConnectFn){
+      errorTarget.textContent = 'A conexão com a sala caiu.';
+      hostingRoomCode = null;
+      showScreen(errorTarget === p2pHostError || errorTarget === p2pJoinError ? 'p2pChoice' : 'join');
+      return;
+    }
+    const attemptNumber = RECONNECT_ATTEMPTS - reconnectAttemptsLeft + 1;
+    reconnectAttemptsLeft -= 1;
+    errorTarget.textContent = `Conexão caiu — tentando reconectar (${attemptNumber}/${RECONNECT_ATTEMPTS})...`;
+    setTimeout(() => {
+      if (lastConnectFn) net = lastConnectFn();
+    }, RECONNECT_DELAY_MS);
+  }
+
   function renderRoomCode(){
     if (!hostingRoomCode){
       lobbyRoomCode.style.display = 'none';
@@ -199,6 +239,7 @@ window.Game = window.Game || {};
       onJoined(id){
         localId = id;
         errorTarget.textContent = '';
+        reconnectAttemptsLeft = RECONNECT_ATTEMPTS; // conectou (de 1ª ou reconectando) — zera o contador pra próxima queda
         showScreen('lobby');
         renderRoomCode();
       },
@@ -218,21 +259,27 @@ window.Game = window.Game || {};
         errorTarget.textContent = message;
       },
       onClose(){
-        // erro recente (senha errada, sala cheia, kick etc.) — se ainda
-        // estamos no formulário de conexão, a mensagem já apareceu ali
-        // mesmo, sem precisar navegar de novo (senão pisca "conexão caiu"
-        // por cima). Se já tínhamos saído do formulário (ex: lobby,
-        // kickado pelo host), precisa navegar de volta — mas carregando a
-        // mensagem específica que já tínhamos (não a genérica), senão ela
-        // se perde no elemento de erro da tela antiga (lobbyError) que vai
-        // ficar escondida.
+        // erro recente (senha errada, sala cheia, kick etc.) — rejeição
+        // DELIBERADA do servidor, não adianta tentar reconectar sozinho
+        // (cairia no mesmo motivo de novo). Se ainda estamos no formulário
+        // de conexão, a mensagem já apareceu ali mesmo, sem precisar
+        // navegar de novo. Se já tínhamos saído do formulário (ex: lobby,
+        // kickado pelo host), navega de volta carregando a mensagem
+        // específica (não a genérica), senão ela se perde no elemento de
+        // erro da tela antiga (lobbyError) que vai ficar escondida.
+        //
+        // Sem erro recente = queda de rede de verdade — aí sim vale tentar
+        // reconectar sozinho (attemptAutoReconnect).
         const onConnectForm = screens.join.style.display === 'flex' || screens.p2pChoice.style.display === 'flex';
         const recentServerError = Date.now() - lastServerErrorAt < 1000;
         if (onConnectForm && recentServerError) return;
-        if (screens.result.style.display !== 'flex'){
-          errorTarget.textContent = recentServerError ? lastServerErrorMessage : 'A conexão com a sala caiu.';
+        if (screens.result.style.display === 'flex') return;
+        if (recentServerError){
+          errorTarget.textContent = lastServerErrorMessage;
           hostingRoomCode = null;
           showScreen(errorTarget === p2pHostError || errorTarget === p2pJoinError ? 'p2pChoice' : 'join');
+        } else {
+          attemptAutoReconnect(errorTarget);
         }
       },
       onMatchStart(players, mapLayoutIndex){
@@ -266,7 +313,9 @@ window.Game = window.Game || {};
     }
     joinError.textContent = 'Conectando...';
     hostingRoomCode = null;
-    net = Game.Net.connect({ host: hostIp, port, password, name: playerName(), token: reconnectToken() }, makeHandlers(joinError));
+    reconnectAttemptsLeft = RECONNECT_ATTEMPTS;
+    lastConnectFn = () => Game.Net.connect({ host: hostIp, port, password, name: playerName(), token: reconnectToken() }, makeHandlers(joinError));
+    net = lastConnectFn();
   });
 
   // ---------- P2P (WebRTC, celular vira host) ----------
@@ -294,7 +343,9 @@ window.Game = window.Game || {};
     }
     p2pJoinError.textContent = 'Conectando...';
     hostingRoomCode = null;
-    net = Game.NetWebRTC.join({ code, password: p2pJoinPassword.value, name: playerName(), token: reconnectToken() }, makeHandlers(p2pJoinError));
+    reconnectAttemptsLeft = RECONNECT_ATTEMPTS;
+    lastConnectFn = () => Game.NetWebRTC.join({ code, password: p2pJoinPassword.value, name: playerName(), token: reconnectToken() }, makeHandlers(p2pJoinError));
+    net = lastConnectFn();
   });
 
   // Se chegou aqui por um QR code (link com ?p2p=codigo), já abre direto
@@ -379,7 +430,7 @@ window.Game = window.Game || {};
   // em vez de recarregar a página.
   let playAgainSolo = null;
 
-  function showResult(won, detail, onPlayAgain){
+  function showResult(won, detail, onPlayAgain, role){
     playAgainSolo = onPlayAgain || null;
     Game.hideMatchUi();
     menu.style.display = 'flex';
@@ -387,7 +438,7 @@ window.Game = window.Game || {};
     resultTitle.textContent = won ? 'Vitória!' : 'Derrota';
     resultTitle.className = won ? 'won' : 'lost';
     resultDetail.textContent = detail || '';
-    recordMatchResult(won);
+    recordMatchResult(won, role);
   }
 
   resultAgain.addEventListener('click', () => {

@@ -13,6 +13,7 @@
 
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
+const { RESUMABLE_EVENT_KINDS } = require('../js/protocol.js');
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
 const PASSWORD = process.env.ROOM_PASSWORD || 'dbd123';
@@ -205,13 +206,13 @@ wss.on('connection', (ws) => {
       // O servidor só espia kind pra guardar o mínimo necessário pra
       // reconstituir o estado de quem reconectar no meio da partida.
       broadcast({ type: 'event', id, data: msg.data }, id);
-      if (msg.data && msg.data.kind === 'matchEnd'){
+      if (msg.data && msg.data.kind === RESUMABLE_EVENT_KINDS.MATCH_END){
         matchState = 'ended';
       }
-      if (msg.data && msg.data.kind === 'objectiveDone' && typeof msg.data.index === 'number'){
+      if (msg.data && msg.data.kind === RESUMABLE_EVENT_KINDS.OBJECTIVE_DONE && typeof msg.data.index === 'number'){
         completedObjectives.add(msg.data.index);
       }
-      if (msg.data && msg.data.kind === 'struggleResult' && msg.data.result === 'eliminated' && msg.data.playerId){
+      if (msg.data && msg.data.kind === RESUMABLE_EVENT_KINDS.STRUGGLE_RESULT && msg.data.result === 'eliminated' && msg.data.playerId){
         eliminatedIds.add(msg.data.playerId);
       }
       return;

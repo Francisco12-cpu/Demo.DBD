@@ -9,6 +9,13 @@ window.Game = window.Game || {};
   // cooldown/uso) — em troca não pode se mexer enquanto escondido, e é
   // obrigado a sair sozinho depois de `maxDuration` segundos.
   function createHideout(){
+    /**
+     * @typedef {Object} HideoutState
+     * @property {boolean} hidden
+     * @property {number} timeLeft - segundos até a saída forçada
+     * @property {number} hiddenFor - segundos escondido nesta entrada (reseta ao sair)
+     */
+    /** @type {HideoutState} */
     const state = { hidden: false, timeLeft: 0, hiddenFor: 0 };
     let nextNoiseAt = 0;
 

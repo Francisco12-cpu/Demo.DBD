@@ -1,0 +1,11 @@
+{
+  "name": "until-dawn",
+  "private": true,
+  "description": "Só pra dependência de teste (Playwright) — o jogo em si continua HTML/CSS/JS puro, sem build step.",
+  "scripts": {
+    "test": "node test/smoke-solo.mjs && node test/smoke-solo-killer.mjs && node test/smoke-online.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

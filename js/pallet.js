@@ -13,6 +13,14 @@ window.Game = window.Game || {};
   // propósito — o loop só vale a pena se custar tempo real de perseguição.
   function createPallet(rect, el){
     const center = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    /**
+     * @typedef {Object} PalletState
+     * @property {{x:number,y:number,w:number,h:number}} rect
+     * @property {boolean} dropped - derrubado vira parede de verdade (ver allWalls() em main.js)
+     * @property {boolean} broken - quebrado não bloqueia mais nada, só entulho visual
+     * @property {number} breakProgress - 0..1, canalização do Assassino
+     */
+    /** @type {PalletState} */
     const state = { rect, dropped: false, broken: false, breakProgress: 0 };
 
     function render(){

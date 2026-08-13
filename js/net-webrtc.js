@@ -170,11 +170,12 @@ window.Game = window.Game || {};
 
       if (msg.type === 'event'){
         broadcast({ type: 'event', id, data: msg.data }, id);
-        if (msg.data && msg.data.kind === 'matchEnd') matchState = 'ended';
-        if (msg.data && msg.data.kind === 'objectiveDone' && typeof msg.data.index === 'number'){
+        const kinds = Game.Protocol.RESUMABLE_EVENT_KINDS;
+        if (msg.data && msg.data.kind === kinds.MATCH_END) matchState = 'ended';
+        if (msg.data && msg.data.kind === kinds.OBJECTIVE_DONE && typeof msg.data.index === 'number'){
           completedObjectives.add(msg.data.index);
         }
-        if (msg.data && msg.data.kind === 'struggleResult' && msg.data.result === 'eliminated' && msg.data.playerId){
+        if (msg.data && msg.data.kind === kinds.STRUGGLE_RESULT && msg.data.result === 'eliminated' && msg.data.playerId){
           eliminatedIds.add(msg.data.playerId);
         }
         return;
@@ -290,7 +291,7 @@ window.Game = window.Game || {};
       sendState(data){ broadcast({ type: 'state', id: localId, data }); },
       sendEvent(data){
         broadcast({ type: 'event', id: localId, data });
-        if (data && data.kind === 'matchEnd') matchState = 'ended';
+        if (data && data.kind === Game.Protocol.RESUMABLE_EVENT_KINDS.MATCH_END) matchState = 'ended';
       },
       close(){ peer.destroy(); },
     };

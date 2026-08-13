@@ -22,6 +22,14 @@ window.Game = window.Game || {};
 
   function isDown(...codes){ return codes.some(c => keys[c]); }
 
+  // feedback tátil nos momentos de impacto (golpe recebido, skill check
+  // errado, pendurado no gancho) — navigator.vibrate só existe em Android
+  // (iOS Safari nunca implementou); a checagem evita erro nos outros
+  // navegadores, simplesmente não faz nada lá
+  function vibrate(pattern){
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  }
+
   // ---------- touch (joystick virtual + botões) ----------
   const isTouchDevice = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   const touchDir = { x: 0, y: 0 };
@@ -248,6 +256,7 @@ window.Game = window.Game || {};
     setAbilityButtonsVisible,
     setJoystickSensitivity,
     isTouchDevice,
+    vibrate,
     get gamepadConnected(){ return gamepadConnected; },
   };
 })();
