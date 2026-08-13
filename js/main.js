@@ -1091,6 +1091,20 @@ window.Game = window.Game || {};
         // não é pathfinding, só "pra longe dele"
         const len = distToKiller || 1;
         target = { x: survivor.state.pos.x + (dxKiller / len) * 400, y: survivor.state.pos.y + (dyKiller / len) * 400 };
+
+        // se tiver um pallet em pé bem perto enquanto foge, derruba —
+        // mesma ação que o Sobrevivente humano faria (nearestPallet +
+        // drop()), incluindo atordoar o Assassino se ele estava perto o
+        // bastante no instante da queda. Sem isso a IA nunca usava os
+        // pallets pra se defender, um dos loops de perseguição do jogo
+        // ficava incompleto quando o Assassino é o jogador humano.
+        const droppablePallet = nearestPallet(survivor.state.pos, Game.CONFIG.pallet.radius);
+        if (droppablePallet && droppablePallet.drop()){
+          Game.Audio.playError(); // feedback local pro jogador-Assassino: "o pallet caiu"
+          attemptPalletStun(droppablePallet, killer.state.pos, () => {
+            killer.state.stunnedUntil = performance.now() + Game.CONFIG.pallet.stunDuration * 1000;
+          });
+        }
       } else if (gatesActive){
         const g = nearestGate(survivor.state.pos);
         target = g ? g.state.pos : survivor.state.pos;
