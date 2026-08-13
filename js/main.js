@@ -633,6 +633,7 @@ window.Game = window.Game || {};
       if (!health.state.injured){
         Game.Audio.playAttackSwing();
         health.hit();
+        player.playHit();
         playerEl.classList.add('hit-flash');
         setTimeout(() => playerEl.classList.remove('hit-flash'), 200);
         return;
@@ -1018,6 +1019,7 @@ window.Game = window.Game || {};
       if (!aiHealth.state.injured){
         Game.Audio.playAttackSwing();
         aiHealth.hit();
+        survivor.playHit();
         survivorEl.classList.add('hit-flash');
         setTimeout(() => survivorEl.classList.remove('hit-flash'), 200);
         return;
@@ -1417,6 +1419,7 @@ window.Game = window.Game || {};
         if (localEntry.health && !localEntry.health.state.injured){
           Game.Audio.playAttackSwing();
           localEntry.health.hit();
+          localEntry.char.playHit();
           localEntry.el.classList.add('hit-flash');
           setTimeout(() => localEntry.el.classList.remove('hit-flash'), 200);
           return;
