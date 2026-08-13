@@ -13,6 +13,14 @@ window.Game = window.Game || {};
   // permanente, só custar um tempo da perseguição.
   function createDoor(rect, el){
     const center = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    /**
+     * @typedef {Object} DoorState
+     * @property {{x:number,y:number,w:number,h:number}} rect
+     * @property {boolean} locked - trancada vira parede de verdade (ver allWalls() em main.js)
+     * @property {number} lockProgress - 0..1, canalização do Sobrevivente
+     * @property {number} breakProgress - 0..1, canalização do Assassino
+     */
+    /** @type {DoorState} */
     const state = { rect, locked: false, lockProgress: 0, breakProgress: 0 };
 
     function render(){

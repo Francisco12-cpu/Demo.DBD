@@ -1,0 +1,43 @@
+name: Smoke tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependências de teste (raiz)
+        run: npm install
+
+      - name: Instalar dependências do servidor LAN
+        run: npm install
+        working-directory: server
+
+      - name: Baixar Chromium (Playwright)
+        run: npx playwright install --with-deps chromium
+
+      - name: Subir o jogo estático
+        run: npx http-server . -p 8941 -s &
+
+      - name: Esperar o servidor estático responder
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8941/index.html > /dev/null && exit 0
+            sleep 1
+          done
+          echo "servidor estático não respondeu a tempo" >&2
+          exit 1
+
+      - name: Rodar smoke tests
+        run: npm test

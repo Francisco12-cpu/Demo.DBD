@@ -23,6 +23,7 @@ window.Game = window.Game || {};
       canAttack: true,
       sprinting: false, // só Sobrevivente: usa a animação "sprint" (mais rápida) enquanto a habilidade Sprint está ativa
       stunnedUntil: 0,  // performance.now() — só Assassino: atordoado por um pallet derrubado perto dele
+      hitUntil: 0,      // performance.now() — só Sobrevivente: tocando a animação de dano (sprite.animations.hit)
     };
 
     let currentAnimName = null;
@@ -96,15 +97,27 @@ window.Game = window.Game || {};
       setTimeout(() => { state.canAttack = true; }, cfg.attackCooldown);
     }
 
+    // toca a animação de dano (sprite.animations.hit) pela duração real dela
+    // — chamado no exato frame em que o Assassino acerta o 1º golpe (ver
+    // health.hit() em js/main.js), separado do flash de brilho em CSS
+    // (.hit-flash), que continua existindo como reforço visual imediato
+    function playHit(){
+      const sprite = spriteConfig();
+      const anim = sprite.animations.hit;
+      if (!anim) return;
+      state.hitUntil = performance.now() + (anim.frames / anim.fps) * 1000;
+    }
+
     // qual animação deveria estar tocando agora, dado o estado atual —
     // downed/carried (js/capture.js) tem prioridade (imóvel, esperando
-    // gancho ou resgate), depois ataque, depois corrida (sprint se ativo),
-    // por último parado
+    // gancho ou resgate), depois dano recém-tomado, depois ataque, depois
+    // corrida (sprint se ativo), por último parado
     function pickAnimationName(sprite){
       const incapacitated = el.classList.contains('downed') || el.classList.contains('carried') || el.classList.contains('hooked');
       if (incapacitated && sprite.animations.downed){
         return 'downed';
       }
+      if (performance.now() < state.hitUntil && sprite.animations.hit) return 'hit';
       if (state.isAttacking && sprite.animations.attack) return 'attack';
       if (el.classList.contains('running')){
         if (state.sprinting && sprite.animations.sprint) return 'sprint';
@@ -138,7 +151,7 @@ window.Game = window.Game || {};
 
     return {
       state, characterConfig, setType, applyVisuals, setColorOverride,
-      setFacing, setMoving, setSprinting, tryAttack, render,
+      setFacing, setMoving, setSprinting, tryAttack, playHit, render,
     };
   }
 
