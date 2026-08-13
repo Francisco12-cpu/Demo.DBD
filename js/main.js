@@ -30,6 +30,16 @@ window.Game = window.Game || {};
   let hooks = [];
   let currentLayoutWalls = [];
 
+  // incrementado a cada startOnline/resumeOnline — cada loop guarda o valor
+  // que estava vigente quando ele nasceu e para sozinho se um mais novo
+  // assumir (ver `loop()` dentro de startOnline). Existe pra reconexão
+  // automática (menu.js): quando a rede cai e reconecta sozinha no meio de
+  // uma partida, o servidor manda matchResume de novo, chamando startOnline
+  // uma 2ª vez — sem isso, o loop antigo (cego pra rede caída, mas não
+  // travado) continuava rodando em paralelo, consumindo input junto com o
+  // novo.
+  let onlineSessionId = 0;
+
   // ---------- mundo (mapa + objetivos + portas + esconderijos + portões + ganchos), compartilhado entre solo e online ----------
   function buildWorld(objectiveCount, layoutIndex){
     arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .door, .pallet, .window, .hideout-spot, .gate, .hook').forEach((n) => n.remove());
@@ -1258,6 +1268,7 @@ window.Game = window.Game || {};
   // MODO ONLINE — N jogadores reais conectados via LAN ou P2P
   // =====================================================================
   function startOnline(net, localId, roster, mapLayoutIndex, resumeData){
+    const sessionId = ++onlineSessionId;
     panel.style.display = 'none';
     const survivors = roster.filter((p) => p.role === 'survivor');
     buildWorld(Game.CONFIG.generatorCount, mapLayoutIndex || 0);
@@ -1651,6 +1662,10 @@ window.Game = window.Game || {};
 
     function loop(now){
       if (matchOver) return;
+      // uma sessão mais nova assumiu (reconexão automática no meio da
+      // partida chamou startOnline de novo) — essa aqui para sozinha, sem
+      // precisar de nenhum sinal explícito de "desliga"
+      if (sessionId !== onlineSessionId) return;
       const delta = (now - lastTime) / 1000;
       lastTime = now;
 
