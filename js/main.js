@@ -459,6 +459,7 @@ window.Game = window.Game || {};
       if (!health.state.injured){
         Game.Audio.playAttackSwing();
         health.hit();
+        Game.Input.vibrate(120);
         player.playHit();
         playerEl.classList.add('hit-flash');
         setTimeout(() => playerEl.classList.remove('hit-flash'), 200);
@@ -517,6 +518,7 @@ window.Game = window.Game || {};
           const speed = cfg.speed * cCfg.carrySpeedMultiplier;
           if (dist <= cCfg.hookRange){
             capture.hook(hook.pos);
+            Game.Input.vibrate(250);
             player.state.pos.x = hook.pos.x;
             player.state.pos.y = hook.pos.y - 10; // um pouco acima do poste, parece pendurado nele
             setHookOccupied(hook, 'ai-survivor');
@@ -695,6 +697,7 @@ window.Game = window.Game || {};
           // estiver perto o bastante pra ouvir
           if (result.justFailed){
             Game.Audio.playError();
+            Game.Input.vibrate([40, 40, 40]);
             emitNoiseSolo(engagedObjective.state.pos, killer.state.pos, Game.CONFIG.noise.skillCheckFailRadius, () => {
               distraction = { x: engagedObjective.state.pos.x, y: engagedObjective.state.pos.y, until: performance.now() + 3000 };
             });
@@ -1247,6 +1250,7 @@ window.Game = window.Game || {};
         if (localEntry.health && !localEntry.health.state.injured){
           Game.Audio.playAttackSwing();
           localEntry.health.hit();
+          Game.Input.vibrate(120);
           localEntry.char.playHit();
           localEntry.el.classList.add('hit-flash');
           setTimeout(() => localEntry.el.classList.remove('hit-flash'), 200);
@@ -1313,6 +1317,7 @@ window.Game = window.Game || {};
           // sou eu que fui pendurado — a partir daqui EU sou dono do
           // desfecho (hookPulse/timeout), igual downed/captureStart
           entry.capture.hook(hook.pos);
+          Game.Input.vibrate(250);
         } else {
           entry.capture.state.carried = false;
           entry.capture.state.hooked = true;
@@ -1562,6 +1567,7 @@ window.Game = window.Game || {};
             // entrega a posição pro Assassino (e marca o ponto pra
             // todo mundo, mesma técnica do ping de Distrair)
             if (result.justFailed){
+              Game.Input.vibrate([40, 40, 40]);
               emitNoiseOnline(net, engagedObjective.state.pos.x, engagedObjective.state.pos.y, { radius: Game.CONFIG.noise.skillCheckFailRadius, ping: 2.5 });
             }
           } else {
