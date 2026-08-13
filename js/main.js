@@ -1175,6 +1175,19 @@ window.Game = window.Game || {};
       return [...entries.values()].filter((e) => e.info.role === 'survivor' && !e.eliminated && !e.escaped);
     }
 
+    // Sobrevivente já eliminado/escapado: em vez da câmera dele travar
+    // olhando pro próprio cadáver pelo resto da partida (o que acontecia
+    // antes — o loop continuava rodando, só sem mais input dele), passa a
+    // seguir quem ainda está em jogo, tipo o "modo fantasma" do jogo
+    // original. null quando quem está vendo ainda está ativo (câmera normal).
+    function spectatorFollowEntry(){
+      if (!isSurvivor || !(localEntry.eliminated || localEntry.escaped)) return null;
+      const alive = activeSurvivors().find((e) => e !== localEntry);
+      if (alive) return alive;
+      if (killerEntry && !killerEntry.eliminated) return killerEntry;
+      return null;
+    }
+
     function checkWinFromObjectives(){
       const done = updateObjectivesStatus();
       if (done >= objectives.length && !gatesActive){
@@ -1687,7 +1700,8 @@ window.Game = window.Game || {};
       Game.Input.setAbilityButtonsVisible(true, isSurvivor ? !!engagedObjective : true, isSurvivor ? 'X' : 'Q');
       localEntry.char.render();
       const senseActive = !isSurvivor && localAbility1.state.activeLeft > 0;
-      lighting.update(localEntry.char.state.pos, senseActive, visionBlockingWalls());
+      const spectating = spectatorFollowEntry();
+      lighting.update(spectating ? spectating.char.state.pos : localEntry.char.state.pos, senseActive, visionBlockingWalls());
 
       if (now - lastStateSent > 70){
         lastStateSent = now;
