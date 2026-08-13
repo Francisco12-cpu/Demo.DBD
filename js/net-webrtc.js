@@ -78,8 +78,15 @@ window.Game = window.Game || {};
       return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability }));
     }
 
+    // "host" = primeiro jogador ainda conectado (Map preserva ordem de
+    // inserção) — mesma técnica do server.js, sem eleição/config nenhuma
+    function hostId(){
+      const first = players.keys().next();
+      return first.done ? null : first.value;
+    }
+
     function broadcastLobby(){
-      broadcast({ type: 'lobby', matchState, players: rosterSnapshot() });
+      broadcast({ type: 'lobby', matchState, players: rosterSnapshot(), hostId: hostId() });
     }
 
     function killerCount(){ return [...players.values()].filter((p) => p.role === 'killer').length; }
@@ -182,6 +189,16 @@ window.Game = window.Game || {};
         broadcastLobby();
         return;
       }
+
+      if (msg.type === 'kick'){
+        // mesma regra do server.js: só o host, só antes da partida começar
+        if (id !== hostId() || matchState !== 'lobby') return;
+        const target = players.get(msg.targetId);
+        if (!target || target.id === id) return;
+        send(target.conn, { type: 'error', message: 'Você foi removido da sala pelo host.' });
+        if (target.conn) target.conn.close();
+        return;
+      }
     }
 
     function handleJoin(msg, conn){
@@ -270,6 +287,7 @@ window.Game = window.Game || {};
       chooseRole(role, ability){ processMessage(localId, { type: 'chooseRole', role, ability }, null); },
       startMatch(){ processMessage(localId, { type: 'startMatch' }, null); },
       rematch(){ processMessage(localId, { type: 'rematch' }, null); },
+      kick(targetId){ processMessage(localId, { type: 'kick', targetId }, null); },
       sendState(data){ broadcast({ type: 'state', id: localId, data }); },
       sendEvent(data){
         broadcast({ type: 'event', id: localId, data });
@@ -323,6 +341,7 @@ window.Game = window.Game || {};
       chooseRole(role, ability){ conn && conn.open && conn.send({ type: 'chooseRole', role, ability }); },
       startMatch(){ conn && conn.open && conn.send({ type: 'startMatch' }); },
       rematch(){ conn && conn.open && conn.send({ type: 'rematch' }); },
+      kick(targetId){ conn && conn.open && conn.send({ type: 'kick', targetId }); },
       sendState(data){ conn && conn.open && conn.send({ type: 'state', data }); },
       sendEvent(data){ conn && conn.open && conn.send({ type: 'event', data }); },
       close(){ conn && conn.close(); peer.destroy(); },
