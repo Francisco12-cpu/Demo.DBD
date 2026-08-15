@@ -259,6 +259,22 @@ Game.CONFIG = {
       cooldown: 10,
       speedMultiplier: 2.2,
     },
+    // 3ª habilidade do Assassino (slot 3/tecla R) — planta uma armadilha no
+    // chão que fica armada até algum Sobrevivente passar perto (sem
+    // expiração automática por tempo, só 1 ativa por vez: decisão
+    // consciente pra simplificar, o cooldown já limita o ritmo de reposição
+    // igual a um pallet quebrado). `duration` aqui não é "efeito ativo no
+    // Assassino" como nas outras habilidades — é reaproveitado por
+    // js/main.js como "armadilha ainda armada, sem contar cooldown" até
+    // disparar ou o Assassino plantar de novo.
+    killerTrap: {
+      label: 'Armadilha',
+      duration: 30,          // segundos armada no chão antes de poder plantar outra (se ninguém pisar)
+      cooldown: 12,           // segundos de cooldown depois que ela dispara (ou expira)
+      triggerRadius: 26,      // px — distância do Sobrevivente pra fisgar
+      snareDuration: 3,       // segundos preso/lento depois de pisar
+      snareSpeedMultiplier: 0.32,
+    },
     survivor: {
       sprint: {
         label: 'Sprint',

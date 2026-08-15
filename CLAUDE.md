@@ -200,11 +200,28 @@ sem sistema de jogo que os use.
   `triggerLocalSurvivorAbilitySlot` genéricos (solo e online) que
   qualquer uma das 4 habilidades pode ocupar em qualquer slot — sprint e
   camuflagem já checam os dois slots (`localAbilityKey`/`localAbilityKey2`).
-- Habilidades novas do Assassino: Armadilha (dispara por proximidade) e
-  Invisibilidade (oposto da Camuflagem) — nenhuma das duas existe ainda.
-  O 3º slot de input (R/touch3/gamepad3) já existe (ver item acima) e
-  está livre pro Assassino usar; falta só a mecânica de cada habilidade e
-  a tela de "escolher 1 de 2" no lobby/menu solo.
+- ~~Armadilha do Assassino~~ — **feito** (2026-08-15): 3ª habilidade fixa
+  do Assassino (slot 3/R), `Game.CONFIG.abilities.killerTrap`. Planta uma
+  armadilha na própria posição (`spawnTrapMarker` em `main.js`, visível
+  pros dois lados — decisão consciente de não ter stealth, igual ao resto
+  do jogo), fica armada até algum Sobrevivente chegar perto (cada cliente
+  de Sobrevivente decide por si, client-authoritative de sempre) ou até
+  `duration` (30s) passar sem ninguém pisar. Quem pisa fica "snared"
+  (`state.snaredUntil` em `character.js`, `.snared` no CSS,
+  `Game.CONFIG.abilities.killerTrap.snareSpeedMultiplier`) por
+  `snareDuration` (3s). Eventos novos no protocolo online: `trapPlaced`/
+  `trapSprung` — o `trapSprung` também força o cooldown da habilidade no
+  cliente do Assassino na hora (sem esperar os 30s de `duration`
+  terminarem sozinhos). Implementado em `startSoloAsKiller` (IA
+  Sobrevivente checa proximidade igual um jogador) e `startOnline`; **não**
+  em `startSolo` (Assassino IA não usa a 3ª habilidade, mesma decisão já
+  tomada pro Sentido). Ainda **fixa** (não há escolha 1-de-2 ainda — isso é
+  o próximo item, Invisibilidade).
+- Habilidade nova do Assassino: Invisibilidade (esconde o Assassino da
+  bússola/batimento/HUD do Sobrevivente, oposto da Camuflagem) — não
+  existe ainda. Depois dela existir, o slot 3 do Assassino vira uma escolha
+  1-de-2 (Armadilha ou Invisibilidade) no lobby/menu solo, mesmo padrão
+  que o Sobrevivente já usa pra escolher entre as 4 dele.
 - 2º estágio de gancho antes da morte definitiva — continua só 1 estágio,
   **simplificação consciente**, não necessariamente um bug a corrigir.
 - Mapa em pixel art de verdade (hoje é `div`/CSS gerado a partir de

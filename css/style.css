@@ -369,6 +369,25 @@ html,body{
   0%{ transform: scale(1); opacity:1; }
   100%{ transform: scale(3.2); opacity:0; }
 }
+/* Armadilha do Assassino (js/main.js, habilidade killerTrap) — visível
+   pros dois lados (decisão consciente: sem stealth, igual ao resto das
+   mecânicas do jogo, que são todas visíveis a olho nu) */
+.trap-marker{
+  position:absolute;
+  left:0; top:0;
+  width:20px; height:20px;
+  margin:-10px 0 0 -10px;
+  border-radius:4px;
+  background: rgba(122,31,43,.55);
+  border: 2px solid var(--killer);
+  box-shadow: 0 0 8px rgba(122,31,43,.7);
+  animation: trapPulse 1.6s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes trapPulse{
+  0%,100%{ opacity:.75; }
+  50%{ opacity:1; }
+}
 
 /* ---------- personagem ---------- */
 /* spritesheets em pixel art de verdade (assets/killer-sheet.png,
@@ -398,6 +417,10 @@ html,body{
 /* atordoado por pallet (js/pallet.js) — feedback visual simples, sem
    sprite/animação própria pro stun ainda */
 .char.stunned .torso{ filter: brightness(.45) saturate(0) blur(1px); }
+/* pisou na Armadilha do Assassino (js/main.js, habilidade killerTrap) —
+   mais lento por um tempo, mesmo esquema visual do stun mas sem apagar
+   a cor do Sobrevivente (hue-rotate por jogador continua visível) */
+.char.snared .torso{ filter: brightness(.7) contrast(1.3); }
 .char.eliminated{ opacity:.35; filter: grayscale(1); }
 /* derrubado/carregado (js/capture.js): a própria animação "downed" da
    spritesheet já mostra a pose caída — não precisa mais girar o elemento

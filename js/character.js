@@ -24,6 +24,7 @@ window.Game = window.Game || {};
       sprinting: false, // só Sobrevivente: usa a animação "sprint" (mais rápida) enquanto a habilidade Sprint está ativa
       stunnedUntil: 0,  // performance.now() — só Assassino: atordoado por um pallet derrubado perto dele
       hitUntil: 0,      // performance.now() — só Sobrevivente: tocando a animação de dano (sprite.animations.hit)
+      snaredUntil: 0,   // performance.now() — só Sobrevivente: pisou na Armadilha do Assassino, mais lento por um tempo
     };
 
     let currentAnimName = null;
@@ -146,6 +147,7 @@ window.Game = window.Game || {};
       el.style.left = state.pos.x + 'px';
       el.style.top = state.pos.y + 'px';
       el.classList.toggle('stunned', performance.now() < state.stunnedUntil);
+      el.classList.toggle('snared', performance.now() < state.snaredUntil);
       updateAnimationFrame(performance.now());
     }
 
