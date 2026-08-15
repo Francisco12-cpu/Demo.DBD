@@ -121,125 +121,85 @@ só a parte já mergeada precisa desse tratamento.
 
 ## Estado atual (resumo — ver README.md pra lista completa)
 
-Sistemas completos e testados: movimento (touch/teclado/gamepad), mapa com
-salas reais + colisão AABB, portas trancáveis/arrombáveis (automático por
-proximidade, sem botão), esconderijo com limite de tempo E barulho se ficar
-escondido demais, objetivos/geradores com skill check de dificuldade
-progressiva (errar não penaliza, só custa tempo), **sistema de captura em 3
-fases — derrubado → carregado → pendurado num gancho, com resgate por
-aliado** (cópia fiel do jogo original, ver README "Sistema de captura"),
-fase de portão de saída, iluminação por raycasting (paredes bloqueiam visão
-mas continuam visíveis), áudio 3D sintetizado, câmera seguindo o jogador,
-multiplayer LAN + P2P com reconexão, modo solo dos dois lados (jogar de
-Sobrevivente OU de Assassino, cada um contra uma IA simples do lado
-oposto), menu responsivo, PWA instalável, **sprite de pixel art autoral real
-pro Assassino e Sobrevivente** (spritesheets `assets/killer-sheet.png`/
-`survivor-sheet.png`, substituindo a silhueta CSS antiga — animações
-idle/run/sprint/attack, o `downed` da captura reaproveitado pras 3 fases
-derrubado/carregado/pendurado, hitbox de ataque com offset frontal
-espelhado por direção, cor dos 4 Sobreviventes por `hue-rotate`), **pallets
-e janelas** (`js/pallet.js`/`js/window.js` — loops de perseguição de
-verdade: pallet derruba/bloqueia/atordoa/quebra, janela deixa o
-Sobrevivente passar rápido e o Assassino devagar, ver README "Loops de
-perseguição"), **sistema de ruído com raio de audição real**
-(`emitNoiseOnline`/`emitNoiseSolo` em `js/main.js`, unifica o que antes
-eram 3 mecanismos duplicados — sprint e pallet quebrando agora fazem
-barulho de verdade), **áudio 3D corrigido** (o contexto agora reativa
-sozinho quando o navegador suspende no meio da partida, batimento sem
-atenuação dupla, frequência mais audível em alto-falante mono — ver README
-"Áudio" pro diagnóstico completo), aviso de gerador ativado agora também
-nos 2 modos solo (antes só existia no Online), **2 bugs de iluminação
-corrigidos** (pallet derrubado tampando a tela — a colisão dele não
-deveria contar pro raycasting de luz, só pra colisão física; e Sentido do
-Assassino sem efeito visível — o overlay de escuridão não sabia que a
-habilidade estava ativa e continuava pintando por cima do Sobrevivente
-"revelado" — ver README "Câmera e iluminação" pro diagnóstico completo de
-cada um), nome do jogo decidido pelo usuário: **"Until Dawn"**, **modo de
-reparo engajado nos geradores** (`js/objective.js` — novo estado
-`engaged`/`engage()`/`disengage()`; chegar perto de um gerador não
-progride mais nada sozinho, precisa apertar o botão de ação, e o
-Sobrevivente fica travado no lugar até sair pelo botão "X" — reaproveita
-o slot de habilidade 2/tecla Q, só aparece enquanto engajado — ou até
-sair do alcance, que desengaja sozinho; a IA Sobrevivente engaja/desengaja
-sozinha, sem conceito de botão; ver README "Objetivos e skill checks").
-Pedido pelo usuário como possível solução alternativa/complementar ao bug
-descrito abaixo — mudar "fica parado perto de gerador sozinho" pra uma
-ação explícita do jogador reduz a chance desse estado acontecer sem querer,
-mesmo que não seja a mesma causa raiz do joystick.
+**Atualizado em 2026-08-15** — esta seção estava defasada em ~11 PRs
+mergeados (#24 a #35); se você é uma sessão nova lendo isto, o resumo
+abaixo já reflete o código real (confirmado lendo os arquivos, não só
+commits).
 
-**Bug do Sobrevivente travado — 2ª rodada de correção, causa raiz mais bem
-delimitada** (`js/input.js`): não é a mecânica de "derrubado" (personagem
-continua com aparência normal, em pé). Acontece **no celular real**, no
-site publicado, **antes mesmo de chegar perto de um gerador** (confirmado
-pelo usuário depois do modo de reparo engajado — ver acima — já estar
-implementado: ele testou de novo e travou "ainda vindo de longe", ou seja,
-**não tem nada a ver com gerador**, é só coincidência de o jogador
-costumar estar andando na direção de um quando reparava antes). Também
-confirmado: só o movimento do próprio personagem trava, o resto do jogo
-(Assassino, outros botões) continua respondendo normal — não é um freeze
-de página, é especificamente o joystick virtual ficando preso.
+O loop completo já está pronto e testado há tempos: movimento (touch/
+teclado/gamepad), mapa com salas reais + colisão AABB, portas trancáveis/
+arrombáveis, esconderijo com limite de tempo e barulho, objetivos/geradores
+com skill check progressivo, **captura em 3 fases** (derrubado → carregado
+→ pendurado, resgate por aliado), portão de saída, iluminação por
+raycasting, áudio 3D sintetizado, câmera seguindo o jogador, sprites de
+pixel art autorais (Assassino/Sobrevivente), **pallets e janelas** (loops
+de perseguição de verdade), sistema de ruído com raio de audição real,
+multiplayer LAN + P2P com reconexão, modo solo dos dois lados, menu
+responsivo, PWA instalável. Nome do jogo decidido: **"Until Dawn"** (já
+propagado em todos os arquivos relevantes).
 
-A 1ª tentativa de correção (rede de segurança ouvindo `touchend`/
-`touchcancel` em qualquer lugar da página, `verifyActiveTouch`) **não
-resolveu** — o usuário reproduziu o mesmo travamento depois dela já estar
-publicada. Causa provável do porquê não resolveu: aquela rede de segurança
-só disparava se ALGUM outro evento de toque acontecesse em qualquer lugar
-da página depois do toque perdido — se o sistema operacional roubar o
-gesto inteiro (troca de app, gesto de navegação, notificação) sem nenhum
-toque subsequente em lugar nenhum, a rede de segurança nunca era acionada
-e o joystick ficava preso do mesmo jeito.
+Desde a última vez que este arquivo foi escrito, também entraram: **IA
+Sobrevivente (modo solo-como-Assassino) agora derruba pallet sozinha ao
+fugir** (`js/main.js`, mesmo caminho de código do jogador humano — a
+limitação antiga não existe mais), **modo fantasma/espectador**
+(`spectatorFollowEntry()` em `js/main.js` — ao ser eliminado/escapar, a
+câmera passa a seguir outro Sobrevivente vivo ou o Assassino em vez de
+travar a tela; cobre o item que estava em "Planos futuros"), **host pode
+kickar jogador antes da partida começar** (`server.js`, `net-webrtc.js`,
+`menu.js` — mas só kick; host ainda não pode *trocar* o papel de outro
+jogador, isso continua pendente), **reconexão automática ao cair a rede
+no modo online**, **animação `hit` (r7) do Sobrevivente já em uso de
+verdade** (`character.js` → `playHit()`, não é mais só o filtro CSS
+`hit-flash`), vibração (`navigator.vibrate`) em golpe/skill check
+errado/gancho, vinheta de perigo com borda pulsante (acessibilidade),
+JSDoc typedefs pro `state` das fábricas, câmera/iluminação extraídas pra
+`js/lighting.js`, os 3 `kind` de evento duplicados entre `server.js` e
+`net-webrtc.js` centralizados, CI rodando os smoke tests Playwright em
+todo PR, correção da trava permanente no modo de reparo engajado.
 
-**Corrigido (2ª tentativa)**: trocado Touch Events por **Pointer Events com
-`setPointerCapture`** no joystick virtual (`setupTouchControls` em
-`js/input.js`) — `pointerdown` chama `joystickBase.setPointerCapture(id)`,
-e o elemento escuta `pointerup`/`pointercancel`/`lostpointercapture`.
-`lostpointercapture` é a peça nova: o navegador garante que esse evento
-dispara nesse elemento sempre que a captura é perdida por QUALQUER motivo
-(incluindo interrupção do sistema operacional), sem depender de nenhum
-outro toque acontecer depois — é a garantia que a rede de segurança
-anterior não tinha. Testado via toque sintético (`CDP
-Input.dispatchTouchEvent`, incluindo um `touchCancel` sem `touchEnd`
-depois — o cenário exato que a 1ª correção não cobria) — solta e volta a
-responder normal em todos os casos testados, mas **ainda não confirmado
-num celular real** (a causa raiz é inerente a hardware/navegador mobile,
-impossível reproduzir 100% em teste automatizado) — pedir confirmação do
-usuário depois do deploy, de novo.
+**Bug do joystick preso no celular**: corrigido (2ª tentativa, trocado
+Touch Events por Pointer Events + `setPointerCapture`/`lostpointercapture`
+em `js/input.js`) e testado via toque sintético — se o usuário reportar
+recorrência num aparelho real, é o próximo lugar a olhar, mas trate como
+resolvido até haver relato em contrário.
 
 **Ainda em aberto sobre os sprites** (perguntar ao usuário antes de decidir
-sozinho): pose de "parado" dedicada do Sobrevivente — não foi confirmada
-nenhuma linha específica, hoje usa o quadro 0 do `run` como placeholder;
-linha r8 do Sobrevivente ("teste") — o usuário mencionou mas não ficou claro
-pra que serve; r2 do Sobrevivente (mini-animação de transição ao parar) —
-descrita como "seria legal" mas não implementada; `hit` do Sobrevivente
-(r7) já está no `Game.CONFIG.sprites` mas o flash de dano continua sendo o
-filtro CSS antigo, não foi trocado pro sprite. `vanish`/`fall` do Assassino
-(r6/r7) estão no config só reservados — não têm sistema de jogo (invisibilidade,
-cutscene de fuga) que os use ainda.
+sozinho — são só ganho estético, não bloqueiam nada): pose de "parado"
+dedicada do Sobrevivente (hoje reaproveita o quadro 0 do `run`); linha r8
+do Sobrevivente ("teste", propósito não esclarecido); r2 do Sobrevivente
+(mini-animação de transição ao parar, "seria legal" mas não pedida
+formalmente); `vanish`/`fall` do Assassino (r6/r7) reservados no config,
+sem sistema de jogo que os use.
 
-**Pendente/backlog** (ver `README.md` → "Planos futuros"): mapa em pixel
-art de verdade (hoje é CSS/canvas gerado — só os personagens ganharam arte
-autoral até agora; os pallets/janelas novos também são divs simples, sem
-arte própria ainda), protocolo de sala com host/dono controlando
-kick/papel, 2ª estágio de gancho antes da morte definitiva (hoje é só 1
-estágio, simplificação consciente), IA Sobrevivente (modo solo-como-
-Assassino) ainda não derruba pallets sozinha (limitação conhecida, ver
-README).
+**Pendente/backlog real** (auditado item a item em 2026-08-15 — ver
+`README.md` → "Planos futuros" pro texto original de cada um):
+- Estado "pronto" no lobby antes de iniciar partida — não existe ainda.
+- Host trocar/forçar o papel (Assassino/Sobrevivente) de outro jogador —
+  só o kick existe hoje.
+- Sobrevivente escolher 2 habilidades em vez de 1 — ainda é só 1 das 4.
+- Habilidades novas do Assassino: Armadilha (dispara por proximidade) e
+  Invisibilidade (oposto da Camuflagem) — nenhuma das duas existe; decisão
+  de design já proposta antes (escolher 1 de 2 no lobby, mesmo padrão do
+  Sobrevivente) mas não implementada.
+- 2º estágio de gancho antes da morte definitiva — continua só 1 estágio,
+  **simplificação consciente**, não necessariamente um bug a corrigir.
+- Mapa em pixel art de verdade (hoje é `div`/CSS gerado a partir de
+  retângulos, só os personagens têm arte autoral) e sistema de tileset
+  customizável (upload do próprio sprite) — ambos de escopo grande,
+  ficam pra depois dos itens acima.
+- Failover de host de verdade no P2P — descartado por complexidade e por
+  ser impossível de testar de ponta a ponta neste ambiente (sem saída de
+  rede pro broker WebRTC).
+- Modo "2 Assassinos" e multiplayer local (mesmo teclado/tela) — **fora de
+  escopo por pedido direto do usuário**, não é falta de tempo, não
+  reconsiderar sem perguntar de novo.
 
-**Nome do jogo: decidido — "Until Dawn"**. Já trocado em `index.html`
-(`<title>`, `<h1>`, `apple-mobile-web-app-title`, título do HUD),
-`manifest.json` (`name`/`short_name`), `server/server.js` (log de boot),
-`server/package.json` (description), `README.md` e `CLAUDE.md`. "Assassino
-vs Sobreviventes" continua usado como descrição mecânica do formato em
-alguns lugares (não é mais o nome do jogo). Ícone atual (`assets/icon-
-*.png`) continua servindo de base (usuário gostou), só refinar se pedido.
-
-**Ideias já discutidas mas propositalmente NÃO implementadas ainda**
-(usuário pediu só análise escrita, não construir): editor visual de
-partículas/som/mapa, executável de PC (Electron/Tauri — PWA já cobre a
-maior parte do caso de uso), comparação de features com o jogo original.
-Se o usuário mencionar essas ideias de novo, ele provavelmente já viu a
-análise anterior — perguntar se é pra continuar analisando ou já
-implementar algo específico.
+**Ideias já discutidas mas propositalmente NÃO implementadas** (usuário
+pediu só análise escrita, não construir): editor visual de partículas/som/
+mapa, executável de PC (Electron/Tauri — PWA já cobre a maior parte do
+caso de uso), comparação de features com o jogo original. Se o usuário
+mencionar de novo, ele provavelmente já viu a análise anterior — perguntar
+se é pra continuar analisando ou já implementar algo específico.
 
 ## Onde cada coisa mora
 
