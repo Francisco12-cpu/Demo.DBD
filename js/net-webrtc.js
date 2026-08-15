@@ -42,9 +42,9 @@ window.Game = window.Game || {};
     const peer = new Peer(roomCode, { debug: 0 });
     const MAX_SURVIVORS = Game.CONFIG.maxSurvivors;
 
-    /** @type {Map<string, {id:string, name:string, role:string|null, ability:string|null, conn: any}>} */
+    /** @type {Map<string, {id:string, name:string, role:string|null, ability:string|null, ability2:string|null, conn: any}>} */
     const players = new Map();
-    /** @type {Map<string, {id:string, name:string, role:string, ability:string, timer:number}>} */
+    /** @type {Map<string, {id:string, name:string, role:string, ability:string, ability2:string, timer:number}>} */
     const pendingReconnect = new Map();
     let matchState = 'lobby';
     let localId = null;
@@ -75,7 +75,7 @@ window.Game = window.Game || {};
     }
 
     function rosterSnapshot(){
-      return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability, ready: !!p.ready }));
+      return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability, ability2: p.ability2, ready: !!p.ready }));
     }
 
     // "host" = primeiro jogador ainda conectado (Map preserva ordem de
@@ -123,6 +123,8 @@ window.Game = window.Game || {};
         if (role !== p.role) p.ready = false; // trocar de papel desmarca "pronto" — o loadout mudou
         p.role = role;
         if (msg.ability) p.ability = msg.ability;
+        if (msg.ability2) p.ability2 = msg.ability2;
+        if (p.ability2 === p.ability) p.ability2 = null; // as 2 habilidades precisam ser diferentes
         broadcastLobby();
         return;
       }
@@ -248,7 +250,7 @@ window.Game = window.Game || {};
         pendingReconnect.delete(token);
         const id = pending.id;
         const playerName = String(msg.name || pending.name).slice(0, 16) || pending.name;
-        players.set(id, { id, name: playerName, role: pending.role, ability: pending.ability, conn, token });
+        players.set(id, { id, name: playerName, role: pending.role, ability: pending.ability, ability2: pending.ability2, conn, token });
         if (conn) conn.__playerId = id;
         send(conn, { type: 'joined', id });
         if (matchState === 'playing'){
@@ -272,7 +274,7 @@ window.Game = window.Game || {};
       }
       const id = conn ? conn.peer : localId;
       const playerName = String(msg.name || 'Jogador').slice(0, 16) || 'Jogador';
-      players.set(id, { id, name: playerName, role: null, ability: null, ready: false, conn, token });
+      players.set(id, { id, name: playerName, role: null, ability: null, ability2: null, ready: false, conn, token });
       if (conn) conn.__playerId = id;
       send(conn, { type: 'joined', id });
       broadcastLobby();
@@ -280,7 +282,7 @@ window.Game = window.Game || {};
 
     peer.on('open', (id) => {
       localId = id;
-      players.set(localId, { id: localId, name: name || 'Jogador', role: null, ability: null, ready: false, conn: null, token });
+      players.set(localId, { id: localId, name: name || 'Jogador', role: null, ability: null, ability2: null, ready: false, conn: null, token });
       handlers.onJoined && handlers.onJoined(localId);
       broadcastLobby();
     });
@@ -303,7 +305,7 @@ window.Game = window.Game || {};
 
         if (matchState === 'playing' && p.token){
           const timer = setTimeout(() => finalizeDeparture(pid), RECONNECT_GRACE_MS);
-          pendingReconnect.set(p.token, { id: pid, name: p.name, role: p.role, ability: p.ability, timer });
+          pendingReconnect.set(p.token, { id: pid, name: p.name, role: p.role, ability: p.ability, ability2: p.ability2, timer });
           return;
         }
         finalizeDeparture(pid);
@@ -316,7 +318,7 @@ window.Game = window.Game || {};
 
     return {
       roomCode,
-      chooseRole(role, ability){ processMessage(localId, { type: 'chooseRole', role, ability }, null); },
+      chooseRole(role, ability, ability2){ processMessage(localId, { type: 'chooseRole', role, ability, ability2 }, null); },
       toggleReady(){ processMessage(localId, { type: 'toggleReady' }, null); },
       startMatch(){ processMessage(localId, { type: 'startMatch' }, null); },
       rematch(){ processMessage(localId, { type: 'rematch' }, null); },
@@ -372,7 +374,7 @@ window.Game = window.Game || {};
     });
 
     return {
-      chooseRole(role, ability){ conn && conn.open && conn.send({ type: 'chooseRole', role, ability }); },
+      chooseRole(role, ability, ability2){ conn && conn.open && conn.send({ type: 'chooseRole', role, ability, ability2 }); },
       toggleReady(){ conn && conn.open && conn.send({ type: 'toggleReady' }); },
       startMatch(){ conn && conn.open && conn.send({ type: 'startMatch' }); },
       rematch(){ conn && conn.open && conn.send({ type: 'rematch' }); },

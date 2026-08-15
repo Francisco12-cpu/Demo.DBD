@@ -7,7 +7,8 @@ window.Game = window.Game || {};
   const keys = {};
   let spaceRequested = false;
   let ability1Requested = false; // KeyE
-  let ability2Requested = false; // KeyQ (só o Assassino usa as duas)
+  let ability2Requested = false; // KeyQ (Investida do Assassino; pro Sobrevivente só faz algo enquanto engajado num gerador)
+  let ability3Requested = false; // KeyR (3º slot — 2ª habilidade do Sobrevivente / 3ª do Assassino)
 
   window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
@@ -17,6 +18,7 @@ window.Game = window.Game || {};
     }
     if (e.code === 'KeyE') ability1Requested = true;
     if (e.code === 'KeyQ') ability2Requested = true;
+    if (e.code === 'KeyR') ability3Requested = true;
   });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
@@ -36,6 +38,7 @@ window.Game = window.Game || {};
   let touchAttackRequested = false;
   let touchAbility1Requested = false;
   let touchAbility2Requested = false;
+  let touchAbility3Requested = false;
   // sensibilidade do joystick virtual (1 = padrão) — configurável no menu
   // de opções; maior = alcança velocidade máxima com um arrasto menor
   let joystickSensitivity = 1;
@@ -50,6 +53,7 @@ window.Game = window.Game || {};
     const attackBtn = document.getElementById('touch-attack');
     const ability1Btn = document.getElementById('touch-ability1');
     const ability2Btn = document.getElementById('touch-ability2');
+    const ability3Btn = document.getElementById('touch-ability3');
     if (!controls || !joystickBase || !attackBtn) return;
 
     controls.style.display = 'flex';
@@ -130,35 +134,46 @@ window.Game = window.Game || {};
         touchAbility2Requested = true;
       }, { passive: false });
     }
+    if (ability3Btn){
+      ability3Btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        touchAbility3Requested = true;
+      }, { passive: false });
+    }
   }
 
-  // label2: texto do botão de habilidade 2 — "Q" pro dash do Assassino,
-  // "X" quando o Sobrevivente reaproveita o mesmo botão pra sair do modo
-  // de reparo do gerador. Omitir mantém o texto atual.
-  function setAbilityButtonsVisible(show1, show2, label2){
+  // label2/label3: texto dos botões de habilidade 2/3 — "Q" pro dash do
+  // Assassino, "X" quando o Sobrevivente reaproveita o botão 2 pra sair do
+  // modo de reparo do gerador. Omitir mantém o texto atual.
+  function setAbilityButtonsVisible(show1, show2, label2, show3, label3){
     const ability1Btn = document.getElementById('touch-ability1');
     const ability2Btn = document.getElementById('touch-ability2');
+    const ability3Btn = document.getElementById('touch-ability3');
     if (ability1Btn) ability1Btn.style.display = show1 ? '' : 'none';
     if (ability2Btn){
       ability2Btn.style.display = show2 ? '' : 'none';
       if (label2) ability2Btn.textContent = label2;
     }
+    if (ability3Btn){
+      ability3Btn.style.display = show3 ? '' : 'none';
+      if (label3) ability3Btn.textContent = label3;
+    }
   }
 
   // ---------- gamepad ----------
-  let gamepadState = { x: 0, y: 0, attack: false, ability1: false, ability2: false };
+  let gamepadState = { x: 0, y: 0, attack: false, ability1: false, ability2: false, ability3: false };
   let gamepadConnected = false;
 
-  // nomes dos botões variam por fabricante — Xbox chama de A/X/Y, PlayStation
-  // de X/Quadrado/Triângulo. `pad.id` geralmente entrega uma pista (padrão
-  // do navegador: "<nome> (Vendor: 054c ...)" pra Sony, "Xbox" no nome pra
-  // Microsoft) — heurística simples só pra deixar a dica mais clara.
+  // nomes dos botões variam por fabricante — Xbox chama de A/X/Y/B, PlayStation
+  // de X/Quadrado/Triângulo/Círculo. `pad.id` geralmente entrega uma pista
+  // (padrão do navegador: "<nome> (Vendor: 054c ...)" pra Sony, "Xbox" no
+  // nome pra Microsoft) — heurística simples só pra deixar a dica mais clara.
   function buttonLabelsFor(pad){
     const id = (pad && pad.id || '').toLowerCase();
     if (id.includes('054c') || id.includes('playstation') || id.includes('dualshock') || id.includes('dualsense')){
-      return { attack: 'X', ability1: 'Quadrado', ability2: 'Triângulo' };
+      return { attack: 'X', ability1: 'Quadrado', ability2: 'Triângulo', ability3: 'Círculo' };
     }
-    return { attack: 'A', ability1: 'X', ability2: 'Y' };
+    return { attack: 'A', ability1: 'X', ability2: 'Y', ability3: 'B' };
   }
 
   function showGamepadToast(text, holdMs){
@@ -173,7 +188,7 @@ window.Game = window.Game || {};
   window.addEventListener('gamepadconnected', (e) => {
     gamepadConnected = true;
     const labels = buttonLabelsFor(e.gamepad);
-    showGamepadToast(`🎮 Controle conectado — ${labels.attack} interage/ataca · ${labels.ability1} habilidade 1 · ${labels.ability2} habilidade 2`, 4500);
+    showGamepadToast(`🎮 Controle conectado — ${labels.attack} interage/ataca · ${labels.ability1} habilidade 1 · ${labels.ability2} habilidade 2 · ${labels.ability3} habilidade 3`, 4500);
   });
   window.addEventListener('gamepaddisconnected', () => {
     gamepadConnected = false;
@@ -189,12 +204,13 @@ window.Game = window.Game || {};
       const attack = !!(pad.buttons[0] && pad.buttons[0].pressed);
       const ability1 = !!(pad.buttons[1] && pad.buttons[1].pressed);
       const ability2 = !!(pad.buttons[2] && pad.buttons[2].pressed);
-      if (Math.abs(dx) > 0.15 || Math.abs(dy) > 0.15 || attack || ability1 || ability2){
-        gamepadState = { x: dx, y: dy, attack, ability1, ability2 };
+      const ability3 = !!(pad.buttons[3] && pad.buttons[3].pressed);
+      if (Math.abs(dx) > 0.15 || Math.abs(dy) > 0.15 || attack || ability1 || ability2 || ability3){
+        gamepadState = { x: dx, y: dy, attack, ability1, ability2, ability3 };
         return;
       }
     }
-    gamepadState = { x: 0, y: 0, attack: false, ability1: false, ability2: false };
+    gamepadState = { x: 0, y: 0, attack: false, ability1: false, ability2: false, ability3: false };
   }
 
   // ---------- API pública ----------
@@ -246,6 +262,14 @@ window.Game = window.Game || {};
     return requested;
   }
 
+  function consumeAbility3Request(){
+    let requested = false;
+    if (ability3Requested){ requested = true; ability3Requested = false; }
+    if (touchAbility3Requested){ requested = true; touchAbility3Requested = false; }
+    if (gamepadState.ability3) requested = true;
+    return requested;
+  }
+
   Game.Input = {
     init: setupTouchControls,
     update,
@@ -253,6 +277,7 @@ window.Game = window.Game || {};
     consumeAttackRequest,
     consumeAbility1Request,
     consumeAbility2Request,
+    consumeAbility3Request,
     setAbilityButtonsVisible,
     setJoystickSensitivity,
     isTouchDevice,

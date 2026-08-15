@@ -40,10 +40,16 @@
     <label>Seu nome
       <input id="menu-name" type="text" maxlength="16" placeholder="Jogador">
     </label>
-    <label>Se for jogar de Sobrevivente, escolha sua habilidade
+    <label>Se for jogar de Sobrevivente, escolha suas 2 habilidades
       <select id="menu-ability">
         <option value="sprint">Sprint — corrida temporária</option>
         <option value="camouflage">Camuflagem — some do Sentido do Assassino</option>
+        <option value="barricade">Trancar porta — tranca na hora a porta mais perto (2 usos)</option>
+        <option value="distract">Distrair — chama atenção pra um ponto falso</option>
+      </select>
+      <select id="menu-ability2">
+        <option value="sprint">Sprint — corrida temporária</option>
+        <option value="camouflage" selected>Camuflagem — some do Sentido do Assassino</option>
         <option value="barricade">Trancar porta — tranca na hora a porta mais perto (2 usos)</option>
         <option value="distract">Distrair — chama atenção pra um ponto falso</option>
       </select>
@@ -109,10 +115,16 @@
       <button id="lobby-be-killer" type="button">Ser Assassino</button>
       <button id="lobby-be-survivor" type="button">Ser Sobrevivente</button>
     </div>
-    <label id="lobby-ability-row" style="display:none">Habilidade
+    <label id="lobby-ability-row" style="display:none">Habilidades (2)
       <select id="lobby-ability">
         <option value="sprint">Sprint — corrida temporária</option>
         <option value="camouflage">Camuflagem — some do Sentido do Assassino</option>
+        <option value="barricade">Trancar porta — tranca na hora a porta mais perto (2 usos)</option>
+        <option value="distract">Distrair — chama atenção pra um ponto falso</option>
+      </select>
+      <select id="lobby-ability2">
+        <option value="sprint">Sprint — corrida temporária</option>
+        <option value="camouflage" selected>Camuflagem — some do Sentido do Assassino</option>
         <option value="barricade">Trancar porta — tranca na hora a porta mais perto (2 usos)</option>
         <option value="distract">Distrair — chama atenção pra um ponto falso</option>
       </select>
@@ -181,6 +193,7 @@
     <div id="touch-joystick-stick"></div>
   </div>
   <div id="touch-abilities">
+    <button id="touch-ability3" type="button" style="display:none">R</button>
     <button id="touch-ability2" type="button" style="display:none">Q</button>
     <button id="touch-ability1" type="button" style="display:none">E</button>
   </div>

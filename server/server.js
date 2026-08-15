@@ -28,11 +28,11 @@ console.log(`Porta: ${PORT}`);
 console.log(`Senha: ${PASSWORD}`);
 console.log('Os outros jogadores entram pelo navegador usando o IP desta máquina na rede local, essa porta e essa senha.');
 
-/** @type {Map<string, {id:string, ws:import('ws').WebSocket, name:string, role:'killer'|'survivor'|null, ability:string|null, ready:boolean, token:string}>} */
+/** @type {Map<string, {id:string, ws:import('ws').WebSocket, name:string, role:'killer'|'survivor'|null, ability:string|null, ability2:string|null, ready:boolean, token:string}>} */
 const players = new Map();
 // jogador que caiu no meio de uma partida em andamento — guardado aqui por
 // RECONNECT_GRACE_MS esperando o mesmo token voltar antes de desistir dele
-/** @type {Map<string, {id:string, name:string, role:string, ability:string, timer:NodeJS.Timeout}>} */
+/** @type {Map<string, {id:string, name:string, role:string, ability:string, ability2:string, timer:NodeJS.Timeout}>} */
 const pendingReconnect = new Map();
 let matchState = 'lobby'; // 'lobby' | 'playing' | 'ended'
 let currentMapLayoutIndex = 0;
@@ -52,7 +52,7 @@ function broadcast(msg, exceptId){
 }
 
 function rosterSnapshot(){
-  return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability, ready: !!p.ready }));
+  return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability, ability2: p.ability2, ready: !!p.ready }));
 }
 
 // "host" = primeiro jogador ainda conectado (Map preserva ordem de
@@ -109,7 +109,7 @@ wss.on('connection', (ws) => {
         pendingReconnect.delete(token);
         id = pending.id;
         const name = String(msg.name || pending.name).slice(0, 16) || pending.name;
-        players.set(id, { id, ws, name, role: pending.role, ability: pending.ability, token });
+        players.set(id, { id, ws, name, role: pending.role, ability: pending.ability, ability2: pending.ability2, token });
         send(ws, { type: 'joined', id });
         if (matchState === 'playing'){
           send(ws, {
@@ -132,7 +132,7 @@ wss.on('connection', (ws) => {
       }
       id = crypto.randomUUID();
       const name = String(msg.name || 'Jogador').slice(0, 16) || 'Jogador';
-      players.set(id, { id, ws, name, role: null, ability: null, ready: false, token });
+      players.set(id, { id, ws, name, role: null, ability: null, ability2: null, ready: false, token });
       send(ws, { type: 'joined', id });
       broadcastLobby();
       return;
@@ -154,6 +154,10 @@ wss.on('connection', (ws) => {
       if (role !== me.role) me.ready = false; // trocar de papel desmarca "pronto" — o loadout mudou
       me.role = role;
       if (msg.ability) me.ability = msg.ability;
+      if (msg.ability2) me.ability2 = msg.ability2;
+      // as 2 habilidades do Sobrevivente precisam ser diferentes — o menu já
+      // evita mandar a mesma nas duas, isso aqui é só a rede de segurança
+      if (me.ability2 === me.ability) me.ability2 = null;
       broadcastLobby();
       return;
     }
@@ -289,7 +293,7 @@ wss.on('connection', (ws) => {
       // dá um tempo pra reconectar (rede caiu, celular travou etc.) antes
       // de contar como saída de vez
       const timer = setTimeout(() => finalizeDeparture(id), RECONNECT_GRACE_MS);
-      pendingReconnect.set(me.token, { id, name: me.name, role: me.role, ability: me.ability, timer });
+      pendingReconnect.set(me.token, { id, name: me.name, role: me.role, ability: me.ability, ability2: me.ability2, timer });
       return;
     }
 

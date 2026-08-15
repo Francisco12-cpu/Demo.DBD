@@ -187,11 +187,24 @@ sem sistema de jogo que os use.
 - ~~Host trocar/forçar o papel~~ — **feito**: `forceRole` no protocolo
   (mesmos 3 lugares), botões "A"/"S" ao lado do kick na linha de cada
   jogador (só o host vê), reseta "pronto" do alvo se o papel mudar.
-- Sobrevivente escolher 2 habilidades em vez de 1 — ainda é só 1 das 4.
+- ~~Sobrevivente escolher 2 habilidades~~ — **feito** (2026-08-15): agora
+  escolhe 2 das 4 (nunca repetidas — `linkAbilitySelects` em `menu.js`
+  troca os `<select>` sozinho se o jogador tentar repetir). Isso exigiu um
+  **3º slot de habilidade de verdade** em todo o sistema de input
+  (`js/input.js`): tecla **R**, botão touch `#touch-ability3`, botão de
+  gamepad índice 3 (Círculo/B) — `consumeAbility3Request()`. A 1ª
+  habilidade continua no slot 1 (E), a 2ª no slot 3 (R); o slot 2 (Q)
+  continua reservado só pro "sair do reparo engajado", sem sobrepor
+  significado. Protocolo de sala ganhou `ability2` ao lado de `ability`
+  nos 3 lugares. `main.js` tem `triggerSurvivorAbilitySlot`/
+  `triggerLocalSurvivorAbilitySlot` genéricos (solo e online) que
+  qualquer uma das 4 habilidades pode ocupar em qualquer slot — sprint e
+  camuflagem já checam os dois slots (`localAbilityKey`/`localAbilityKey2`).
 - Habilidades novas do Assassino: Armadilha (dispara por proximidade) e
-  Invisibilidade (oposto da Camuflagem) — nenhuma das duas existe; decisão
-  de design já proposta antes (escolher 1 de 2 no lobby, mesmo padrão do
-  Sobrevivente) mas não implementada.
+  Invisibilidade (oposto da Camuflagem) — nenhuma das duas existe ainda.
+  O 3º slot de input (R/touch3/gamepad3) já existe (ver item acima) e
+  está livre pro Assassino usar; falta só a mecânica de cada habilidade e
+  a tela de "escolher 1 de 2" no lobby/menu solo.
 - 2º estágio de gancho antes da morte definitiva — continua só 1 estágio,
   **simplificação consciente**, não necessariamente um bug a corrigir.
 - Mapa em pixel art de verdade (hoje é `div`/CSS gerado a partir de

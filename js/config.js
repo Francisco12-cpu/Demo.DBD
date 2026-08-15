@@ -243,9 +243,10 @@ Game.CONFIG = {
   },
 
   // ---------- habilidades (passo 7) ----------
-  // Assassino tem sempre as duas; Sobrevivente escolhe 1 das 4 antes de
-  // entrar. Todas seguem o mesmo objeto { duration, cooldown, ... } lido
-  // por js/ability.js — nunca hardcoded fora daqui.
+  // Assassino tem sempre as duas; Sobrevivente escolhe 2 das 4 antes de
+  // entrar (nunca repetidas — ver linkAbilitySelects em menu.js). Todas
+  // seguem o mesmo objeto { duration, cooldown, ... } lido por
+  // js/ability.js — nunca hardcoded fora daqui.
   abilities: {
     killerSense: {
       label: 'Sentido',

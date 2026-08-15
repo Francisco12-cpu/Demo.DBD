@@ -412,7 +412,7 @@ window.Game = window.Game || {};
   // =====================================================================
   // MODO SOLO — 1 Sobrevivente (jogador) vs 1 Assassino (IA), pra testar
   // =====================================================================
-  function startSolo(name, abilityKey){
+  function startSolo(name, abilityKey, abilityKey2){
     panel.style.display = '';
     buildWorld(Game.CONFIG.generatorCount, randomLayoutIndex());
 
@@ -427,7 +427,9 @@ window.Game = window.Game || {};
     let gatesActive = false; // vira true quando os 5 geradores terminam
 
     const abilityCfg = Game.CONFIG.abilities.survivor[abilityKey] || Game.CONFIG.abilities.survivor.sprint;
+    const abilityCfg2 = Game.CONFIG.abilities.survivor[abilityKey2] || Game.CONFIG.abilities.survivor.camouflage;
     const survivorAbility = Game.createAbility(abilityCfg);
+    const survivorAbility2 = Game.createAbility(abilityCfg2);
     const killerDash = Game.createAbility(Game.CONFIG.abilities.killerDash);
 
     player.state.pos.x = MAP.player.x; player.state.pos.y = MAP.player.y;
@@ -438,7 +440,7 @@ window.Game = window.Game || {};
     killer.render();
 
     beginMatchUi();
-    Game.Input.setAbilityButtonsVisible(true, false);
+    Game.Input.setAbilityButtonsVisible(true, false, null, true);
 
     let distraction = null; // { x, y, until } — pra onde a IA vai correr em vez do jogador
     const matchStartAt = performance.now();
@@ -453,7 +455,7 @@ window.Game = window.Game || {};
       const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
       const doneCount = updateObjectivesStatus();
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
-      Game.Menu.showResult(won, fullDetail, () => startSolo(name, abilityKey), 'survivor');
+      Game.Menu.showResult(won, fullDetail, () => startSolo(name, abilityKey, abilityKey2), 'survivor');
     }
 
     function attemptKillerHit(){
@@ -632,19 +634,24 @@ window.Game = window.Game || {};
       killer.render();
     }
 
-    function triggerSurvivorAbility(){
-      if (!survivorAbility.ready()) return;
-      if (abilityKey === 'barricade'){
+    // genérico pros 2 slots de habilidade do Sobrevivente — o efeito extra
+    // ao ativar (barricade tranca porta, distract solta um ping falso)
+    // depende só de qual habilidade é, não de qual slot ela ocupa
+    function triggerSurvivorAbilitySlot(key, cfg, ability){
+      if (!ability.ready()) return;
+      if (key === 'barricade'){
         if (instantLockNearestDoor(player.state.pos) < 0) return; // não tem porta perto o bastante
-        survivorAbility.trigger();
+        ability.trigger();
         return;
       }
-      survivorAbility.trigger();
-      if (abilityKey === 'distract'){
-        spawnPingMarker(player.state.pos.x, player.state.pos.y, abilityCfg.duration);
-        distraction = { x: player.state.pos.x, y: player.state.pos.y, until: performance.now() + abilityCfg.duration * 1000 };
+      ability.trigger();
+      if (key === 'distract'){
+        spawnPingMarker(player.state.pos.x, player.state.pos.y, cfg.duration);
+        distraction = { x: player.state.pos.x, y: player.state.pos.y, until: performance.now() + cfg.duration * 1000 };
       }
     }
+    function triggerSurvivorAbility(){ triggerSurvivorAbilitySlot(abilityKey, abilityCfg, survivorAbility); }
+    function triggerSurvivorAbility2(){ triggerSurvivorAbilitySlot(abilityKey2, abilityCfg2, survivorAbility2); }
 
     let lastTime = performance.now();
     function loop(now){
@@ -655,8 +662,12 @@ window.Game = window.Game || {};
       Game.Input.update();
       capture.update(delta);
       survivorAbility.update(delta);
+      survivorAbility2.update(delta);
       killerDash.update(delta);
-      updateAbilityHud([{ label: abilityCfg.label, ability: survivorAbility }]);
+      updateAbilityHud([
+        { label: abilityCfg.label, ability: survivorAbility },
+        { label: abilityCfg2.label, ability: survivorAbility2 },
+      ]);
       Game.Audio.updateHeartbeat(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
       updateKillerCompass(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
       updateDangerVignette(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
@@ -664,6 +675,7 @@ window.Game = window.Game || {};
       if (heldHook && !capture.state.hooked){ setHookOccupied(heldHook, null); heldHook = null; }
 
       const ability1Requested = Game.Input.consumeAbility1Request();
+      const ability3Requested = Game.Input.consumeAbility3Request();
       const attackPressed = Game.Input.consumeAttackRequest();
       let engagedObjective = null; // gerador engajado pra reparar, se houver
 
@@ -696,6 +708,7 @@ window.Game = window.Game || {};
         }
       } else if (!capture.state.eliminated){
         if (ability1Requested) triggerSurvivorAbility();
+        if (ability3Requested) triggerSurvivorAbility2();
         const ability2Requested = Game.Input.consumeAbility2Request();
 
         // engajado num gerador: precisa ter apertado o botão de ação perto
@@ -781,7 +794,8 @@ window.Game = window.Game || {};
             const standingStill = Math.hypot(dir.x, dir.y) <= 0.05;
             health.update(delta, standingStill);
 
-            const sprintActive = abilityKey === 'sprint' && survivorAbility.state.activeLeft > 0;
+            const sprintActive = (abilityKey === 'sprint' && survivorAbility.state.activeLeft > 0) ||
+              (abilityKey2 === 'sprint' && survivorAbility2.state.activeLeft > 0);
             let speed = player.characterConfig().speed;
             if (health.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
             if (sprintActive) speed *= Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
@@ -808,8 +822,9 @@ window.Game = window.Game || {};
 
       playerEl.classList.toggle('hidden-in-spot', hideout.state.hidden);
       // X (ability2/Q) só aparece enquanto engajado num gerador, pra sair
-      // do modo de reparo
-      Game.Input.setAbilityButtonsVisible(true, !!engagedObjective, 'X');
+      // do modo de reparo; R (ability3) é a 2ª habilidade de verdade, fica
+      // sempre visível igual a E
+      Game.Input.setAbilityButtonsVisible(true, !!engagedObjective, 'X', true);
       updateKillerAI(delta);
       player.render();
       lighting.update(player.state.pos, false, visionBlockingWalls());
@@ -1177,12 +1192,17 @@ window.Game = window.Game || {};
     const localAbilityCfg = isSurvivor
       ? (Game.CONFIG.abilities.survivor[localEntry.info.ability] || Game.CONFIG.abilities.survivor.sprint)
       : null;
+    const localAbilityCfg2 = isSurvivor
+      ? (Game.CONFIG.abilities.survivor[localEntry.info.ability2] || Game.CONFIG.abilities.survivor.camouflage)
+      : null;
     const localAbility1 = isSurvivor ? Game.createAbility(localAbilityCfg) : Game.createAbility(Game.CONFIG.abilities.killerSense);
     const localAbility2 = isSurvivor ? null : Game.createAbility(Game.CONFIG.abilities.killerDash);
+    const localAbility3 = isSurvivor ? Game.createAbility(localAbilityCfg2) : null;
     const localAbilityKey = isSurvivor ? localEntry.info.ability : null;
+    const localAbilityKey2 = isSurvivor ? localEntry.info.ability2 : null;
 
     beginMatchUi();
-    Game.Input.setAbilityButtonsVisible(true, !isSurvivor);
+    Game.Input.setAbilityButtonsVisible(true, !isSurvivor, null, isSurvivor);
     const matchStartAt = performance.now();
     let lastStepAt = 0;
     let gatesActive = false; // vira true quando os 5 geradores terminam (todo mundo calcula igual, é só olhar objectives.state.done, já sincronizado)
@@ -1499,20 +1519,24 @@ window.Game = window.Game || {};
       });
     }
 
-    function triggerLocalSurvivorAbility(){
-      if (!localAbility1.ready()) return;
-      if (localAbilityKey === 'barricade'){
+    // genérico pros 2 slots de habilidade do Sobrevivente — mesma ideia do
+    // startSolo, ver comentário lá
+    function triggerLocalSurvivorAbilitySlot(key, cfg, ability){
+      if (!ability.ready()) return;
+      if (key === 'barricade'){
         const index = instantLockNearestDoor(localEntry.char.state.pos);
         if (index < 0) return;
-        localAbility1.trigger();
+        ability.trigger();
         net.sendEvent({ kind: 'doorForceLock', index });
         return;
       }
-      localAbility1.trigger();
-      if (localAbilityKey === 'distract'){
-        emitNoiseOnline(net, localEntry.char.state.pos.x, localEntry.char.state.pos.y, { radius: Game.CONFIG.noise.distractRadius, ping: localAbilityCfg.duration });
+      ability.trigger();
+      if (key === 'distract'){
+        emitNoiseOnline(net, localEntry.char.state.pos.x, localEntry.char.state.pos.y, { radius: Game.CONFIG.noise.distractRadius, ping: cfg.duration });
       }
     }
+    function triggerLocalSurvivorAbility(){ triggerLocalSurvivorAbilitySlot(localAbilityKey, localAbilityCfg, localAbility1); }
+    function triggerLocalSurvivorAbility2(){ triggerLocalSurvivorAbilitySlot(localAbilityKey2, localAbilityCfg2, localAbility3); }
 
     // ---------- visão do Assassino (fog simples: perto sempre vê; Sentido revela geral; Camuflagem esconde sempre) ----------
     function updateKillerVision(){
@@ -1543,10 +1567,14 @@ window.Game = window.Game || {};
       if (isSurvivor) localEntry.capture.update(delta);
       localAbility1.update(delta);
       if (localAbility2) localAbility2.update(delta);
+      if (localAbility3) localAbility3.update(delta);
       mirrorCarriedEntries();
 
       if (isSurvivor){
-        updateAbilityHud([{ label: localAbilityCfg.label, ability: localAbility1 }]);
+        updateAbilityHud([
+          { label: localAbilityCfg.label, ability: localAbility1 },
+          { label: localAbilityCfg2.label, ability: localAbility3 },
+        ]);
         const killerPos = killerEntry && !killerEntry.eliminated ? killerEntry.char.state.pos : null;
         Game.Audio.updateHeartbeat(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
         updateKillerCompass(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
@@ -1565,6 +1593,7 @@ window.Game = window.Game || {};
       // reparo engajado; Assassino usa pro dash — nunca os dois ao mesmo
       // tempo, então dá pra consumir sempre e rotear pelo papel abaixo.
       const ability2Requested = Game.Input.consumeAbility2Request();
+      const ability3Requested = Game.Input.consumeAbility3Request();
 
       const captured = isSurvivor && localEntry.capture.state.captured;
       const eliminated = isSurvivor && (localEntry.capture.state.eliminated || localEntry.escaped);
@@ -1605,6 +1634,7 @@ window.Game = window.Game || {};
         const stunned = !isSurvivor && performance.now() < localEntry.char.state.stunnedUntil; // atordoado por pallet
         if (isSurvivor){
           if (ability1Requested) triggerLocalSurvivorAbility();
+          if (ability3Requested) triggerLocalSurvivorAbility2();
 
           // engajado num gerador: só chegar perto não progride mais nada —
           // precisou apertar o botão de ação antes (ver abaixo). O X
@@ -1741,7 +1771,10 @@ window.Game = window.Game || {};
           const cfg = localEntry.char.characterConfig();
           if (isSurvivor) localEntry.health.update(delta, Math.hypot(dir.x, dir.y) <= 0.05);
           let speed = cfg.speed;
-          const sprintActive = isSurvivor && localAbilityKey === 'sprint' && localAbility1.state.activeLeft > 0;
+          const sprintActive = isSurvivor && (
+            (localAbilityKey === 'sprint' && localAbility1.state.activeLeft > 0) ||
+            (localAbilityKey2 === 'sprint' && localAbility3.state.activeLeft > 0)
+          );
           if (isSurvivor && localEntry.health.state.injured) speed *= Game.CONFIG.health.injuredSpeedMultiplier;
           if (sprintActive){
             speed *= Game.CONFIG.abilities.survivor.sprint.speedMultiplier;
@@ -1768,8 +1801,9 @@ window.Game = window.Game || {};
       if (isSurvivor) localEntry.el.classList.toggle('hidden-in-spot', localEntry.hideout.state.hidden);
       // botão 2 (ability2/Q): pro Assassino é sempre a Investida; pro
       // Sobrevivente vira o "X" de sair do reparo, só aparece enquanto
-      // engajado num gerador
-      Game.Input.setAbilityButtonsVisible(true, isSurvivor ? !!engagedObjective : true, isSurvivor ? 'X' : 'Q');
+      // engajado num gerador. Botão 3 (ability3/R): 2ª habilidade de
+      // verdade do Sobrevivente, sempre visível igual ao botão 1
+      Game.Input.setAbilityButtonsVisible(true, isSurvivor ? !!engagedObjective : true, isSurvivor ? 'X' : 'Q', isSurvivor);
       localEntry.char.render();
       const senseActive = !isSurvivor && localAbility1.state.activeLeft > 0;
       const spectating = spectatorFollowEntry();
@@ -1783,7 +1817,11 @@ window.Game = window.Game || {};
           facingRight: localEntry.char.state.facingRight,
           moving: localEntry.el.classList.contains('running'),
           sprinting: isSurvivor && localEntry.char.state.sprinting,
-          camouflaged: isSurvivor && ((localAbilityKey === 'camouflage' && localAbility1.state.activeLeft > 0) || localEntry.hideout.state.hidden),
+          camouflaged: isSurvivor && (
+            (localAbilityKey === 'camouflage' && localAbility1.state.activeLeft > 0) ||
+            (localAbilityKey2 === 'camouflage' && localAbility3.state.activeLeft > 0) ||
+            localEntry.hideout.state.hidden
+          ),
           injured: isSurvivor && localEntry.health.state.injured,
         });
       }

@@ -27,6 +27,7 @@ window.Game = window.Game || {};
 
   const nameInput = document.getElementById('menu-name');
   const abilitySelect = document.getElementById('menu-ability');
+  const abilitySelect2 = document.getElementById('menu-ability2');
   const soloSurvivorBtn = document.getElementById('menu-solo-survivor');
   const soloKillerBtn = document.getElementById('menu-solo-killer');
   const lanBtn = document.getElementById('menu-lan');
@@ -56,6 +57,7 @@ window.Game = window.Game || {};
   const lobbyBeSurvivor = document.getElementById('lobby-be-survivor');
   const lobbyAbilityRow = document.getElementById('lobby-ability-row');
   const lobbyAbility = document.getElementById('lobby-ability');
+  const lobbyAbility2 = document.getElementById('lobby-ability2');
   const lobbyError = document.getElementById('lobby-error');
   const lobbyReady = document.getElementById('lobby-ready');
   const lobbyStart = document.getElementById('lobby-start');
@@ -66,6 +68,31 @@ window.Game = window.Game || {};
 
   function playerName(){
     return (nameInput.value || '').trim().slice(0, 16) || 'Jogador';
+  }
+
+  // as 2 habilidades do Sobrevivente precisam ser diferentes — em vez de
+  // travar o <select> ou mostrar erro, se o jogador escolher em um select a
+  // mesma habilidade que já está no outro, os dois trocam de lugar sozinhos
+  // (sempre sobra uma combinação válida, sem precisar de mensagem de erro)
+  function linkAbilitySelects(selA, selB, onChange){
+    selA.addEventListener('change', () => {
+      if (selA.value === selB.value){
+        selB.value = selA.dataset.prevValue || (selB.value === 'sprint' ? 'camouflage' : 'sprint');
+      }
+      selA.dataset.prevValue = selA.value;
+      selB.dataset.prevValue = selB.value;
+      onChange();
+    });
+    selB.addEventListener('change', () => {
+      if (selB.value === selA.value){
+        selA.value = selB.dataset.prevValue || (selA.value === 'sprint' ? 'camouflage' : 'sprint');
+      }
+      selA.dataset.prevValue = selA.value;
+      selB.dataset.prevValue = selB.value;
+      onChange();
+    });
+    selA.dataset.prevValue = selA.value;
+    selB.dataset.prevValue = selB.value;
   }
 
   // token persistido: permite ao servidor reconhecer o mesmo jogador
@@ -155,9 +182,11 @@ window.Game = window.Game || {};
   }
   renderStats();
 
+  linkAbilitySelects(abilitySelect, abilitySelect2, () => {});
+
   soloSurvivorBtn.addEventListener('click', () => {
     menu.style.display = 'none';
-    Game.startSolo(playerName(), abilitySelect.value);
+    Game.startSolo(playerName(), abilitySelect.value, abilitySelect2.value);
   });
 
   soloKillerBtn.addEventListener('click', () => {
@@ -440,11 +469,11 @@ window.Game = window.Game || {};
   lobbyBeSurvivor.addEventListener('click', () => {
     lobbyError.textContent = '';
     const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
-    net.chooseRole(me && me.role === 'survivor' ? null : 'survivor', lobbyAbility.value);
+    net.chooseRole(me && me.role === 'survivor' ? null : 'survivor', lobbyAbility.value, lobbyAbility2.value);
   });
-  lobbyAbility.addEventListener('change', () => {
+  linkAbilitySelects(lobbyAbility, lobbyAbility2, () => {
     const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
-    if (me && me.role === 'survivor') net.chooseRole('survivor', lobbyAbility.value);
+    if (me && me.role === 'survivor') net.chooseRole('survivor', lobbyAbility.value, lobbyAbility2.value);
   });
   lobbyReady.addEventListener('click', () => {
     lobbyError.textContent = '';
