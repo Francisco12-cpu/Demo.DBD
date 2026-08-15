@@ -184,8 +184,9 @@ sem sistema de jogo que os use.
   (`server.js`/`net-webrtc.js` host+join/`net.js`), reseta ao trocar de
   papel ou dar rematch, `Iniciar partida` só habilita com todo mundo
   pronto (`lobby-ready`/`lobby-start` em `menu.js`+`index.html`).
-- Host trocar/forçar o papel (Assassino/Sobrevivente) de outro jogador —
-  só o kick existe hoje.
+- ~~Host trocar/forçar o papel~~ — **feito**: `forceRole` no protocolo
+  (mesmos 3 lugares), botões "A"/"S" ao lado do kick na linha de cada
+  jogador (só o host vê), reseta "pronto" do alvo se o papel mudar.
 - Sobrevivente escolher 2 habilidades em vez de 1 — ainda é só 1 das 4.
 - Habilidades novas do Assassino: Armadilha (dispara por proximidade) e
   Invisibilidade (oposto da Camuflagem) — nenhuma das duas existe; decisão

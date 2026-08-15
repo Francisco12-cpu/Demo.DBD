@@ -93,6 +93,12 @@ html,body{
   font-family:inherit; font-size:11px; line-height:1; padding:4px 7px; cursor:pointer;
 }
 .lobby-kick-btn:hover{ background:var(--killer); color:var(--ink); }
+/* botões "A"/"S" — host força o papel de outro jogador (ver renderLobby) */
+.lobby-role-btn{
+  background:transparent; border:1px solid var(--muted); color:var(--muted);
+  font-family:inherit; font-size:11px; line-height:1; padding:4px 7px; cursor:pointer;
+}
+.lobby-role-btn.active{ background:var(--gold); color:#1a1420; border-color:var(--gold); }
 #result-title.won{ color: var(--survivor); }
 #result-title.lost{ color: var(--killer); }
 

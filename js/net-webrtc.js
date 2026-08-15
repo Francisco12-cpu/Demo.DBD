@@ -202,6 +202,26 @@ window.Game = window.Game || {};
         return;
       }
 
+      if (msg.type === 'forceRole'){
+        // mesma regra do server.js: só o host, só antes da partida começar
+        if (id !== hostId() || matchState !== 'lobby') return;
+        const target = players.get(msg.targetId);
+        if (!target) return;
+        const role = msg.role === 'killer' || msg.role === 'survivor' ? msg.role : null;
+        if (role === 'killer' && target.role !== 'killer' && killerCount() >= 1){
+          send(conn, { type: 'error', message: 'Já tem um Assassino nessa sala.' });
+          return;
+        }
+        if (role === 'survivor' && target.role !== 'survivor' && survivorCount() >= MAX_SURVIVORS){
+          send(conn, { type: 'error', message: `Sala de Sobreviventes cheia (máx ${MAX_SURVIVORS}).` });
+          return;
+        }
+        if (role !== target.role) target.ready = false;
+        target.role = role;
+        broadcastLobby();
+        return;
+      }
+
       if (msg.type === 'kick'){
         // mesma regra do server.js: só o host, só antes da partida começar
         if (id !== hostId() || matchState !== 'lobby') return;
@@ -300,6 +320,7 @@ window.Game = window.Game || {};
       toggleReady(){ processMessage(localId, { type: 'toggleReady' }, null); },
       startMatch(){ processMessage(localId, { type: 'startMatch' }, null); },
       rematch(){ processMessage(localId, { type: 'rematch' }, null); },
+      forceRole(targetId, role){ processMessage(localId, { type: 'forceRole', targetId, role }, null); },
       kick(targetId){ processMessage(localId, { type: 'kick', targetId }, null); },
       sendState(data){ broadcast({ type: 'state', id: localId, data }); },
       sendEvent(data){
@@ -355,6 +376,7 @@ window.Game = window.Game || {};
       toggleReady(){ conn && conn.open && conn.send({ type: 'toggleReady' }); },
       startMatch(){ conn && conn.open && conn.send({ type: 'startMatch' }); },
       rematch(){ conn && conn.open && conn.send({ type: 'rematch' }); },
+      forceRole(targetId, role){ conn && conn.open && conn.send({ type: 'forceRole', targetId, role }); },
       kick(targetId){ conn && conn.open && conn.send({ type: 'kick', targetId }); },
       sendState(data){ conn && conn.open && conn.send({ type: 'state', data }); },
       sendEvent(data){ conn && conn.open && conn.send({ type: 'event', data }); },

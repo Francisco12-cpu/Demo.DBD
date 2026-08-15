@@ -239,6 +239,29 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (msg.type === 'forceRole'){
+      // só o host, só antes da partida começar — mesma regra do kick.
+      // Deixa o host reorganizar quem é Assassino/Sobrevivente sem
+      // depender de cada jogador clicar no próprio botão (útil quando
+      // alguém trava ou não entende a UI)
+      if (id !== hostId() || matchState !== 'lobby') return;
+      const target = players.get(msg.targetId);
+      if (!target) return;
+      const role = msg.role === 'killer' || msg.role === 'survivor' ? msg.role : null;
+      if (role === 'killer' && target.role !== 'killer' && killerCount() >= 1){
+        send(ws, { type: 'error', message: 'Já tem um Assassino nessa sala.' });
+        return;
+      }
+      if (role === 'survivor' && target.role !== 'survivor' && survivorCount() >= MAX_SURVIVORS){
+        send(ws, { type: 'error', message: `Sala de Sobreviventes cheia (máx ${MAX_SURVIVORS}).` });
+        return;
+      }
+      if (role !== target.role) target.ready = false;
+      target.role = role;
+      broadcastLobby();
+      return;
+    }
+
     if (msg.type === 'kick'){
       // só o host (ver hostId()) pode kickar, e só antes da partida
       // começar — kickar no meio da partida abriria um monte de caso de

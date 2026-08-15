@@ -45,6 +45,7 @@ window.Game = window.Game || {};
       toggleReady(){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'toggleReady' })); },
       startMatch(){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'startMatch' })); },
       rematch(){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'rematch' })); },
+      forceRole(targetId, role){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'forceRole', targetId, role })); },
       kick(targetId){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'kick', targetId })); },
       sendState(data){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'state', data })); },
       sendEvent(data){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'event', data })); },

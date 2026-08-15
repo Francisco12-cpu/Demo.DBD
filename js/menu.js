@@ -376,6 +376,24 @@ window.Game = window.Game || {};
       // isso só aparece na sala (matchState !== 'playing', que é a única
       // hora em que a tela de lobby fica visível de qualquer forma)
       if (amIHost && p.id !== localId){
+        const killerBtn = document.createElement('button');
+        killerBtn.type = 'button';
+        killerBtn.className = 'lobby-role-btn' + (p.role === 'killer' ? ' active' : '');
+        killerBtn.textContent = 'A';
+        killerBtn.title = p.role === 'killer' ? 'Tirar do papel de Assassino' : 'Definir como Assassino';
+        killerBtn.dataset.forceRoleId = p.id;
+        killerBtn.dataset.forceRole = p.role === 'killer' ? '' : 'killer';
+        row.appendChild(killerBtn);
+
+        const survivorBtn = document.createElement('button');
+        survivorBtn.type = 'button';
+        survivorBtn.className = 'lobby-role-btn' + (p.role === 'survivor' ? ' active' : '');
+        survivorBtn.textContent = 'S';
+        survivorBtn.title = p.role === 'survivor' ? 'Tirar do papel de Sobrevivente' : 'Definir como Sobrevivente';
+        survivorBtn.dataset.forceRoleId = p.id;
+        survivorBtn.dataset.forceRole = p.role === 'survivor' ? '' : 'survivor';
+        row.appendChild(survivorBtn);
+
         const kickBtn = document.createElement('button');
         kickBtn.type = 'button';
         kickBtn.className = 'lobby-kick-btn';
@@ -402,9 +420,10 @@ window.Game = window.Game || {};
   // delegação de evento: 1 listener só, em vez de 1 por botão de kick
   // recriado a cada renderLobby()
   lobbyPlayers.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-kick-id]');
-    if (!btn || !net) return;
-    net.kick(btn.dataset.kickId);
+    const kickBtn = e.target.closest('[data-kick-id]');
+    if (kickBtn && net){ net.kick(kickBtn.dataset.kickId); return; }
+    const roleBtn = e.target.closest('[data-force-role-id]');
+    if (roleBtn && net){ net.forceRole(roleBtn.dataset.forceRoleId, roleBtn.dataset.forceRole || null); return; }
   });
 
   function escapeHtml(str){
