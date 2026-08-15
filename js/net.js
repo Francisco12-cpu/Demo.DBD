@@ -42,6 +42,7 @@ window.Game = window.Game || {};
 
     return {
       chooseRole(role, ability){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'chooseRole', role, ability })); },
+      toggleReady(){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'toggleReady' })); },
       startMatch(){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'startMatch' })); },
       rematch(){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'rematch' })); },
       kick(targetId){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'kick', targetId })); },

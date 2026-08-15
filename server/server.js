@@ -28,7 +28,7 @@ console.log(`Porta: ${PORT}`);
 console.log(`Senha: ${PASSWORD}`);
 console.log('Os outros jogadores entram pelo navegador usando o IP desta máquina na rede local, essa porta e essa senha.');
 
-/** @type {Map<string, {id:string, ws:import('ws').WebSocket, name:string, role:'killer'|'survivor'|null, ability:string|null, token:string}>} */
+/** @type {Map<string, {id:string, ws:import('ws').WebSocket, name:string, role:'killer'|'survivor'|null, ability:string|null, ready:boolean, token:string}>} */
 const players = new Map();
 // jogador que caiu no meio de uma partida em andamento — guardado aqui por
 // RECONNECT_GRACE_MS esperando o mesmo token voltar antes de desistir dele
@@ -52,7 +52,7 @@ function broadcast(msg, exceptId){
 }
 
 function rosterSnapshot(){
-  return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability }));
+  return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability, ready: !!p.ready }));
 }
 
 // "host" = primeiro jogador ainda conectado (Map preserva ordem de
@@ -132,7 +132,7 @@ wss.on('connection', (ws) => {
       }
       id = crypto.randomUUID();
       const name = String(msg.name || 'Jogador').slice(0, 16) || 'Jogador';
-      players.set(id, { id, ws, name, role: null, ability: null, token });
+      players.set(id, { id, ws, name, role: null, ability: null, ready: false, token });
       send(ws, { type: 'joined', id });
       broadcastLobby();
       return;
@@ -151,8 +151,16 @@ wss.on('connection', (ws) => {
         send(ws, { type: 'error', message: `Sala de Sobreviventes cheia (máx ${MAX_SURVIVORS}).` });
         return;
       }
+      if (role !== me.role) me.ready = false; // trocar de papel desmarca "pronto" — o loadout mudou
       me.role = role;
       if (msg.ability) me.ability = msg.ability;
+      broadcastLobby();
+      return;
+    }
+
+    if (msg.type === 'toggleReady'){
+      if (!me.role) return; // precisa ter escolhido um papel antes de poder marcar pronto
+      me.ready = !me.ready;
       broadcastLobby();
       return;
     }
@@ -168,6 +176,10 @@ wss.on('connection', (ws) => {
       }
       if ([...players.values()].some((p) => p.role === null)){
         send(ws, { type: 'error', message: 'Todo mundo na sala precisa escolher um papel (Assassino ou Sobrevivente).' });
+        return;
+      }
+      if ([...players.values()].some((p) => !p.ready)){
+        send(ws, { type: 'error', message: 'Todo mundo precisa marcar "pronto" antes de iniciar.' });
         return;
       }
       matchState = 'playing';
@@ -222,7 +234,7 @@ wss.on('connection', (ws) => {
       matchState = 'lobby';
       completedObjectives = new Set();
       eliminatedIds = new Set();
-      for (const p of players.values()) p.role = null;
+      for (const p of players.values()){ p.role = null; p.ready = false; }
       broadcastLobby();
       return;
     }

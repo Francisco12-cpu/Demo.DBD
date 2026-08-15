@@ -75,7 +75,7 @@ window.Game = window.Game || {};
     }
 
     function rosterSnapshot(){
-      return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability }));
+      return [...players.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ability: p.ability, ready: !!p.ready }));
     }
 
     // "host" = primeiro jogador ainda conectado (Map preserva ordem de
@@ -120,8 +120,16 @@ window.Game = window.Game || {};
           send(conn, { type: 'error', message: `Sala de Sobreviventes cheia (máx ${MAX_SURVIVORS}).` });
           return;
         }
+        if (role !== p.role) p.ready = false; // trocar de papel desmarca "pronto" — o loadout mudou
         p.role = role;
         if (msg.ability) p.ability = msg.ability;
+        broadcastLobby();
+        return;
+      }
+
+      if (msg.type === 'toggleReady'){
+        if (!p.role) return;
+        p.ready = !p.ready;
         broadcastLobby();
         return;
       }
@@ -137,6 +145,10 @@ window.Game = window.Game || {};
         }
         if ([...players.values()].some((pp) => pp.role === null)){
           send(conn, { type: 'error', message: 'Todo mundo na sala precisa escolher um papel.' });
+          return;
+        }
+        if ([...players.values()].some((pp) => !pp.ready)){
+          send(conn, { type: 'error', message: 'Todo mundo precisa marcar "pronto" antes de iniciar.' });
           return;
         }
         matchState = 'playing';
@@ -185,7 +197,7 @@ window.Game = window.Game || {};
         matchState = 'lobby';
         completedObjectives = new Set();
         eliminatedIds = new Set();
-        for (const pp of players.values()) pp.role = null;
+        for (const pp of players.values()){ pp.role = null; pp.ready = false; }
         broadcastLobby();
         return;
       }
@@ -240,7 +252,7 @@ window.Game = window.Game || {};
       }
       const id = conn ? conn.peer : localId;
       const playerName = String(msg.name || 'Jogador').slice(0, 16) || 'Jogador';
-      players.set(id, { id, name: playerName, role: null, ability: null, conn, token });
+      players.set(id, { id, name: playerName, role: null, ability: null, ready: false, conn, token });
       if (conn) conn.__playerId = id;
       send(conn, { type: 'joined', id });
       broadcastLobby();
@@ -248,7 +260,7 @@ window.Game = window.Game || {};
 
     peer.on('open', (id) => {
       localId = id;
-      players.set(localId, { id: localId, name: name || 'Jogador', role: null, ability: null, conn: null, token });
+      players.set(localId, { id: localId, name: name || 'Jogador', role: null, ability: null, ready: false, conn: null, token });
       handlers.onJoined && handlers.onJoined(localId);
       broadcastLobby();
     });
@@ -285,6 +297,7 @@ window.Game = window.Game || {};
     return {
       roomCode,
       chooseRole(role, ability){ processMessage(localId, { type: 'chooseRole', role, ability }, null); },
+      toggleReady(){ processMessage(localId, { type: 'toggleReady' }, null); },
       startMatch(){ processMessage(localId, { type: 'startMatch' }, null); },
       rematch(){ processMessage(localId, { type: 'rematch' }, null); },
       kick(targetId){ processMessage(localId, { type: 'kick', targetId }, null); },
@@ -339,6 +352,7 @@ window.Game = window.Game || {};
 
     return {
       chooseRole(role, ability){ conn && conn.open && conn.send({ type: 'chooseRole', role, ability }); },
+      toggleReady(){ conn && conn.open && conn.send({ type: 'toggleReady' }); },
       startMatch(){ conn && conn.open && conn.send({ type: 'startMatch' }); },
       rematch(){ conn && conn.open && conn.send({ type: 'rematch' }); },
       kick(targetId){ conn && conn.open && conn.send({ type: 'kick', targetId }); },

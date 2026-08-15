@@ -85,6 +85,8 @@ html,body{
 .lobby-player .role-tag{ color:var(--muted); text-transform:uppercase; font-size:10px; letter-spacing:1px; }
 .lobby-player.role-killer .role-tag{ color: var(--killer); }
 .lobby-player.role-survivor .role-tag{ color: var(--survivor); }
+.lobby-player.ready{ border-color: var(--survivor); }
+.lobby-player .ready-tag{ color: var(--survivor); font-size:10px; text-transform:uppercase; letter-spacing:1px; }
 /* botão de kick — só o host vê (ver renderLobby em menu.js) */
 .lobby-kick-btn{
   background:transparent; border:1px solid var(--killer); color:var(--killer);

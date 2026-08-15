@@ -38,11 +38,18 @@ cd server && npm install && PORT=8792 ROOM_PASSWORD=test123 npm start   # servid
 
 Testes são feitos com **Playwright direto via script `.mjs`** (não existe
 suite de testes formal no repo) — ver padrão abaixo. Não existe `npm test`.
+`playwright` já é dependência do projeto (`node_modules/`), com o Chromium
+baixado em `%LOCALAPPDATA%\ms-playwright`. Se o script de teste mora fora
+da pasta do projeto (ex: no scratchpad), `import` direto do caminho do
+pacote quebra no ESM do Windows (erro `ERR_UNSUPPORTED_ESM_URL_SCHEME` —
+caminho absoluto tipo `C:\...` não é uma URL `file://` válida) — usar
+`createRequire` apontando pro `package.json` do projeto em vez de `import`:
 
 ```js
-import pkg from '/opt/node22/lib/node_modules/playwright/index.js';
-const { chromium } = pkg;
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+import { createRequire } from 'node:module';
+const require = createRequire('C:\\Users\\Affil\\Desktop\\Demo.DBD-main\\package.json');
+const { chromium } = require('playwright');
+const browser = await chromium.launch(); // sem executablePath — usa o Chromium já baixado
 ```
 
 Padrão pra testar rápido: usar `page.evaluate(() => { Game.CONFIG.x.y = valor; })`
@@ -173,7 +180,10 @@ sem sistema de jogo que os use.
 
 **Pendente/backlog real** (auditado item a item em 2026-08-15 — ver
 `README.md` → "Planos futuros" pro texto original de cada um):
-- Estado "pronto" no lobby antes de iniciar partida — não existe ainda.
+- ~~Estado "pronto" no lobby~~ — **feito**: `toggleReady` no protocolo
+  (`server.js`/`net-webrtc.js` host+join/`net.js`), reseta ao trocar de
+  papel ou dar rematch, `Iniciar partida` só habilita com todo mundo
+  pronto (`lobby-ready`/`lobby-start` em `menu.js`+`index.html`).
 - Host trocar/forçar o papel (Assassino/Sobrevivente) de outro jogador —
   só o kick existe hoje.
 - Sobrevivente escolher 2 habilidades em vez de 1 — ainda é só 1 das 4.

@@ -57,6 +57,7 @@ window.Game = window.Game || {};
   const lobbyAbilityRow = document.getElementById('lobby-ability-row');
   const lobbyAbility = document.getElementById('lobby-ability');
   const lobbyError = document.getElementById('lobby-error');
+  const lobbyReady = document.getElementById('lobby-ready');
   const lobbyStart = document.getElementById('lobby-start');
 
   const resultTitle = document.getElementById('result-title');
@@ -365,10 +366,11 @@ window.Game = window.Game || {};
     const amIHost = !!msg.hostId && msg.hostId === localId;
     msg.players.forEach((p) => {
       const row = document.createElement('div');
-      row.className = 'lobby-player' + (p.role ? ' role-' + p.role : '');
+      row.className = 'lobby-player' + (p.role ? ' role-' + p.role : '') + (p.ready ? ' ready' : '');
       const roleLabel = p.role === 'killer' ? 'Assassino' : (p.role === 'survivor' ? 'Sobrevivente' : 'sem papel');
       const isHostTag = p.id === msg.hostId ? ' · host' : '';
-      row.innerHTML = `<span>${escapeHtml(p.name)}${p.id === localId ? ' (você)' : ''}${isHostTag}</span><span class="role-tag">${roleLabel}</span>`;
+      const readyTag = p.ready ? '<span class="ready-tag">pronto</span>' : '';
+      row.innerHTML = `<span>${escapeHtml(p.name)}${p.id === localId ? ' (você)' : ''}${isHostTag}</span>${readyTag}<span class="role-tag">${roleLabel}</span>`;
       // só o host vê o botão de kickar, e não em si mesmo — remover alguém
       // no meio da partida abriria caso de borda demais pro benefício, por
       // isso só aparece na sala (matchState !== 'playing', que é a única
@@ -389,6 +391,12 @@ window.Game = window.Game || {};
     lobbyBeKiller.classList.toggle('active', !!me && me.role === 'killer');
     lobbyBeSurvivor.classList.toggle('active', !!me && me.role === 'survivor');
     lobbyAbilityRow.style.display = !!me && me.role === 'survivor' ? 'flex' : 'none';
+
+    lobbyReady.disabled = !me || !me.role;
+    lobbyReady.classList.toggle('active', !!me && me.ready);
+    lobbyReady.textContent = !!me && me.ready ? 'Pronto ✓ (clique pra desmarcar)' : 'Marcar como pronto';
+    const everyoneReady = msg.players.length > 0 && msg.players.every((p) => p.ready);
+    lobbyStart.disabled = !everyoneReady;
   }
 
   // delegação de evento: 1 listener só, em vez de 1 por botão de kick
@@ -418,6 +426,10 @@ window.Game = window.Game || {};
   lobbyAbility.addEventListener('change', () => {
     const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
     if (me && me.role === 'survivor') net.chooseRole('survivor', lobbyAbility.value);
+  });
+  lobbyReady.addEventListener('click', () => {
+    lobbyError.textContent = '';
+    net.toggleReady();
   });
   lobbyStart.addEventListener('click', () => {
     lobbyError.textContent = '';
