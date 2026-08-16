@@ -329,8 +329,13 @@ independente):
   configurações, hoje é um slider só.
 
 **Multiplayer / protocolo**
-- Persistir o loadout de habilidades (últimas escolhidas) no
-  `localStorage`, mesmo padrão já usado pro token de reconexão.
+- ~~Persistir o loadout de habilidades~~ — **feito** (2026-08-15):
+  `dbd_ability`/`dbd_ability2`/`dbd_killer_ability` no `localStorage`,
+  mesmo padrão do token de reconexão. Solo e lobby online compartilham a
+  mesma preferência (`loadAbilityPrefs()` seeda os 6 `<select>` — 3 solo +
+  3 lobby — a partir das mesmas 3 chaves; qualquer um deles mudando
+  salva de volta). Testado: mudar os 3 selects, recarregar a página,
+  confirmar que os 6 `<select>` voltam com o valor salvo.
 - Botão "copiar código da sala" (clipboard) na tela de host P2P.
 - Validação/versionamento leve de protocolo em `protocol.js` — hoje só os
   3 kinds "resumable" quebram cedo se tiverem um typo; os outros ~15

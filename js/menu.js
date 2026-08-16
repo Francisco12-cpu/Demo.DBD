@@ -99,6 +99,39 @@ window.Game = window.Game || {};
     selB.dataset.prevValue = selB.value;
   }
 
+  // loadout de habilidades persistido entre sessões — mesmo padrão do
+  // token de reconexão logo abaixo: silencioso, sem UI própria, só lembra
+  // a última escolha (solo e lobby online compartilham a mesma preferência,
+  // já que é "o que esse jogador costuma jogar", não algo por partida).
+  const SURVIVOR_ABILITY_KEYS = ['sprint', 'camouflage', 'barricade', 'distract'];
+  const KILLER_ABILITY_KEYS = ['trap', 'invisibility'];
+
+  function loadAbilityPrefs(){
+    const a1 = localStorage.getItem('dbd_ability');
+    const a2 = localStorage.getItem('dbd_ability2');
+    const ka = localStorage.getItem('dbd_killer_ability');
+    if (SURVIVOR_ABILITY_KEYS.includes(a1)){
+      abilitySelect.value = a1;
+      lobbyAbility.value = a1;
+    }
+    if (SURVIVOR_ABILITY_KEYS.includes(a2) && a2 !== abilitySelect.value){
+      abilitySelect2.value = a2;
+      lobbyAbility2.value = a2;
+    }
+    if (KILLER_ABILITY_KEYS.includes(ka)){
+      menuKillerAbility.value = ka;
+      lobbyKillerAbility.value = ka;
+    }
+  }
+  function saveSurvivorAbilityPrefs(a1, a2){
+    localStorage.setItem('dbd_ability', a1);
+    localStorage.setItem('dbd_ability2', a2);
+  }
+  function saveKillerAbilityPref(key){
+    localStorage.setItem('dbd_killer_ability', key);
+  }
+  loadAbilityPrefs();
+
   // token persistido: permite ao servidor reconhecer o mesmo jogador
   // se a conexão cair no meio de uma partida e ele reconectar depois.
   function reconnectToken(){
@@ -186,7 +219,10 @@ window.Game = window.Game || {};
   }
   renderStats();
 
-  linkAbilitySelects(abilitySelect, abilitySelect2, () => {});
+  linkAbilitySelects(abilitySelect, abilitySelect2, () => {
+    saveSurvivorAbilityPrefs(abilitySelect.value, abilitySelect2.value);
+  });
+  menuKillerAbility.addEventListener('change', () => saveKillerAbilityPref(menuKillerAbility.value));
 
   soloSurvivorBtn.addEventListener('click', () => {
     menu.style.display = 'none';
@@ -474,19 +510,23 @@ window.Game = window.Game || {};
     lobbyError.textContent = '';
     const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
     net.chooseRole(me && me.role === 'killer' ? null : 'killer', lobbyKillerAbility.value);
+    saveKillerAbilityPref(lobbyKillerAbility.value);
   });
   lobbyKillerAbility.addEventListener('change', () => {
     const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
     if (me && me.role === 'killer') net.chooseRole('killer', lobbyKillerAbility.value);
+    saveKillerAbilityPref(lobbyKillerAbility.value);
   });
   lobbyBeSurvivor.addEventListener('click', () => {
     lobbyError.textContent = '';
     const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
     net.chooseRole(me && me.role === 'survivor' ? null : 'survivor', lobbyAbility.value, lobbyAbility2.value);
+    saveSurvivorAbilityPrefs(lobbyAbility.value, lobbyAbility2.value);
   });
   linkAbilitySelects(lobbyAbility, lobbyAbility2, () => {
     const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
     if (me && me.role === 'survivor') net.chooseRole('survivor', lobbyAbility.value, lobbyAbility2.value);
+    saveSurvivorAbilityPrefs(lobbyAbility.value, lobbyAbility2.value);
   });
   lobbyReady.addEventListener('click', () => {
     lobbyError.textContent = '';
