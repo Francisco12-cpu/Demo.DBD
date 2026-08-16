@@ -36,14 +36,34 @@ npx http-server . -p 8941          # serve o jogo estático
 cd server && npm install && PORT=8792 ROOM_PASSWORD=test123 npm start   # servidor LAN, pra testar modo online
 ```
 
-Testes são feitos com **Playwright direto via script `.mjs`** (não existe
-suite de testes formal no repo) — ver padrão abaixo. Não existe `npm test`.
-`playwright` já é dependência do projeto (`node_modules/`), com o Chromium
-baixado em `%LOCALAPPDATA%\ms-playwright`. Se o script de teste mora fora
-da pasta do projeto (ex: no scratchpad), `import` direto do caminho do
-pacote quebra no ESM do Windows (erro `ERR_UNSUPPORTED_ESM_URL_SCHEME` —
-caminho absoluto tipo `C:\...` não é uma URL `file://` válida) — usar
-`createRequire` apontando pro `package.json` do projeto em vez de `import`:
+**Existe sim uma suite formal, `test/` + `npm test`** (`smoke-solo.mjs`,
+`smoke-solo-killer.mjs`, `smoke-online.mjs` — o online sobe o próprio
+`server/server.js` como processo filho). Roda em todo PR via
+`.github/workflows/test.yml`. **Rodar antes de considerar qualquer mudança
+de fluxo do menu/lobby pronta** — ela pegou uma quebra real nesta mesma
+sessão (o estado "pronto" do lobby desabilitando `#lobby-start` sem o
+smoke test online nunca clicar em `#lobby-ready`, travando 30s e falhando
+no CI até ser corrigido). Rodar:
+```
+npx http-server . -p 8941 -s &   # a suite espera o jogo servido nessa porta
+npm test
+```
+Ao adicionar/alterar qualquer coisa no fluxo de lobby (papel, pronto,
+habilidade, iniciar partida), atualizar `smoke-online.mjs` junto — não só
+rodar, EDITAR o arquivo se o fluxo mudou, senão ele quebra de novo pra
+próxima sessão do mesmo jeito que quebrou agora.
+
+Pra iterar numa feature ESPECÍFICA que ainda não tem cobertura na suite
+formal (a maioria das mecânicas — a suite acima é só smoke test, não
+cobre habilidade por habilidade), continue escrevendo script Playwright
+ad-hoc no scratchpad, mesmo padrão de sempre — só não esquecer de rodar
+a suite formal também antes de terminar. `playwright` já é dependência do
+projeto (`node_modules/`), Chromium baixado em `%LOCALAPPDATA%\ms-playwright`.
+Se o script mora fora da pasta do projeto (scratchpad), `import` direto
+do caminho do pacote quebra no ESM do Windows (erro
+`ERR_UNSUPPORTED_ESM_URL_SCHEME` — caminho absoluto tipo `C:\...` não é
+uma URL `file://` válida) — usar `createRequire` apontando pro
+`package.json` do projeto em vez de `import`:
 
 ```js
 import { createRequire } from 'node:module';
@@ -55,11 +75,18 @@ const browser = await chromium.launch(); // sem executablePath — usa o Chromiu
 Padrão pra testar rápido: usar `page.evaluate(() => { Game.CONFIG.x.y = valor; })`
 **antes** de clicar em "Jogar" pra encurtar timers longos (geradores de 35s,
 duração de gancho de 6s, etc.) — NUNCA editar `js/config.js` só pra testar.
-Pra testar 2 jogadores, abrir 2 `browser.newContext()` apontando pro mesmo
-servidor LAN. **Cuidado**: rodar vários testes online em sequência rápida
-reusando os mesmos nomes ("Killer1"/"Surv1") às vezes dá timeout de conexão
-por causa de sala presa no servidor de teste — se um teste isolado passa mas
-falhava numa bateria, é isso, não é bug de código.
+Se o alvo (objetivo/porta/pallet) fica dentro de uma sala, um walker
+"anda reto até o alvo" trava na parede — sem pathfinding de verdade, ou
+usa um waypoint fora da sala primeiro, ou mira num spot de campo aberto
+(`MAP.objectiveSpots[4..7]`, por exemplo). Elementos como `.pallet`/`.door`
+têm `style.left/top` = canto do retângulo, não o centro (some `width/2`,
+`height/2` pra mirar certo — `.gate`/personagens já são ponto exato).
+Pra testar 2+ jogadores, abrir vários `browser.newContext()` apontando pro
+mesmo servidor LAN. **Cuidado**: rodar vários testes online em sequência
+rápida reusando os mesmos nomes/porta às vezes dá timeout de conexão por
+causa de sala presa no servidor de teste anterior — se um teste isolado
+passa mas falhava numa bateria, reinicie o servidor com uma porta nova
+antes de tentar de novo, não é bug de código.
 
 ## Convenções que este projeto segue à risca
 
@@ -537,10 +564,23 @@ independente):
   o SW de verdade: `js/config.js` (extensão conhecida) cacheia,
   `/fake-api-endpoint` (sem extensão, simula um endpoint dinâmico
   futuro) não cacheia.
-- Formalizar os scripts de teste Playwright ad-hoc (só existem no
-  scratchpad de cada sessão) como uma pasta `tests/` versionada no repo,
-  já que o CI (`#34`) já roda smoke tests — hoje cada sessão reescreve os
-  scripts do zero.
+- ~~Formalizar testes numa pasta versionada~~ — **já existia, não
+  precisou criar** (2026-08-15): checado e essa ideia partia de uma
+  premissa desatualizada deste próprio arquivo — `test/` (não `tests/`)
+  + `npm test` já existem desde os PRs #22/#34 (`smoke-solo.mjs`/
+  `smoke-solo-killer.mjs`/`smoke-online.mjs`, CI em
+  `.github/workflows/test.yml`), só a seção "Como rodar/testar
+  localmente" deste arquivo estava desatualizada dizendo o contrário.
+  **Achado real ao rodar os 3 antes de propor algo novo**:
+  `smoke-online.mjs` estava **quebrado** desde o estado "pronto" do
+  lobby (item mais acima nesta lista) — clicava `#lobby-start` sem
+  nunca marcar `#lobby-ready`, travava 30s e falhava, local e no CI.
+  Corrigido (adicionado o clique em `#lobby-ready` nos 2 clientes antes
+  de iniciar). Seção de testes deste arquivo reescrita pra parar de
+  afirmar que não existe suite formal, e pra deixar registrado: sempre
+  rodar `npm test` antes de considerar pronta qualquer mudança de fluxo
+  de menu/lobby, e atualizar `smoke-online.mjs` junto se esse fluxo
+  mudar de novo.
 
 Itens de escopo grande já documentados em "Pendente/backlog real" acima
 (mapa em pixel art, tileset customizável, 2º estágio de gancho, failover
