@@ -12,17 +12,29 @@ window.Game = window.Game || {};
   // Assassino, funciona mesmo sem ele estar visível na tela.
 
   let ctx = null;
-  let masterGain = null;
-  let masterVolume = 1;
+  // 3 categorias de volume independentes (0..1 cada), configuráveis nas
+  // Configurações — antes era um slider "master" só. sfxGain cobre todo
+  // efeito sonoro (ataque, captura, passo, porta/pallet/portão, interface
+  // etc.), heartbeatGain só o batimento cardíaco, ambientGain só o drone
+  // de fundo. Cada som se conecta na categoria certa em vez de ir direto
+  // pro destino final.
+  let sfxGain = null, heartbeatGain = null, ambientGain = null;
+  let sfxVolume = 1, heartbeatVolume = 1, ambientVolume = 1;
 
   function ensureContext(){
     if (!ctx){
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) return null;
       ctx = new AudioContextClass();
-      masterGain = ctx.createGain();
-      masterGain.gain.value = masterVolume;
-      masterGain.connect(ctx.destination);
+      sfxGain = ctx.createGain();
+      sfxGain.gain.value = sfxVolume;
+      sfxGain.connect(ctx.destination);
+      heartbeatGain = ctx.createGain();
+      heartbeatGain.gain.value = heartbeatVolume;
+      heartbeatGain.connect(ctx.destination);
+      ambientGain = ctx.createGain();
+      ambientGain.gain.value = ambientVolume;
+      ambientGain.connect(ctx.destination);
     }
     // navegadores mobile suspendem o contexto sozinhos no meio da partida
     // (tela apagar, trocar de app, notificação) — sem isso, o jogo ficava
@@ -31,13 +43,17 @@ window.Game = window.Game || {};
     return ctx;
   }
 
-  // Volume master (0..1), configurável no menu de opções — persiste entre
-  // partidas via localStorage (ver js/menu.js). Afeta todos os sons daqui
-  // pra frente (todo som passa pelo masterGain em vez de ir direto pro
-  // destino final).
-  function setMasterVolume(v){
-    masterVolume = Math.max(0, Math.min(1, v));
-    if (masterGain) masterGain.gain.value = masterVolume;
+  function setSfxVolume(v){
+    sfxVolume = Math.max(0, Math.min(1, v));
+    if (sfxGain) sfxGain.gain.value = sfxVolume;
+  }
+  function setHeartbeatVolume(v){
+    heartbeatVolume = Math.max(0, Math.min(1, v));
+    if (heartbeatGain) heartbeatGain.gain.value = heartbeatVolume;
+  }
+  function setAmbientVolume(v){
+    ambientVolume = Math.max(0, Math.min(1, v));
+    if (ambientGain) ambientGain.gain.value = ambientVolume;
   }
 
   // Precisa ser chamado a partir de um gesto do usuário (clique/toque) —
@@ -99,7 +115,7 @@ window.Game = window.Game || {};
 
     const panner = makePanner(c, panX, panZ);
 
-    osc.connect(gain).connect(panner).connect(masterGain);
+    osc.connect(gain).connect(panner).connect(heartbeatGain);
     osc.start();
     osc.stop(c.currentTime + 0.26);
 
@@ -178,7 +194,7 @@ window.Game = window.Game || {};
     gain.gain.setValueAtTime(0.18, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.16);
 
-    osc.connect(gain).connect(masterGain);
+    osc.connect(gain).connect(sfxGain);
     osc.start();
     osc.stop(c.currentTime + 0.18);
   }
@@ -195,7 +211,7 @@ window.Game = window.Game || {};
     gain.gain.setValueAtTime(0.22, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.32);
 
-    osc.connect(gain).connect(masterGain);
+    osc.connect(gain).connect(sfxGain);
     osc.start();
     osc.stop(c.currentTime + 0.34);
   }
@@ -216,7 +232,7 @@ window.Game = window.Game || {};
     gain.gain.setValueAtTime(sprinting ? 0.16 : 0.12, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.08);
 
-    osc.connect(gain).connect(masterGain);
+    osc.connect(gain).connect(sfxGain);
     osc.start();
     osc.stop(c.currentTime + 0.09);
   }
@@ -252,7 +268,7 @@ window.Game = window.Game || {};
     gain.gain.setValueAtTime(volume, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + durationSec);
 
-    src.connect(filter).connect(gain).connect(masterGain);
+    src.connect(filter).connect(gain).connect(sfxGain);
     src.start();
     src.stop(c.currentTime + durationSec + 0.02);
   }
@@ -270,7 +286,7 @@ window.Game = window.Game || {};
         const gain = c.createGain();
         gain.gain.setValueAtTime(0.16, c.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.05);
-        osc.connect(gain).connect(masterGain);
+        osc.connect(gain).connect(sfxGain);
         osc.start();
         osc.stop(c.currentTime + 0.06);
       }, delay * 1000);
@@ -295,7 +311,7 @@ window.Game = window.Game || {};
     const gain = c.createGain();
     gain.gain.setValueAtTime(0.3, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.22);
-    osc.connect(gain).connect(masterGain);
+    osc.connect(gain).connect(sfxGain);
     osc.start();
     osc.stop(c.currentTime + 0.24);
     playNoiseBurst(0.2, 0.15, 900);
@@ -321,7 +337,7 @@ window.Game = window.Game || {};
         const gain = c.createGain();
         gain.gain.setValueAtTime(0.16, c.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.35);
-        osc.connect(gain).connect(masterGain);
+        osc.connect(gain).connect(sfxGain);
         osc.start();
         osc.stop(c.currentTime + 0.37);
       }, i * 90);
@@ -342,7 +358,7 @@ window.Game = window.Game || {};
         const gain = c.createGain();
         gain.gain.setValueAtTime(0.18, c.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.3);
-        osc.connect(gain).connect(masterGain);
+        osc.connect(gain).connect(sfxGain);
         osc.start();
         osc.stop(c.currentTime + 0.32);
       }, i * 80);
@@ -364,7 +380,7 @@ window.Game = window.Game || {};
     gain.gain.setValueAtTime(0.15, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.09);
 
-    osc.connect(gain).connect(masterGain);
+    osc.connect(gain).connect(sfxGain);
     osc.start();
     osc.stop(c.currentTime + 0.1);
   }
@@ -380,7 +396,7 @@ window.Game = window.Game || {};
     gain.gain.setValueAtTime(0.14, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.2);
 
-    osc.connect(gain).connect(masterGain);
+    osc.connect(gain).connect(sfxGain);
     osc.start();
     osc.stop(c.currentTime + 0.22);
   }
@@ -397,7 +413,7 @@ window.Game = window.Game || {};
     const gain = c.createGain();
     gain.gain.setValueAtTime(0.06, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.5);
-    osc.connect(gain).connect(masterGain);
+    osc.connect(gain).connect(sfxGain);
     osc.start();
     osc.stop(c.currentTime + 0.52);
   }
@@ -416,7 +432,7 @@ window.Game = window.Game || {};
         const gain = c.createGain();
         gain.gain.setValueAtTime(0.18, c.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.12);
-        osc.connect(gain).connect(masterGain);
+        osc.connect(gain).connect(sfxGain);
         osc.start();
         osc.stop(c.currentTime + 0.13);
       }, i * 55);
@@ -436,7 +452,7 @@ window.Game = window.Game || {};
         const gain = c.createGain();
         gain.gain.setValueAtTime(0.2, c.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.15);
-        osc.connect(gain).connect(masterGain);
+        osc.connect(gain).connect(sfxGain);
         osc.start();
         osc.stop(c.currentTime + 0.16);
       }, delay * 1000);
@@ -456,7 +472,7 @@ window.Game = window.Game || {};
 
     const gain = c.createGain();
     gain.gain.value = 0.06; // era 0.1 — competia com o batimento cardíaco na mesma faixa grave (52-68Hz vs 55-58Hz), mascarando ele no alto-falante mono
-    gain.connect(masterGain);
+    gain.connect(ambientGain);
 
     const filter = c.createBiquadFilter();
     filter.type = 'lowpass';
@@ -498,6 +514,6 @@ window.Game = window.Game || {};
     playClick, playError, playTestSound, playObjectiveStart,
     playDoorLock, playDoorBreak, playPalletDrop, playPalletBreak, playGateOpen, playSurvivorEscape,
     playSkillCheckGreat,
-    setMasterVolume, startAmbient, stopAmbient,
+    setSfxVolume, setHeartbeatVolume, setAmbientVolume, startAmbient, stopAmbient,
   };
 })();

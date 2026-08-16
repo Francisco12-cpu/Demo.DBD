@@ -155,20 +155,28 @@ window.Game = window.Game || {};
   // ---------- configurações (volume + sensibilidade do joystick), persistidas ----------
   const settingsOpenBtn = document.getElementById('menu-settings-open');
   const settingsBackBtn = document.getElementById('settings-back');
-  const settingsVolume = document.getElementById('settings-volume');
+  const settingsVolumeSfx = document.getElementById('settings-volume-sfx');
+  const settingsVolumeHeartbeat = document.getElementById('settings-volume-heartbeat');
+  const settingsVolumeAmbient = document.getElementById('settings-volume-ambient');
   const settingsJoystick = document.getElementById('settings-joystick');
   const settingsHardSkillCheck = document.getElementById('settings-hard-skillcheck');
 
   function loadSettings(){
-    const volume = parseInt(localStorage.getItem('dbd_volume'), 10);
+    const volumeSfx = parseInt(localStorage.getItem('dbd_volume_sfx'), 10);
+    const volumeHeartbeat = parseInt(localStorage.getItem('dbd_volume_heartbeat'), 10);
+    const volumeAmbient = parseInt(localStorage.getItem('dbd_volume_ambient'), 10);
     const joystick = parseInt(localStorage.getItem('dbd_joystick'), 10);
-    settingsVolume.value = isNaN(volume) ? 100 : volume;
+    settingsVolumeSfx.value = isNaN(volumeSfx) ? 100 : volumeSfx;
+    settingsVolumeHeartbeat.value = isNaN(volumeHeartbeat) ? 100 : volumeHeartbeat;
+    settingsVolumeAmbient.value = isNaN(volumeAmbient) ? 100 : volumeAmbient;
     settingsJoystick.value = isNaN(joystick) ? 100 : joystick;
     settingsHardSkillCheck.checked = localStorage.getItem('dbd_hard_skillcheck') === '1';
     applySettings();
   }
   function applySettings(){
-    Game.Audio.setMasterVolume(parseInt(settingsVolume.value, 10) / 100);
+    Game.Audio.setSfxVolume(parseInt(settingsVolumeSfx.value, 10) / 100);
+    Game.Audio.setHeartbeatVolume(parseInt(settingsVolumeHeartbeat.value, 10) / 100);
+    Game.Audio.setAmbientVolume(parseInt(settingsVolumeAmbient.value, 10) / 100);
     Game.Input.setJoystickSensitivity(parseInt(settingsJoystick.value, 10) / 100);
     // troca só entre os 2 valores já calibrados no config — nunca calcula
     // penalidade na hora, evita gente configurando um número aleatório
@@ -176,8 +184,16 @@ window.Game = window.Game || {};
       ? Game.CONFIG.skillCheck.hardModeFailPenalty
       : 0;
   }
-  settingsVolume.addEventListener('input', () => {
-    localStorage.setItem('dbd_volume', settingsVolume.value);
+  settingsVolumeSfx.addEventListener('input', () => {
+    localStorage.setItem('dbd_volume_sfx', settingsVolumeSfx.value);
+    applySettings();
+  });
+  settingsVolumeHeartbeat.addEventListener('input', () => {
+    localStorage.setItem('dbd_volume_heartbeat', settingsVolumeHeartbeat.value);
+    applySettings();
+  });
+  settingsVolumeAmbient.addEventListener('input', () => {
+    localStorage.setItem('dbd_volume_ambient', settingsVolumeAmbient.value);
     applySettings();
   });
   settingsJoystick.addEventListener('input', () => {

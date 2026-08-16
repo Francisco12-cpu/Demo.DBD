@@ -420,8 +420,20 @@ independente):
   `window.AudioContext`/`webkitAudioContext` removidos via
   `addInitScript` (simula um navegador sem suporte), o aviso aparece
   certo depois do primeiro toque.
-- Volumes separados por categoria (SFX / batimento / ambiente) nas
-  configurações, hoje é um slider só.
+- ~~Volumes separados por categoria~~ — **feito** (2026-08-15): 3 gain
+  nodes independentes em `audio.js` (`sfxGain`/`heartbeatGain`/
+  `ambientGain`, cada um `ctx.destination` direto — não tem mais um
+  "master" por cima) — todo som se conecta na categoria certa em vez de
+  um `masterGain` único. API muda de `setMasterVolume(v)` pra
+  `setSfxVolume`/`setHeartbeatVolume`/`setAmbientVolume`. 3 sliders nas
+  Configurações (`dbd_volume_sfx`/`dbd_volume_heartbeat`/
+  `dbd_volume_ambient` no `localStorage`, substituindo o único
+  `dbd_volume` de antes). Testado via Playwright: sliders persistem e
+  recarregam certo, API antiga (`setMasterVolume`) não existe mais, e
+  (verificação mais forte) interceptando `AudioContext.prototype.
+  createGain` pra capturar os nodes de verdade — os 3 primeiros criados
+  batem exatamente com os valores dos sliders (`0.25`/`0.6`/`0.05` pra
+  `25`/`60`/`5`).
 
 **Multiplayer / protocolo**
 - ~~Persistir o loadout de habilidades~~ — **feito** (2026-08-15):
