@@ -72,6 +72,12 @@ try {
   await survivorPage.click('#lobby-be-survivor');
   await survivorPage.waitForTimeout(200);
 
+  // #lobby-start fica desabilitado até todo mundo marcar "pronto" —
+  // feature adicionada depois deste teste ter sido escrito originalmente
+  await killerPage.click('#lobby-ready');
+  await survivorPage.click('#lobby-ready');
+  await killerPage.waitForTimeout(300);
+
   await killerPage.click('#lobby-start');
   await killerPage.waitForTimeout(1000);
   await survivorPage.waitForTimeout(1000);
