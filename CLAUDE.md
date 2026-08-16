@@ -387,9 +387,16 @@ independente):
   Consertar exigiria mexer no `broadcast()` genérico usado por todo
   `net-webrtc.js`, risco maior que o benefício pra essa entrega — anotado
   aqui pra uma rodada futura dedicada só a isso.
-- Sinalizar na UI quando `Game.Audio.ensureContext()` volta `null`
-  (navegador sem Web Audio) — hoje o jogador só fica sem batimento/SFX
-  sem nenhum aviso.
+- ~~Sinalizar na UI quando Web Audio indisponível~~ — **feito**
+  (2026-08-15): `Game.Audio.init()` agora retorna `true`/`false`
+  (Web Audio existe nesse navegador ou não). O `pointerdown` de
+  desbloqueio de áudio em `menu.js` (já existia, é o mesmo listener que
+  resolve o "jogo mudo" quando quem inicia a partida é outro jogador)
+  mostra `#audio-warning` (`menu-start`) se vier `false`. Testado via
+  Playwright: navegador normal nunca mostra o aviso; com
+  `window.AudioContext`/`webkitAudioContext` removidos via
+  `addInitScript` (simula um navegador sem suporte), o aviso aparece
+  certo depois do primeiro toque.
 - Volumes separados por categoria (SFX / batimento / ambiente) nas
   configurações, hoje é um slider só.
 

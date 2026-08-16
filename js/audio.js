@@ -44,10 +44,12 @@ window.Game = window.Game || {};
   // navegadores bloqueiam áudio automático. O menu já garante isso (o
   // jogador clica "Jogar" antes da partida começar). ensureContext() já
   // tenta resume() sozinha, então init() só existe como o ponto de entrada
-  // "oficial" chamado a partir de um gesto/evento de foco.
+  // "oficial" chamado a partir de um gesto/evento de foco. Retorna
+  // true/false (Web Audio existe nesse navegador ou não) — menu.js usa
+  // isso pra avisar o jogador em vez de deixá-lo mudo sem explicação.
   function init(){
-    ensureContext();
     nextBeatAt = 0; // evita o batimento ficar "travado" esperando um timestamp de antes de suspender
+    return !!ensureContext();
   }
 
   // volta de segundo plano (tela apagou, trocou de app, notificação) —

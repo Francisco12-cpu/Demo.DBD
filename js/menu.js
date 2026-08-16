@@ -8,7 +8,14 @@ window.Game = window.Game || {};
   // de rede), não um clique seu — sem isso o AudioContext ficava
   // 'suspended' pra sempre nesse caso e o jogo saía mudo (bug real
   // reportado pelo usuário, com ou sem fone).
-  document.addEventListener('pointerdown', () => Game.Audio.init(), { once: true });
+  document.addEventListener('pointerdown', () => {
+    // navegador sem Web Audio de verdade (raro, mas existe em WebViews
+    // restritos/navegadores antigos) — sem isso o jogador só ficava mudo
+    // sem nenhuma explicação, achando que era erro/fone desconectado
+    const audioAvailable = Game.Audio.init();
+    const warning = document.getElementById('audio-warning');
+    if (warning) warning.style.display = audioAvailable ? 'none' : 'block';
+  }, { once: true });
 
   const menu = document.getElementById('menu');
   const screens = {
