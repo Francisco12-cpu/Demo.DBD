@@ -299,6 +299,12 @@ window.Game = window.Game || {};
     }, Game.CONFIG.abilities.survivor.barricade.duration * 1000);
   }
 
+  // SFX ambiente (porta/pallet quebrando etc.) só toca se quem vai ouvir
+  // estiver perto o bastante da fonte — ver Game.CONFIG.sfxRadius
+  function withinSfxRadius(listenerPos, sourcePos){
+    return Math.hypot(listenerPos.x - sourcePos.x, listenerPos.y - sourcePos.y) <= Game.CONFIG.sfxRadius;
+  }
+
   function spawnPingMarker(x, y, durationSec){
     const div = document.createElement('div');
     div.className = 'ping-marker';
@@ -595,7 +601,7 @@ window.Game = window.Game || {};
         if (!d.state.locked) return;
         const near = Math.hypot(killer.state.pos.x - d.center.x, killer.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
         if (near) nearLockedDoor = true;
-        d.progressBreak(delta, near);
+        if (d.progressBreak(delta, near) && withinSfxRadius(player.state.pos, d.center)) Game.Audio.playDoorBreak();
       });
 
       // pallet já derrubado no caminho: quebra de vez em vez de desviar
@@ -603,7 +609,7 @@ window.Game = window.Game || {};
         if (!p.state.dropped) return;
         const near = Math.hypot(killer.state.pos.x - p.center.x, killer.state.pos.y - p.center.y) <= Game.CONFIG.pallet.radius;
         if (near) nearLockedDoor = true; // reaproveita o mesmo "não desvia, resolve" da porta
-        p.progressBreak(delta, near);
+        if (p.progressBreak(delta, near) && withinSfxRadius(player.state.pos, p.center)) Game.Audio.playPalletBreak();
       });
 
       if (killerDash.ready() && dist > 220) killerDash.trigger();
@@ -655,6 +661,7 @@ window.Game = window.Game || {};
       if (key === 'barricade'){
         if (instantLockNearestDoor(player.state.pos) < 0) return; // não tem porta perto o bastante
         ability.trigger();
+        Game.Audio.playDoorLock();
         return;
       }
       ability.trigger();
@@ -765,7 +772,7 @@ window.Game = window.Game || {};
           if (attackPressed && nearHideout){
             hideout.enter();
           } else if (attackPressed && droppablePallet && droppablePallet.drop()){
-            Game.Audio.playError(); // feedback local — "o pallet caiu"
+            Game.Audio.playPalletDrop();
             emitNoiseSolo(droppablePallet.center, killer.state.pos, Game.CONFIG.noise.palletDropRadius, () => {
               distraction = { x: droppablePallet.center.x, y: droppablePallet.center.y, until: performance.now() + 1200 };
             });
@@ -784,15 +791,16 @@ window.Game = window.Game || {};
 
         gates.forEach((g) => {
           const near = Math.hypot(player.state.pos.x - g.state.pos.x, player.state.pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius;
-          g.progressOpen(delta, near, gatesActive);
+          if (g.progressOpen(delta, near, gatesActive)) Game.Audio.playGateOpen();
         });
         if (gatesActive && nearOpenGate(player.state.pos)){
+          Game.Audio.playSurvivorEscape();
           endMatch(true, 'Você escapou pelo portão!');
         }
 
         doors.forEach((d) => {
           const near = Math.hypot(player.state.pos.x - d.center.x, player.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
-          d.progressLock(delta, near);
+          if (d.progressLock(delta, near)) Game.Audio.playDoorLock();
         });
 
         if (!player.state.isAttacking){
@@ -1005,7 +1013,7 @@ window.Game = window.Game || {};
         // ficava incompleto quando o Assassino é o jogador humano.
         const droppablePallet = nearestPallet(survivor.state.pos, Game.CONFIG.pallet.radius);
         if (droppablePallet && droppablePallet.drop()){
-          Game.Audio.playError(); // feedback local pro jogador-Assassino: "o pallet caiu"
+          if (withinSfxRadius(killer.state.pos, droppablePallet.center)) Game.Audio.playPalletDrop();
           attemptPalletStun(droppablePallet, killer.state.pos, () => {
             killer.state.stunnedUntil = performance.now() + Game.CONFIG.pallet.stunDuration * 1000;
           });
@@ -1091,9 +1099,12 @@ window.Game = window.Game || {};
           const g = nearestGate(survivor.state.pos);
           if (g){
             const near = Math.hypot(survivor.state.pos.x - g.state.pos.x, survivor.state.pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius;
-            g.progressOpen(delta, near, gatesActive);
+            if (g.progressOpen(delta, near, gatesActive)) Game.Audio.playGateOpen();
           }
-          if (nearOpenGate(survivor.state.pos)) endMatch(false, 'O Sobrevivente escapou pelo portão.');
+          if (nearOpenGate(survivor.state.pos)){
+            Game.Audio.playSurvivorEscape();
+            endMatch(false, 'O Sobrevivente escapou pelo portão.');
+          }
         }
       }
 
@@ -1157,12 +1168,12 @@ window.Game = window.Game || {};
 
       doors.forEach((d) => {
         const near = Math.hypot(killer.state.pos.x - d.center.x, killer.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
-        d.progressBreak(delta, near);
+        if (d.progressBreak(delta, near)) Game.Audio.playDoorBreak();
       });
 
       pallets.forEach((p) => {
         const near = Math.hypot(killer.state.pos.x - p.center.x, killer.state.pos.y - p.center.y) <= Game.CONFIG.pallet.radius;
-        p.progressBreak(delta, near);
+        if (p.progressBreak(delta, near)) Game.Audio.playPalletBreak();
       });
 
       if (stunned){
@@ -1494,6 +1505,7 @@ window.Game = window.Game || {};
 
       if (data.kind === 'gateOpened'){
         if (gates[data.index]) gates[data.index].setOpen(true);
+        Game.Audio.playGateOpen(); // grande momento da partida, toca pra todo mundo sem checar distância
         return;
       }
 
@@ -1502,6 +1514,7 @@ window.Game = window.Game || {};
         if (!entry || entry.escaped) return;
         entry.escaped = true;
         entry.el.classList.add('escaped');
+        Game.Audio.playSurvivorEscape();
         checkMatchResolution();
         return;
       }
@@ -1518,26 +1531,42 @@ window.Game = window.Game || {};
 
       if (data.kind === 'doorForceLock'){
         lockDoorByIndex(data.index);
+        if (doors[data.index] && withinSfxRadius(localEntry.char.state.pos, doors[data.index].center)) Game.Audio.playDoorLock();
         return;
       }
 
       if (data.kind === 'doorLocked'){
-        if (doors[data.index]) doors[data.index].setLocked(true);
+        if (doors[data.index]){
+          doors[data.index].setLocked(true);
+          if (withinSfxRadius(localEntry.char.state.pos, doors[data.index].center)) Game.Audio.playDoorLock();
+        }
         return;
       }
 
       if (data.kind === 'doorBroken'){
-        if (doors[data.index]) doors[data.index].setLocked(false);
+        if (doors[data.index]){
+          doors[data.index].setLocked(false);
+          if (withinSfxRadius(localEntry.char.state.pos, doors[data.index].center)) Game.Audio.playDoorBreak();
+        }
         return;
       }
 
       if (data.kind === 'palletDropped'){
-        if (pallets[data.index]) pallets[data.index].setDropped(true);
+        if (pallets[data.index]){
+          pallets[data.index].setDropped(true);
+          // o Assassino já tem feedback próprio disso via emitNoiseOnline
+          // (sound:'palletDrop', ver 'noise' acima) — aqui é só pros outros
+          // Sobreviventes por perto, que a mecânica de ruído não cobre
+          if (isSurvivor && withinSfxRadius(localEntry.char.state.pos, pallets[data.index].center)) Game.Audio.playPalletDrop();
+        }
         return;
       }
 
       if (data.kind === 'palletBroken'){
-        if (pallets[data.index]) pallets[data.index].setBroken(true);
+        if (pallets[data.index]){
+          pallets[data.index].setBroken(true);
+          if (isSurvivor && withinSfxRadius(localEntry.char.state.pos, pallets[data.index].center)) Game.Audio.playPalletBreak();
+        }
         return;
       }
 
@@ -1587,6 +1616,8 @@ window.Game = window.Game || {};
           const dist = Math.hypot(data.x - localEntry.char.state.pos.x, data.y - localEntry.char.state.pos.y);
           if (dist <= (data.radius ?? Infinity)){
             if (data.sound === 'objectiveStart') Game.Audio.playObjectiveStart();
+            else if (data.sound === 'palletDrop') Game.Audio.playPalletDrop();
+            else if (data.sound === 'palletBreak') Game.Audio.playPalletBreak();
             else Game.Audio.playError();
           }
         }
@@ -1622,6 +1653,7 @@ window.Game = window.Game || {};
         if (index < 0) return;
         ability.trigger();
         net.sendEvent({ kind: 'doorForceLock', index });
+        Game.Audio.playDoorLock(); // feedback local — sendEvent não volta pro próprio remetente
         return;
       }
       ability.trigger();
@@ -1801,7 +1833,8 @@ window.Game = window.Game || {};
             } else if (attackRequested && droppablePallet && droppablePallet.drop()){
               const index = pallets.indexOf(droppablePallet);
               net.sendEvent({ kind: 'palletDropped', index });
-              emitNoiseOnline(net, droppablePallet.center.x, droppablePallet.center.y, { radius: Game.CONFIG.noise.palletDropRadius, ping: 1.2 });
+              Game.Audio.playPalletDrop(); // feedback local — sendEvent não volta pro próprio remetente
+              emitNoiseOnline(net, droppablePallet.center.x, droppablePallet.center.y, { radius: Game.CONFIG.noise.palletDropRadius, ping: 1.2, sound: 'palletDrop' });
               if (killerEntry && !killerEntry.eliminated){
                 attemptPalletStun(droppablePallet, killerEntry.char.state.pos, () => {
                   net.sendEvent({ kind: 'palletStun', targetId: killerEntry.info.id });
@@ -1817,17 +1850,24 @@ window.Game = window.Game || {};
 
           doors.forEach((d, index) => {
             const near = Math.hypot(localEntry.char.state.pos.x - d.center.x, localEntry.char.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
-            if (d.progressLock(delta, near)) net.sendEvent({ kind: 'doorLocked', index });
+            if (d.progressLock(delta, near)){
+              net.sendEvent({ kind: 'doorLocked', index });
+              Game.Audio.playDoorLock();
+            }
           });
 
           gates.forEach((g, index) => {
             const near = Math.hypot(localEntry.char.state.pos.x - g.state.pos.x, localEntry.char.state.pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius;
-            if (g.progressOpen(delta, near, gatesActive)) net.sendEvent({ kind: 'gateOpened', index });
+            if (g.progressOpen(delta, near, gatesActive)){
+              net.sendEvent({ kind: 'gateOpened', index });
+              Game.Audio.playGateOpen();
+            }
           });
           if (gatesActive && nearOpenGate(localEntry.char.state.pos)){
             localEntry.escaped = true;
             localEntry.el.classList.add('escaped');
             net.sendEvent({ kind: 'survivorEscaped', playerId: localId });
+            Game.Audio.playSurvivorEscape();
             checkMatchResolution();
           }
         } else if (!stunned){
@@ -1882,13 +1922,17 @@ window.Game = window.Game || {};
           }
           doors.forEach((d, index) => {
             const near = Math.hypot(localEntry.char.state.pos.x - d.center.x, localEntry.char.state.pos.y - d.center.y) <= Game.CONFIG.door.radius;
-            if (d.progressBreak(delta, near)) net.sendEvent({ kind: 'doorBroken', index });
+            if (d.progressBreak(delta, near)){
+              net.sendEvent({ kind: 'doorBroken', index });
+              Game.Audio.playDoorBreak();
+            }
           });
           pallets.forEach((p, index) => {
             const near = Math.hypot(localEntry.char.state.pos.x - p.center.x, localEntry.char.state.pos.y - p.center.y) <= Game.CONFIG.pallet.radius;
             if (p.progressBreak(delta, near)){
               net.sendEvent({ kind: 'palletBroken', index });
-              emitNoiseOnline(net, p.center.x, p.center.y, { radius: Game.CONFIG.noise.palletBreakRadius, ping: 1.5 });
+              Game.Audio.playPalletBreak(); // feedback local — sendEvent/noise não voltam pro próprio remetente
+              emitNoiseOnline(net, p.center.x, p.center.y, { radius: Game.CONFIG.noise.palletBreakRadius, ping: 1.5, sound: 'palletBreak' });
             }
           });
         }

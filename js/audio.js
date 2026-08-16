@@ -219,6 +219,134 @@ window.Game = window.Game || {};
     osc.stop(c.currentTime + 0.09);
   }
 
+  // buffer de ruído branco, reaproveitado entre chamadas (criar de novo a
+  // cada som seria desperdício — o conteúdo aleatório não muda, só quando
+  // toca) — base pros sons de "impacto"/madeira quebrando abaixo, já que
+  // Web Audio não tem gerador de ruído pronto sem passar por um buffer
+  let noiseBuffer = null;
+  function getNoiseBuffer(c){
+    if (noiseBuffer) return noiseBuffer;
+    const length = c.sampleRate * 1; // 1s é mais que suficiente pra qualquer som curto daqui
+    noiseBuffer = c.createBuffer(1, length, c.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+    return noiseBuffer;
+  }
+
+  // ruído filtrado (passa-baixa) + envelope curto — base dos sons de
+  // porta/pallet quebrando abaixo. cutoff mais baixo = estalo mais grave/
+  // "encorpado" (pallet), mais alto = mais seco/agudo (porta).
+  function playNoiseBurst(volume, durationSec, cutoff){
+    const c = ensureContext();
+    if (!c) return;
+    const src = c.createBufferSource();
+    src.buffer = getNoiseBuffer(c);
+
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = cutoff;
+
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(volume, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + durationSec);
+
+    src.connect(filter).connect(gain).connect(masterGain);
+    src.start();
+    src.stop(c.currentTime + durationSec + 0.02);
+  }
+
+  // porta trancando — 2 cliques secos e rápidos (mecanismo de fechadura)
+  function playDoorLock(){
+    const c = ensureContext();
+    if (!c) return;
+    [0, 0.09].forEach((delay) => {
+      setTimeout(() => {
+        const osc = c.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(700, c.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(300, c.currentTime + 0.04);
+        const gain = c.createGain();
+        gain.gain.setValueAtTime(0.16, c.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.05);
+        osc.connect(gain).connect(masterGain);
+        osc.start();
+        osc.stop(c.currentTime + 0.06);
+      }, delay * 1000);
+    });
+  }
+
+  // porta arrombada — estalo seco e curto (mais agudo/rápido que o pallet
+  // quebrando, é só madeira fina da moldura, não o pallet inteiro)
+  function playDoorBreak(){
+    playNoiseBurst(0.28, 0.22, 1800);
+  }
+
+  // pallet caindo — thud grave (impacto) + um pouco de ruído (o estalo da
+  // madeira batendo no chão) tocando junto
+  function playPalletDrop(){
+    const c = ensureContext();
+    if (!c) return;
+    const osc = c.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, c.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(50, c.currentTime + 0.18);
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.3, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.22);
+    osc.connect(gain).connect(masterGain);
+    osc.start();
+    osc.stop(c.currentTime + 0.24);
+    playNoiseBurst(0.2, 0.15, 900);
+  }
+
+  // pallet quebrado de vez — ruído mais grave/prolongado que a porta
+  // (madeira grossa se estilhaçando, não só uma tábua fina)
+  function playPalletBreak(){
+    playNoiseBurst(0.3, 0.4, 700);
+  }
+
+  // portão de saída abrindo — 3 notas subindo, mecânico mas com um alívio
+  // sutil (é uma boa notícia pro Sobrevivente, má pro Assassino — toca
+  // igual pros dois, quem se importa é quem já sabe o que significa)
+  function playGateOpen(){
+    const c = ensureContext();
+    if (!c) return;
+    [260, 340, 440].forEach((freq, i) => {
+      setTimeout(() => {
+        const osc = c.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        const gain = c.createGain();
+        gain.gain.setValueAtTime(0.16, c.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.35);
+        osc.connect(gain).connect(masterGain);
+        osc.start();
+        osc.stop(c.currentTime + 0.37);
+      }, i * 90);
+    });
+  }
+
+  // Sobrevivente escapou pelo portão — sequência curta resolvendo pra cima,
+  // mais "completa" que o playGateOpen (o portão já abriu antes; isso aqui
+  // é o momento de vitória individual de quem atravessou)
+  function playSurvivorEscape(){
+    const c = ensureContext();
+    if (!c) return;
+    [440, 550, 660, 880].forEach((freq, i) => {
+      setTimeout(() => {
+        const osc = c.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const gain = c.createGain();
+        gain.gain.setValueAtTime(0.18, c.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.3);
+        osc.connect(gain).connect(masterGain);
+        osc.start();
+        osc.stop(c.currentTime + 0.32);
+      }, i * 80);
+    });
+  }
+
   // ---------- sons de interface (clique/erro) ----------
   // curtos e neutros — só pra dar retorno de "isso reagiu ao meu toque",
   // pedido explícito do usuário porque o menu inteiro estava mudo
@@ -345,6 +473,7 @@ window.Game = window.Game || {};
   Game.Audio = {
     init, updateHeartbeat, stopHeartbeat, playAttackSwing, playCaptureHit, playFootstep,
     playClick, playError, playTestSound, playObjectiveStart,
+    playDoorLock, playDoorBreak, playPalletDrop, playPalletBreak, playGateOpen, playSurvivorEscape,
     setMasterVolume, startAmbient, stopAmbient,
   };
 })();

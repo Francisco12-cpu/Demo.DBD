@@ -29,6 +29,16 @@ Game.CONFIG = {
   playerRadius: 28, // raio de colisão do personagem (metade do sprite 64px, sprite pixel art 32px em escala 2x)
   killerVisionRange: 240, // px — modo online: distância normal que o Assassino enxerga um Sobrevivente sem usar Sentido
   heartbeatRange: 340, // px — modo online/solo: distância máxima em que o Sobrevivente ouve o batimento cardíaco do Assassino (funciona mesmo sem ele estar visível)
+  // raio de audição pros SFX ambiente de porta/pallet feitos por OUTRO
+  // jogador/IA longe (trancar/arrombar porta, derrubar/quebrar pallet) —
+  // sem isso, esses sons tocariam pra qualquer jogador não importa a
+  // distância, o mesmo problema que o sistema de ruído (Game.CONFIG.noise)
+  // já corrigiu pros alertas de verdade. Ações do PRÓPRIO jogador sempre
+  // tocam (ele já precisa estar perto pra interagir, a mecânica em si já
+  // garante isso). Portão abrindo/Sobrevivente escapando ficam de fora
+  // desse raio de propósito — são poucos por partida e sinalizam uma
+  // virada de jogo pra todo mundo, não um som ambiente rotineiro.
+  sfxRadius: 650,
   visionRadius: 150, // px (mundo) — raio do "spotlight" ao redor do próprio personagem; na tela vira visionRadius*zoom, então precisa ser bem menor que o alcance de câmera pra sobrar área escura
 
   // spritesheets em pixel art de verdade (assets/killer-sheet.png,

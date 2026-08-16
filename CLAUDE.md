@@ -318,10 +318,36 @@ independente):
   voz (loop LAN/P2P não tem chat nem voz — só o ping falso da Distração).
 
 **Áudio**
-- SFX dedicados que hoje faltam em `audio.js`: porta trancando/
-  arrombando, pallet caindo/quebrando, portão abrindo, Sobrevivente
-  escapando pelo portão (hoje só existe swing de ataque, hit de captura,
-  passo, clique, erro e início de objetivo).
+- ~~SFX dedicados de porta/pallet/portão/fuga~~ — **feito** (2026-08-15):
+  `playDoorLock`/`playDoorBreak`/`playPalletDrop`/`playPalletBreak`/
+  `playGateOpen`/`playSurvivorEscape` em `audio.js` (ruído branco via
+  buffer reaproveitado — `getNoiseBuffer()` — pros sons de quebra/impacto,
+  já que Web Audio não tem gerador de ruído pronto). Porta/pallet/gate
+  ganham **raio de audição** novo (`Game.CONFIG.sfxRadius`, 650px) —
+  ação do PRÓPRIO jogador sempre toca (a mecânica já exige proximidade
+  pra interagir), mas ouvir a ação de OUTRO jogador/IA longe é
+  distance-gated, mesmo cuidado que o sistema de ruído já tinha (evita
+  reintroduzir "ouve não importa a distância"). Portão abrir/Sobrevivente
+  escapar ficam **fora** do raio de propósito — são poucos por partida e
+  sinalizam virada de jogo, tocam pra todo mundo. Pallet drop/break já
+  passavam pelo sistema de ruído (`emitNoiseOnline`) pro Assassino
+  especificamente — em vez de duplicar, o `sound` desse sistema ganhou
+  `'palletDrop'`/`'palletBreak'` mapeando pro som certo em vez do
+  `playError()` genérico de antes; meu novo handler de rede só toca pros
+  OUTROS Sobreviventes por perto (que o sistema de ruído não cobria).
+  Implementado nos 2 modos solo e online (local + remoto).
+
+  **Achado durante o teste, não corrigido** (fora de escopo desta
+  entrega): `js/net-webrtc.js` → `host()` → `sendEvent()` não passa
+  `exceptId` pro `broadcast()`, então quando o **próprio host P2P** é
+  quem dispara um evento, ele recebe de volta via `deliverLocally` (ao
+  contrário do `server.js`, que corretamente exclui o remetente). Isso é
+  inofensivo pra maioria dos handlers (idempotentes — reaplicar o mesmo
+  estado não quebra nada) mas pode duplicar efeitos sonoros/vibração só
+  quando o host P2P (não jogadores comuns, nem LAN) é o autor do evento.
+  Consertar exigiria mexer no `broadcast()` genérico usado por todo
+  `net-webrtc.js`, risco maior que o benefício pra essa entrega — anotado
+  aqui pra uma rodada futura dedicada só a isso.
 - Sinalizar na UI quando `Game.Audio.ensureContext()` volta `null`
   (navegador sem Web Audio) — hoje o jogador só fica sem batimento/SFX
   sem nenhum aviso.
