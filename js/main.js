@@ -1431,7 +1431,12 @@ window.Game = window.Game || {};
 
       if (data.kind === 'pickedUp'){
         const entry = entries.get(data.targetId);
-        if (entry && entry.capture){
+        // só aplica se ainda estiver mesmo "downed" — sem essa checagem,
+        // uma corrida rara com 'revived' (aliado reanimando no exato
+        // mesmo instante em que o Assassino pega) podia deixar alguém já
+        // reanimado e livre sendo marcado como "carried" por engano, se
+        // os 2 eventos chegassem fora de ordem
+        if (entry && entry.capture && entry.capture.state.downed){
           entry.capture.state.downed = false;
           entry.capture.state.carried = true;
           entry.capture.render();
@@ -1481,6 +1486,17 @@ window.Game = window.Game || {};
       // ver o resultado chegar via struggleResult daqui a pouco
       if (data.kind === 'rescued'){
         if (data.targetId === localId && localEntry.capture) localEntry.capture.rescue();
+        return;
+      }
+
+      // reanimar aliado caído (downed) sem precisar de gancho — mesma
+      // ideia do rescued acima, só que pra fase anterior (antes do
+      // Assassino pegar). revive() por dentro chama resolve('revived'),
+      // que já dispara o mesmo struggleResult que escaped/rescued usam —
+      // os outros clientes (nem alvo, nem quem reanimou) já sabem
+      // espelhar isso sem handler extra (ver 'struggleResult' abaixo)
+      if (data.kind === 'revived'){
+        if (data.targetId === localId && localEntry.capture) localEntry.capture.revive();
         return;
       }
 
@@ -1826,10 +1842,18 @@ window.Game = window.Game || {};
             const nearHideout = nearestHideoutSpot(localEntry.char.state.pos, Game.CONFIG.hideout.radius);
             const hookedAlly = activeSurvivors().find((e) => e !== localEntry && e.capture && e.capture.state.hooked &&
               Math.hypot(e.char.state.pos.x - localEntry.char.state.pos.x, e.char.state.pos.y - localEntry.char.state.pos.y) <= Game.CONFIG.capture.rescueRange);
+            // aliado caído (downed, ainda não pego pelo Assassino) — dá
+            // pra reanimar direto, sem esperar ele ser pendurado. Só entra
+            // aqui se não tiver ninguém pendurado por perto (prioridade
+            // pro resgate do gancho, sempre mais urgente)
+            const downedAlly = !hookedAlly && activeSurvivors().find((e) => e !== localEntry && e.capture && e.capture.state.downed &&
+              Math.hypot(e.char.state.pos.x - localEntry.char.state.pos.x, e.char.state.pos.y - localEntry.char.state.pos.y) <= Game.CONFIG.capture.reviveRange);
             const droppablePallet = nearestPallet(localEntry.char.state.pos, Game.CONFIG.pallet.radius);
             const engageTarget = nearestEngageableObjective(localEntry.char.state.pos);
             if (attackRequested && hookedAlly){
               net.sendEvent({ kind: 'rescued', targetId: hookedAlly.info.id });
+            } else if (attackRequested && downedAlly){
+              net.sendEvent({ kind: 'revived', targetId: downedAlly.info.id });
             } else if (attackRequested && nearHideout){
               localEntry.hideout.enter();
             } else if (attackRequested && droppablePallet && droppablePallet.drop()){

@@ -307,8 +307,27 @@ independente):
   confirmada sempre dentro da zona normal ao spawnar de verdade.
 - Modo de dificuldade opcional em que errar skill check tira progresso do
   gerador (hoje só custa tempo, `objective.js` → `resolveSkillCheck`).
-- Ação de reanimar aliado *downed* sem precisar carregar até o gancho —
-  o próprio comentário de `capture.js` já assume essa lacuna.
+- ~~Reanimar aliado *downed* sem gancho~~ — **feito** (2026-08-15):
+  `capture.js` ganha `revive()` — só funciona na fase *downed* (antes do
+  Assassino pegar; uma vez `carried`/`hooked`, só resgate no gancho
+  mesmo). Reaproveita `resolve('revived')` por dentro, então dispara o
+  mesmo `onResolve(result)` que `escaped`/`rescued` já usam — o
+  `struggleResult` que isso já manda pra rede é o suficiente pra outros
+  clientes espelharem, **sem precisar de handler novo pra observadores**.
+  Só existe no **modo online** (solo só tem 1 Sobrevivente, não tem quem
+  reanimar). Novo evento `'revived'` no protocolo, `targetId===localId`
+  no alvo chama `capture.revive()`, mesmo padrão de `'rescued'`.
+  `Game.CONFIG.capture.reviveRange` (55px, igual ao `rescueRange`).
+  **Corrida real fechada**: se o Assassino pegar (`pickedUp`) e um
+  aliado reanimar (`revived`) quase ao mesmo tempo, o evento que chegar
+  por último não podia mais aplicar por cima — `revive()` já se recusa
+  se `!state.downed`, e o handler de `'pickedUp'` ganhou a mesma checagem
+  (`entry.capture.state.downed` precisa ser `true` antes de aplicar).
+  Testado via Playwright com 3 clientes LAN (Assassino + 2 Sobreviventes):
+  Assassino derruba de verdade (2 golpes reais), aliado anda até lá e
+  reanima, o próprio alvo, o Assassino E o aliado todos veem o estado
+  certo (`captured:false, downed:false, injured:true`), e o alvo
+  reanimado consegue andar de novo.
 - ~~Cooldown de reentrada em `hideout.js`~~ — **feito** (2026-08-15):
   `Game.CONFIG.hideout.reentryCooldown` (5s), `state.reentryLockedUntil`
   (timestamp `performance.now()`, mesmo padrão de `stunnedUntil`/

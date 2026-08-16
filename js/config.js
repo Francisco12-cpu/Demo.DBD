@@ -156,6 +156,7 @@ Game.CONFIG = {
     wiggleGoal: 5,             // apertos necessários pra se soltar do carrego antes de chegar no gancho
     hookRange: 70,             // px — o quão perto de um gancho o Assassino precisa estar pra pendurar
     rescueRange: 55,           // px — o quão perto um Sobrevivente aliado precisa estar pra resgatar quem tá pendurado
+    reviveRange: 55,           // px — o quão perto um Sobrevivente aliado precisa estar pra reanimar quem caiu (antes do Assassino pegar), sem precisar de gancho
   },
 
   maxSurvivors: 4, // limite de sobreviventes por partida (modo online)

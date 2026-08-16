@@ -83,6 +83,23 @@ window.Game = window.Game || {};
       return true;
     }
 
+    // um Sobrevivente aliado reanima quem caiu, sem precisar de gancho —
+    // só existe nessa fase (downed): uma vez que o Assassino já pegou
+    // (carried) ou pendurou (hooked), só dá pra resgatar do jeito normal
+    // (rescue(), no gancho). Instantâneo, igual ao resgate do gancho (sem
+    // canalização) — mesma simplificação já usada lá. Volta ferido (não
+    // saudável), igual ao jogo original: levantar do chão não cura a
+    // machucadura, só tira de "caído". Reaproveita resolve() — dispara o
+    // mesmo onResolve(result) que escaped/rescued já usam pra avisar quem
+    // chamou down() (em main.js, isso já manda o evento 'struggleResult'
+    // pra rede, que os outros clientes já sabem espelhar pra qualquer
+    // resultado que não seja 'eliminated' — não precisou de evento novo).
+    function revive(){
+      if (!state.downed) return false;
+      resolve('revived');
+      return true;
+    }
+
     // enquanto carregado, apertar repetido tenta soltar antes de chegar
     // num gancho — retorna true no frame em que consegue se soltar
     function wigglePulse(){
@@ -172,7 +189,7 @@ window.Game = window.Game || {};
       if (state.timeLeft <= 0) resolve('eliminated');
     }
 
-    return { state, down, pickUp, wigglePulse, dropFree, hook, hookPulse, rescue, pulse, update, render };
+    return { state, down, pickUp, revive, wigglePulse, dropFree, hook, hookPulse, rescue, pulse, update, render };
   }
 
   Game.createCapture = createCapture;
