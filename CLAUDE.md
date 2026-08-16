@@ -477,8 +477,17 @@ independente):
   própria. Testado via Playwright com 3 clientes LAN: cada Sobreviventes
   recebe o número certo (1, 2), Assassino não tem badge nenhum.
 - Configuração de remapeamento de tecla (hoje E/Q/R/WASD são fixos).
-- Histórico de partidas (não só o agregado que já existe em
-  `localStorage`/`dbd_stats`).
+- ~~Histórico de partidas~~ — **feito** (2026-08-15): tela nova
+  "Histórico de partidas" (`#menu-history`, botão no menu principal),
+  guarda as últimas 20 em `dbd_match_history` no `localStorage`
+  (`{date, won, role, detail}` — `detail` reaproveita o mesmo texto que
+  já aparece na tela de resultado, sem duplicar formatação). Botão
+  "Limpar histórico". `recordMatchHistory()` chamado em `showResult()`,
+  ao lado do `recordMatchResult()` (agregado) que já existia — os dois
+  continuam coexistindo, um não substitui o outro. Testado via
+  Playwright: estado vazio mostra aviso, partida solo real completa
+  (timers encurtados via `page.evaluate`) gera uma entrada com
+  papel/resultado/detalhe corretos, botão de limpar funciona.
 
 **Técnico/arquitetura**
 - Estrutura espacial simples (grid) pra `nearbyWalls` em `lighting.js` —

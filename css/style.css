@@ -62,6 +62,20 @@ html,body{
 }
 .menu-card hr{ border: none; border-top: 1px solid var(--wall); width: 100%; margin: 2px 0; }
 .menu-credits{ color: var(--muted); font-size: 11px; text-align: center; margin: 8px 0 0; }
+/* histórico de partidas — lista rolável própria, pra não deixar o menu
+   inteiro crescendo sem limite conforme o histórico enche (até 20) */
+#history-list{
+  display:flex; flex-direction:column; gap:4px;
+  max-height: 50vh; overflow-y:auto;
+  font-size:12px;
+}
+.history-entry{
+  display:flex; justify-content:space-between; gap:8px;
+  padding:6px 8px; background:var(--bg-deep); border:1px solid var(--wall);
+}
+.history-entry.won{ border-left:3px solid var(--survivor); }
+.history-entry.lost{ border-left:3px solid var(--killer); }
+.history-entry .history-detail{ color:var(--muted); font-size:11px; }
 .room-code{
   display:flex; flex-direction:column; align-items:center; gap:8px;
   font-size: 22px; letter-spacing: 2px; color: var(--gold);

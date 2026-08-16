@@ -25,6 +25,7 @@ window.Game = window.Game || {};
     lobby: document.getElementById('menu-lobby'),
     result: document.getElementById('menu-result'),
     settings: document.getElementById('menu-settings'),
+    history: document.getElementById('menu-history'),
   };
 
   function showScreen(name){
@@ -237,6 +238,47 @@ window.Game = window.Game || {};
     resultProgressEl.textContent = renderStats();
   }
   renderStats();
+
+  // ---------- histórico de partidas (últimas 20, não só o agregado acima) ----------
+  const historyOpenBtn = document.getElementById('menu-history-open');
+  const historyBackBtn = document.getElementById('history-back');
+  const historyClearBtn = document.getElementById('history-clear');
+  const historyListEl = document.getElementById('history-list');
+  const MATCH_HISTORY_LIMIT = 20;
+
+  function readMatchHistory(){
+    try { return JSON.parse(localStorage.getItem('dbd_match_history')) || []; }
+    catch { return []; }
+  }
+  // detail: o mesmo texto que já aparece na tela de resultado (ver
+  // showResult) — reaproveitado aqui pra não duplicar formatação
+  function recordMatchHistory(won, role, detail){
+    const history = readMatchHistory();
+    history.unshift({ date: new Date().toISOString(), won, role, detail: detail || '' });
+    if (history.length > MATCH_HISTORY_LIMIT) history.length = MATCH_HISTORY_LIMIT;
+    localStorage.setItem('dbd_match_history', JSON.stringify(history));
+  }
+  function renderHistory(){
+    const history = readMatchHistory();
+    if (history.length === 0){
+      historyListEl.innerHTML = '<p class="menu-hint">Nenhuma partida registrada ainda.</p>';
+      return;
+    }
+    historyListEl.innerHTML = history.map((entry) => {
+      const roleLabel = entry.role === 'killer' ? 'Assassino' : 'Sobrevivente';
+      const dateLabel = new Date(entry.date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return `<div class="history-entry ${entry.won ? 'won' : 'lost'}">
+        <span>${entry.won ? '🏆' : '💀'} ${roleLabel} · ${dateLabel}</span>
+        <span class="history-detail">${escapeHtml(entry.detail)}</span>
+      </div>`;
+    }).join('');
+  }
+  historyOpenBtn.addEventListener('click', () => { renderHistory(); showScreen('history'); });
+  historyBackBtn.addEventListener('click', () => showScreen('start'));
+  historyClearBtn.addEventListener('click', () => {
+    localStorage.removeItem('dbd_match_history');
+    renderHistory();
+  });
 
   linkAbilitySelects(abilitySelect, abilitySelect2, () => {
     saveSurvivorAbilityPrefs(abilitySelect.value, abilitySelect2.value);
@@ -602,6 +644,7 @@ window.Game = window.Game || {};
     resultTitle.className = won ? 'won' : 'lost';
     resultDetail.textContent = detail || '';
     recordMatchResult(won, role);
+    recordMatchHistory(won, role, detail);
   }
 
   resultAgain.addEventListener('click', () => {
