@@ -336,7 +336,12 @@ independente):
   3 lobby — a partir das mesmas 3 chaves; qualquer um deles mudando
   salva de volta). Testado: mudar os 3 selects, recarregar a página,
   confirmar que os 6 `<select>` voltam com o valor salvo.
-- Botão "copiar código da sala" (clipboard) na tela de host P2P.
+- ~~Botão "copiar código da sala"~~ — **feito** (2026-08-15):
+  `#lobby-room-code-copy` ao lado do código/QR, usa `navigator.clipboard`
+  (só aparece se a API existir — precisa de contexto seguro, https ou
+  localhost; sem fallback, o código já fica visível na tela pra copiar à
+  mão). Testado via Playwright com permissão de clipboard concedida:
+  clica, mostra "Copiado!" por 1.5s, clipboard recebe o código certo.
 - Validação/versionamento leve de protocolo em `protocol.js` — hoje só os
   3 kinds "resumable" quebram cedo se tiverem um typo; os outros ~15
   passam despercebidos até teste manual.

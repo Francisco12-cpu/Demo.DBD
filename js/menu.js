@@ -52,6 +52,7 @@ window.Game = window.Game || {};
 
   const lobbyRoomCode = document.getElementById('lobby-room-code');
   const lobbyRoomCodeText = document.getElementById('lobby-room-code-text');
+  const lobbyRoomCodeCopy = document.getElementById('lobby-room-code-copy');
   const lobbyRoomQr = document.getElementById('lobby-room-qr');
   const lobbyCounts = document.getElementById('lobby-counts');
   const lobbyPlayers = document.getElementById('lobby-players');
@@ -302,6 +303,22 @@ window.Game = window.Game || {};
         lobbyRoomQr.style.display = 'none';
       }
     }
+  }
+
+  // clipboard só existe em contexto seguro (https ou localhost) — sem
+  // fallback nenhum se não tiver: o código já está visível na tela pra
+  // copiar manualmente, o botão só é uma conveniência
+  if (navigator.clipboard){
+    lobbyRoomCodeCopy.addEventListener('click', () => {
+      if (!hostingRoomCode) return;
+      navigator.clipboard.writeText(hostingRoomCode).then(() => {
+        const original = lobbyRoomCodeCopy.textContent;
+        lobbyRoomCodeCopy.textContent = 'Copiado!';
+        setTimeout(() => { lobbyRoomCodeCopy.textContent = original; }, 1500);
+      }).catch(() => {});
+    });
+  } else {
+    lobbyRoomCodeCopy.style.display = 'none';
   }
 
   function makeHandlers(errorTarget){
