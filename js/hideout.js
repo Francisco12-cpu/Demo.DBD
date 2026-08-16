@@ -14,23 +14,30 @@ window.Game = window.Game || {};
      * @property {boolean} hidden
      * @property {number} timeLeft - segundos até a saída forçada
      * @property {number} hiddenFor - segundos escondido nesta entrada (reseta ao sair)
+     * @property {number} reentryLockedUntil - performance.now() até quando enter() é recusado
      */
     /** @type {HideoutState} */
-    const state = { hidden: false, timeLeft: 0, hiddenFor: 0 };
+    const state = { hidden: false, timeLeft: 0, hiddenFor: 0, reentryLockedUntil: 0 };
     let nextNoiseAt = 0;
 
+    // retorna false se recusou (ainda em cooldown de reentrada — ver
+    // reentryCooldown no config, fecha o exploit de sair/entrar rápido pra
+    // resetar hiddenFor sem nunca fazer barulho)
     function enter(){
-      if (state.hidden) return;
+      if (state.hidden) return false;
+      if (performance.now() < state.reentryLockedUntil) return false;
       state.hidden = true;
       state.timeLeft = Game.CONFIG.hideout.maxDuration;
       state.hiddenFor = 0;
       nextNoiseAt = Game.CONFIG.hideout.noiseAfter;
+      return true;
     }
 
     function exit(){
       state.hidden = false;
       state.timeLeft = 0;
       state.hiddenFor = 0;
+      state.reentryLockedUntil = performance.now() + Game.CONFIG.hideout.reentryCooldown * 1000;
     }
 
     // retorna { forcedExit, madeNoise } — forcedExit quando o tempo máximo

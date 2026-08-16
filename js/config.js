@@ -235,6 +235,14 @@ Game.CONFIG = {
     // números pra deixar mais fácil ou mais arriscado ficar escondido.
     noiseAfter: 6,      // segundos escondido até começar a fazer barulho
     noiseInterval: 3,   // segundos entre cada barulho, depois de noiseAfter
+    // sem isso, dava pra sair e entrar de novo instantaneamente pra
+    // resetar hiddenFor e nunca fazer barulho (camping infinito) — exploit
+    // real, achado numa auditoria de código, não um bug reportado por
+    // jogador. Bloqueia reentrada por esse tempo depois de QUALQUER saída
+    // (voluntária ou forçada), perto do valor de noiseAfter de propósito:
+    // só vale a pena sair achando que vai poder voltar rápido se realmente
+    // precisar (ex: skill check), não como tática de resetar o timer.
+    reentryCooldown: 5,
   },
 
   // Sobrevivente controlado pela IA (modo solo, jogando de Assassino) —

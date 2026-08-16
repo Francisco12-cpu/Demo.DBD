@@ -297,9 +297,14 @@ independente):
   gerador (hoje só custa tempo, `objective.js` → `resolveSkillCheck`).
 - Ação de reanimar aliado *downed* sem precisar carregar até o gancho —
   o próprio comentário de `capture.js` já assume essa lacuna.
-- Cooldown de reentrada em `hideout.js` — hoje dá pra sair e entrar nele
-  de novo instantaneamente pra resetar o temporizador de ruído
-  (`noiseAfter`), o que é um exploit de camping real.
+- ~~Cooldown de reentrada em `hideout.js`~~ — **feito** (2026-08-15):
+  `Game.CONFIG.hideout.reentryCooldown` (5s), `state.reentryLockedUntil`
+  (timestamp `performance.now()`, mesmo padrão de `stunnedUntil`/
+  `snaredUntil`) setado em toda saída (voluntária ou forçada);
+  `enter()` recusa (retorna `false`, no-op silencioso) enquanto em
+  cooldown. Testado isolado (`Game.createHideout()` via
+  `page.evaluate`): reentrada imediata bloqueada, libera depois do
+  cooldown, barulho depois de tempo escondido continua funcionando.
 - Regeneração/reset de pallets já quebrados depois de uma certa fase da
   partida (ex.: só depois do portão abrir), pra não esgotar os loops de
   perseguição em partidas longas.
