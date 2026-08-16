@@ -572,7 +572,22 @@ independente):
   overlay de iluminação/fog, sem precisar de lógica de visibilidade
   própria. Testado via Playwright com 3 clientes LAN: cada Sobreviventes
   recebe o número certo (1, 2), Assassino não tem badge nenhum.
-- Configuração de remapeamento de tecla (hoje E/Q/R/WASD são fixos).
+- ~~Configuração de remapeamento de tecla~~ — **feito** (2026-08-16):
+  Configurações → "Teclas" — 4 botões (habilidade 1/2/3, marcador de
+  ping), clica e aperta a tecla nova. `Game.Input.setKeybind(action,
+  code)` novo em `input.js`: rejeita (sem aplicar, retorna `{ok:false,
+  reason}`) tecla reservada (WASD/setas/Space — **movimento e ataque
+  continuam fixos de propósito**, remapeá-los abriria risco de travar o
+  próprio personagem) ou duplicata com outra ação já mapeada. Persistido
+  em `dbd_keybinds` (localStorage), com `resetKeybinds()`/botão
+  "Restaurar teclas padrão". Os 3 botões touch e o gamepad continuam
+  fixos (não fazem sentido remapear — são posição física, não código de
+  tecla). Testado via Playwright: remapeia habilidade 1 pra `KeyF`,
+  confirma que passa a funcionar de verdade (`consumeAbility1Request()`
+  via evento sintético) e que `KeyE` (a tecla antiga) para de funcionar;
+  tentativa de duplicata e de tecla reservada são rejeitadas com
+  mensagem, sem aplicar; sobrevive a um reload da página; reset volta
+  pro padrão E/Q/R/V.
 - ~~Histórico de partidas~~ — **feito** (2026-08-15): tela nova
   "Histórico de partidas" (`#menu-history`, botão no menu principal),
   guarda as últimas 20 em `dbd_match_history` no `localStorage`
