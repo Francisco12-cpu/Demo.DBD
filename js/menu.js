@@ -31,6 +31,11 @@ window.Game = window.Game || {};
   function showScreen(name){
     Object.values(screens).forEach((el) => { el.style.display = 'none'; });
     screens[name].style.display = 'flex';
+    // sai da tela sem cancelar um remapeamento de tecla em andamento (ver
+    // stopListening mais abaixo) deixava o listener de keydown grudado na
+    // window pra sempre — a próxima tecla apertada em QUALQUER lugar do
+    // jogo (inclusive durante uma partida) rebindava a ação silenciosamente
+    stopListening();
   }
 
   const nameInput = document.getElementById('menu-name');
