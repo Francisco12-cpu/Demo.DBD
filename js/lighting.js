@@ -14,8 +14,22 @@ window.Game = window.Game || {};
   // mapa é maior que a tela de propósito, só uma janela ao redor do
   // personagem fica visível (dá pra sobrar um "spotlight" de #lighting
   // por cima, ver update()).
-  const CAMERA_ZOOM_DESKTOP = 1.3;
-  const CAMERA_ZOOM_MOBILE = 1.7;
+  //
+  // "Aliasing" nas texturas de chão/parede (achado 2026-08-16, relatado
+  // pelo Francisco depois do BUG-002/BUG-003): os tiles novos (16px de
+  // base — ver Game.CONFIG.tiles) são finos e repetem, então qualquer
+  // desalinhamento de sub-pixel entre eles vira um padrão de moiré bem
+  // visível (antes, com cor sólida, isso não existia porque não tinha
+  // nenhuma borda de tile pra desalinhar). 1.3 e 1.7 não são múltiplos
+  // exatos de 1/16 — 16×1.3=20.8px, uma fração de pixel por tile, que o
+  // navegador tem que arredondar/suavizar tile a tile. Ajustados pro
+  // múltiplo de 1/16 mais próximo (16×1.3125=21px, 16×1.6875=27px,
+  // exatos) — mudança visual imperceptível no zoom em si, mas todo tile
+  // de 16/32/48/64px (todos múltiplos de 16) passa a cair em pixel
+  // inteiro. Ver também pixel-snap do offset da câmera em update()
+  // abaixo — os dois juntos são as "2 formas mais fáceis" de resolver.
+  const CAMERA_ZOOM_DESKTOP = 1.3125;
+  const CAMERA_ZOOM_MOBILE = 1.6875;
 
   // Polígono de visibilidade calculado por raycasting em espaço de tela:
   // um raio pra cada canto de parede (± uma fração de grau, pra pegar a
@@ -212,8 +226,15 @@ window.Game = window.Game || {};
         ? Math.max(halfH, Math.min(MAP.height - halfH, followPos.y))
         : MAP.height / 2;
 
-      const offsetX = viewW / 2 - camX * zoom;
-      const offsetY = viewH / 2 - camY * zoom;
+      // pixel-snap: câmera segue a posição CONTÍNUA do jogador (com casas
+      // decimais), então sem arredondar aqui o translate muda por uma
+      // fração de pixel a cada frame — em combinação com as texturas que
+      // repetem (chão/parede, ver BUG-003), isso lê como um tremor/
+      // aliasing constante enquanto anda. Arredondar pra pixel inteiro
+      // deixa a câmera "grudada" na grade de pixel do tile, só se move em
+      // saltos de 1px (imperceptível, o jogo já roda em 60fps).
+      const offsetX = Math.round(viewW / 2 - camX * zoom);
+      const offsetY = Math.round(viewH / 2 - camY * zoom);
       arena.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
 
       const screenX = offsetX + followPos.x * zoom;
