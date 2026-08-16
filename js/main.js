@@ -373,6 +373,27 @@ window.Game = window.Game || {};
     killerCompassArrowEl.style.transform = `rotate(${angleDeg + 90}deg)`;
   }
 
+  // seta pro objetivo incompleto mais próximo — ajuda quem tá jogando pela
+  // 1ª vez a não vagar sem rumo. Sem limite de alcance (ao contrário do
+  // killer-compass, que só existe dentro do raio do batimento — esse aqui
+  // é ajuda de navegação, não informação sensível que precisa de custo).
+  // Depois que os geradores terminam (gatesActive), passa a apontar pro
+  // portão mais próximo ainda fechado em vez de um gerador — mesmo
+  // "pra onde eu vou agora" que o jogador precisa, só que na fase final.
+  const objectiveCompassEl = document.getElementById('objective-compass');
+  const objectiveCompassArrowEl = document.getElementById('objective-compass-arrow');
+  function updateObjectiveCompass(localPos, gatesActiveNow){
+    const target = gatesActiveNow
+      ? nearestBy(gates, localPos, (g) => g.state.pos, { filter: (g) => !g.state.open })
+      : nearestBy(objectives, localPos, (o) => o.state.pos, { filter: (o) => !o.state.done });
+    if (!target){ objectiveCompassEl.classList.remove('active'); return; }
+    const targetPos = target.state.pos;
+    const dx = targetPos.x - localPos.x, dy = targetPos.y - localPos.y;
+    objectiveCompassEl.classList.add('active');
+    const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI;
+    objectiveCompassArrowEl.style.transform = `rotate(${angleDeg + 90}deg)`;
+  }
+
   // vinheta vermelha nas bordas — reforço visual de tensão junto com o
   // batimento cardíaco, mesma proximidade, só que sempre visível mesmo
   // sem fone/som ligado
@@ -693,6 +714,7 @@ window.Game = window.Game || {};
       Game.Audio.updateHeartbeat(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
       updateKillerCompass(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
       updateDangerVignette(player.state.pos, killer.state.pos, Game.CONFIG.heartbeatRange);
+      updateObjectiveCompass(player.state.pos, gatesActive);
       // saiu do gancho (fugiu, foi resgatado ou foi sacrificado) — libera pra outro corpo usar
       if (heldHook && !capture.state.hooked){ setHookOccupied(heldHook, null); heldHook = null; }
 
@@ -1751,6 +1773,7 @@ window.Game = window.Game || {};
         Game.Audio.updateHeartbeat(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
         updateKillerCompass(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
         updateDangerVignette(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
+        updateObjectiveCompass(localEntry.char.state.pos, gatesActive);
       } else {
         updateAbilityHud([
           { label: Game.CONFIG.abilities.killerSense.label, ability: localAbility1 },

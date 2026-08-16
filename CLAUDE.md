@@ -452,8 +452,22 @@ independente):
   um ponto propositalmente inválido.
 
 **UX/acessibilidade**
-- Seta/indicador apontando pro objetivo incompleto mais próximo (ajuda
-  quem tá jogando pela 1ª vez a não vagar sem rumo).
+- ~~Seta pro objetivo incompleto mais próximo~~ — **feito**
+  (2026-08-15): `#objective-compass` — mesmo padrão visual/CSS do
+  `#killer-compass` já existente (espelhado à esquerda, dourado em vez
+  de vermelho), mas **sem limite de alcance** (é ajuda de navegação, não
+  informação sensível que precisa custar algo pra ver — diferente do
+  killer-compass, que só existe dentro do raio do batimento).
+  `updateObjectiveCompass(localPos, gatesActiveNow)` aponta pro objetivo
+  incompleto mais próximo (`nearestBy(objectives, ...)`) e, depois que
+  todos terminam (`gatesActive`), passa a apontar pro portão mais
+  próximo ainda fechado — mesma pergunta "pra onde eu vou agora" nas 2
+  fases. Só pro Sobrevivente (`startSolo`/`startOnline`, não existe em
+  `startSoloAsKiller`). Testado: ângulo calculado bate exatamente com a
+  matemática esperada tanto mirando um objetivo quanto (depois de
+  completar um de verdade numa partida solo real, timers encurtados)
+  mirando o portão; regressão online confirmando que só o Sobrevivente
+  vê a seta, nunca o Assassino.
 - ~~Indicador extra pros 4 Sobreviventes~~ — **feito** (2026-08-15):
   `.survivor-badge` — círculo com o número (1-4) no canto do sprite,
   criado junto com `setColorOverride()` em `startOnline` (só modo online,
