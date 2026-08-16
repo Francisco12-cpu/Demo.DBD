@@ -128,6 +128,13 @@ Game.CONFIG = {
     speedGainPerHit: 14,     // graus/s a mais no ponteiro por acerto
     minZoneWidthDeg: 22,     // nunca fica menor que isso
     maxSpeedDegPerSec: 320,  // nunca fica mais rápido que isso
+
+    // skill check "ótimo": sub-zona menor, centralizada dentro da zona de
+    // acerto normal — acertar exatamente nela dá bônus de progresso maior
+    // (estilo "great skill check" do jogo original). Acertar fora dela mas
+    // ainda dentro da zona normal continua valendo o successBonus de sempre.
+    greatZoneFraction: 0.3,     // largura da zona ótima = fração da zona normal
+    greatBonusMultiplier: 1.6, // successBonus × isso, só quando acerta na zona ótima
   },
 
   // captura (js/capture.js) — igual ao jogo original: o 2º golpe DERRUBA

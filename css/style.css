@@ -496,9 +496,14 @@ html,body{
   width:70px; height:70px;
   transform: translate(-50%,-50%);
   border-radius:50%;
+  /* zona "ótima" (great-start/end) fica sempre dentro da zona normal
+     (zone-start/end) — ver spawnSkillCheck em js/objective.js — por isso
+     dá pra fatiar o mesmo conic-gradient em 5 trechos sem sobreposição */
   background: conic-gradient(
     var(--wall) 0deg, var(--wall) var(--zone-start,0deg),
-    var(--gold) var(--zone-start,0deg), var(--gold) var(--zone-end,0deg),
+    var(--gold) var(--zone-start,0deg), var(--gold) var(--great-start, var(--zone-start,0deg)),
+    var(--survivor) var(--great-start, var(--zone-start,0deg)), var(--survivor) var(--great-end, var(--zone-start,0deg)),
+    var(--gold) var(--great-end, var(--zone-start,0deg)), var(--gold) var(--zone-end,0deg),
     var(--wall) var(--zone-end,0deg)
   );
   display:none;

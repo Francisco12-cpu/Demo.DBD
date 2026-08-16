@@ -290,9 +290,21 @@ prioridade — usar julgamento na próxima sessão, cada item é pequeno e
 independente):
 
 **Jogabilidade**
-- Skill check "ótimo" (zona central menor dentro da zona de acerto em
-  `objective.js`, com bônus de progresso maior — o dado já existe,
-  `zoneStart`/`zoneEnd`, só falta a sub-zona).
+- ~~Skill check "ótimo"~~ — **feito** (2026-08-15): sub-zona central
+  (`Game.CONFIG.skillCheck.greatZoneFraction`=0.3 da zona normal,
+  sempre recalculada e centralizada em `spawnSkillCheck()`) que multiplica
+  o `successBonus` por `greatBonusMultiplier` (1.6×) quando acertada.
+  `objective.update()` retorna `{ justFailed, great }` (era só
+  `justFailed`) — `great` é opcional pra quem chama, não quebra nada em
+  `startSoloAsKiller` (IA nunca lê o campo). Anel do skill check
+  (`.skillcheck-ring`) ganha uma faixa colorida extra no `conic-gradient`
+  via `--great-start`/`--great-end` (mesmo mecanismo de `--zone-start`/
+  `--zone-end`). Som novo `playSkillCheckGreat()` em `audio.js`. Testado
+  com `Game.createObjective()` isolado (`state.skillCheck` é objeto plano,
+  dá pra forçar ângulo/zona direto): acerto normal dá exatamente
+  `successBonus`, acerto na zona ótima dá exatamente `successBonus ×
+  greatBonusMultiplier`, erro não dá progresso nenhum; zona ótima
+  confirmada sempre dentro da zona normal ao spawnar de verdade.
 - Modo de dificuldade opcional em que errar skill check tira progresso do
   gerador (hoje só custa tempo, `objective.js` → `resolveSkillCheck`).
 - Ação de reanimar aliado *downed* sem precisar carregar até o gancho —

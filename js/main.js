@@ -755,6 +755,7 @@ window.Game = window.Game || {};
               objectivesStatus.textContent = 'Geradores prontos! Ache um portão pra escapar.';
             }
           }
+          if (result.great) Game.Audio.playSkillCheckGreat();
           // igual ao original: errar o skill check faz barulho alto e
           // entrega a posição — a IA vai investigar por um tempinho, se
           // estiver perto o bastante pra ouvir
@@ -1813,6 +1814,7 @@ window.Game = window.Game || {};
               net.sendEvent({ kind: 'objectiveDone', index });
               checkWinFromObjectives();
             }
+            if (result.great) Game.Audio.playSkillCheckGreat();
             // igual ao original: errar o skill check faz barulho alto e
             // entrega a posição pro Assassino (e marca o ponto pra
             // todo mundo, mesma técnica do ping de Distrair)

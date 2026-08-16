@@ -400,6 +400,27 @@ window.Game = window.Game || {};
     osc.stop(c.currentTime + 0.52);
   }
 
+  // skill check "ótimo" (zona central, ver js/objective.js) — 2 notas
+  // curtas subindo, distinto do "clique" neutro do menu e sem confundir
+  // com o alarme de erro (playError)
+  function playSkillCheckGreat(){
+    const c = ensureContext();
+    if (!c) return;
+    [660, 880].forEach((freq, i) => {
+      setTimeout(() => {
+        const osc = c.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const gain = c.createGain();
+        gain.gain.setValueAtTime(0.18, c.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.12);
+        osc.connect(gain).connect(masterGain);
+        osc.start();
+        osc.stop(c.currentTime + 0.13);
+      }, i * 55);
+    });
+  }
+
   // botão "Testar som" das Configurações — 3 bipes, pra quem não tem
   // certeza se o áudio do celular está mesmo ativado
   function playTestSound(){
@@ -474,6 +495,7 @@ window.Game = window.Game || {};
     init, updateHeartbeat, stopHeartbeat, playAttackSwing, playCaptureHit, playFootstep,
     playClick, playError, playTestSound, playObjectiveStart,
     playDoorLock, playDoorBreak, playPalletDrop, playPalletBreak, playGateOpen, playSurvivorEscape,
+    playSkillCheckGreat,
     setMasterVolume, startAmbient, stopAmbient,
   };
 })();

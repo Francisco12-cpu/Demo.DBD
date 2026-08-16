@@ -51,9 +51,17 @@ window.Game = window.Game || {};
       const speedDegPerSec = Math.min(cfg.maxSpeedDegPerSec, cfg.speedDegPerSec + level * cfg.speedGainPerHit);
       const zoneStart = Math.random() * (360 - zoneWidthDeg);
       const zoneEnd = zoneStart + zoneWidthDeg;
-      state.skillCheck = { angle: 0, zoneStart, zoneEnd, speedDegPerSec };
+      // zona "ótima" — sub-faixa menor, centralizada dentro da zona normal
+      // (ver Game.CONFIG.skillCheck.greatZoneFraction/greatBonusMultiplier)
+      const zoneCenter = (zoneStart + zoneEnd) / 2;
+      const greatWidthDeg = zoneWidthDeg * cfg.greatZoneFraction;
+      const greatStart = zoneCenter - greatWidthDeg / 2;
+      const greatEnd = zoneCenter + greatWidthDeg / 2;
+      state.skillCheck = { angle: 0, zoneStart, zoneEnd, greatStart, greatEnd, speedDegPerSec };
       scRing.style.setProperty('--zone-start', zoneStart + 'deg');
       scRing.style.setProperty('--zone-end', zoneEnd + 'deg');
+      scRing.style.setProperty('--great-start', greatStart + 'deg');
+      scRing.style.setProperty('--great-end', greatEnd + 'deg');
       scRing.style.display = 'block';
     }
 
@@ -61,11 +69,13 @@ window.Game = window.Game || {};
     // progresso nem sobe o nível de dificuldade — só não ganha nada nesse
     // skill check, o que já custa o tempo até ele aparecer de novo no
     // mesmo nível. Só acertar avança a barra E sobe a dificuldade do
-    // próximo skill check desse gerador.
-    function resolveSkillCheck(hit){
+    // próximo skill check desse gerador. `great` (acerto na sub-zona
+    // central) multiplica o ganho — ver spawnSkillCheck.
+    function resolveSkillCheck(hit, great){
       const cfg = Game.CONFIG.skillCheck;
       if (hit){
-        state.progress = Math.min(1, state.progress + cfg.successBonus);
+        const bonus = great ? cfg.successBonus * cfg.greatBonusMultiplier : cfg.successBonus;
+        state.progress = Math.min(1, state.progress + bonus);
         state.skillCheckLevel += 1;
       }
       if (state.progress >= 1) state.done = true;
@@ -107,11 +117,14 @@ window.Game = window.Game || {};
     // tinha um skill check ativo antes deste frame (ver js/main.js).
     // speedMultiplier: >1 quando há mais Sobreviventes ajudando perto do
     // mesmo objetivo (cooperação) — 1 é o padrão (sozinho).
-    // Retorna { justFailed } pra quem chama avisar o Assassino (evento de
-    // rede no online, ou distrair a IA no solo) — igual ao jogo original,
-    // errar um skill check faz barulho alto e entrega a posição.
+    // Retorna { justFailed, great } — justFailed pra quem chama avisar o
+    // Assassino (evento de rede no online, ou distrair a IA no solo) —
+    // igual ao jogo original, errar um skill check faz barulho alto e
+    // entrega a posição. great: true no frame em que acerta a sub-zona
+    // "ótima" (ver spawnSkillCheck) — pra quem chama dar um feedback
+    // extra (som/vibração diferente), opcional.
     function update(delta, playerPos, interactPressed, speedMultiplier){
-      const result = { justFailed: false };
+      const result = { justFailed: false, great: false };
       if (state.done) return result;
       const cfg = Game.CONFIG.objective;
 
@@ -130,10 +143,12 @@ window.Game = window.Game || {};
           } else {
             scNeedle.style.transform = `translateX(-50%) rotate(${state.skillCheck.angle}deg)`;
             if (interactPressed){
-              const { angle, zoneStart, zoneEnd } = state.skillCheck;
+              const { angle, zoneStart, zoneEnd, greatStart, greatEnd } = state.skillCheck;
               const hit = angle >= zoneStart && angle <= zoneEnd;
-              resolveSkillCheck(hit);
+              const great = hit && angle >= greatStart && angle <= greatEnd;
+              resolveSkillCheck(hit, great);
               if (!hit) result.justFailed = true;
+              result.great = great;
             }
           }
         } else {
