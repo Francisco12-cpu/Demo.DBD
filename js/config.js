@@ -41,6 +41,38 @@ Game.CONFIG = {
   sfxRadius: 650,
   visionRadius: 150, // px (mundo) — raio do "spotlight" ao redor do próprio personagem; na tela vira visionRadius*zoom, então precisa ser bem menor que o alcance de câmera pra sobrar área escura
 
+  // BUG-003 (BUGS.md, "pipeline de arte não é plug and play"): chão/parede/
+  // porta/pallet eram só `div`/CSS de cor sólida — o mapa nunca teve arte
+  // de verdade, só os personagens. Francisco forneceu um tileset
+  // (`assets/tiles/dungeon-tileset.png`, 384×192 — licença de uso livre,
+  // mesmo esquema dos spritesheets de personagem abaixo). A folha mistura
+  // 2 formatos bem diferentes:
+  //   - Chão/parede/caixote: peças de 32×32 alinhadas à grade, feitas pra
+  //     REPETIR (`floor`/`wall`/`crate` abaixo). A maioria das outras
+  //     células da grade (banners de pé fixo, tochas, pilares, grama) são
+  //     de uso único, não repetem bem — não usadas como textura de fundo.
+  //   - Props pequenos soltos (arco de porta, barris, potes...) NÃO seguem
+  //     a grade de 32px — têm tamanho e posição próprios, tipo um recorte
+  //     de spritesheet de UI. `door` (17×19px) é um desses: usado como
+  //     ícone centrado (`background-repeat: no-repeat`), não repetido.
+  // CSS lê isso via custom properties (`--floor-tile-url` etc., setadas 1x
+  // em main.js) como `background-image`. Se o arquivo não carregar, o
+  // `background-color` sólido de sempre continua aparecendo por baixo —
+  // já é o fallback pedido no BUG-003, de graça, sem código novo.
+  // Parede também ganha um baixo-relevo diferente por lado (`.wall-h`
+  // horizontal vs `.wall-v` vertical, decidido pela proporção do
+  // retângulo em `buildWorld()`) — a folha não tem uma 2ª textura plana de
+  // parede pra usar como variante por lado, então "cada lado é diferente"
+  // aqui é luz/sombra via CSS (claro no topo/esquerda, escuro embaixo/
+  // direita) em vez de uma 2ª imagem.
+  tiles: {
+    size: 32,
+    floor: 'assets/tiles/floor-stone.png',
+    wall: 'assets/tiles/wall-brick.png',
+    crate: 'assets/tiles/wood-crate.png',
+    door: 'assets/tiles/door-arch.png',
+  },
+
   // spritesheets em pixel art de verdade (assets/killer-sheet.png,
   // assets/survivor-sheet.png — fornecidas pelo usuário, licença de uso
   // livre) — substituem a técnica antiga de mask-image + cor sólida.

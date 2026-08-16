@@ -70,7 +70,7 @@ Seção 3 foi corrigida na tabela em si.
 
 ---
 
-### BUG-003 · Pipeline de arte não é "plug and play" · 🔴 P1 `[ARQ]`
+### BUG-003 · Pipeline de arte não é "plug and play" · 🟡 P1 `[ARQ]` — chão/parede feitos 2026-08-16
 - **Sintoma:** Não existe um caminho fácil para colocar sprites e pixel art no chão, nas paredes e nos objetos. Cada arte nova exige mexer no código.
 - **Esperado:** Trocar/adicionar arte deve ser **só soltar um arquivo e escrever uma linha**, sem tocar na lógica do jogo.
 - **Correção proposta:**
@@ -80,6 +80,15 @@ Seção 3 foi corrigida na tabela em si.
   - Fallback obrigatório: se a imagem não carregar, desenha um retângulo colorido com o ID escrito em cima — assim dá pra jogar mesmo sem arte pronta.
 - **Critério de aceite:** Adicionar uma parede nova = colocar `parede_tijolo.png` na pasta + 1 linha no manifesto. Zero alteração em arquivo de lógica.
 - **Triagem:** confirmado, real. Hoje os caminhos de sprite vivem em `Game.CONFIG.sprites` (melhor que hardcoded na lógica, mas ainda não é manifesto), e paredes/chão são `div`/CSS geradas de retângulos — não tem arte nenhuma. Maior item de escopo do arquivo inteiro; precisa da arte pronta (tiles 32×32) pra ir além do manifesto+fallback.
+- **Corrigido (parcial — chão, parede, porta, pallet):** Francisco forneceu `Dungeon tileset.png` (384×192, licença livre — movido pra `assets/tiles/dungeon-tileset.png`). A folha mistura 2 formatos: tiles de 32×32 alinhados à grade (repetem bem) e props soltos SEM alinhamento de grade (achado auditando pixel a pixel com flood-fill de componentes conectados via numpy, depois de um recorte errado inicial não bater com o que aparecia visualmente — os props não seguem a grade de 32px do resto da folha).
+  - **Chão/parede** (`floor-stone.png`/`wall-brick.png`): únicos 2 tiles de grade que repetem sem costura (resto da grade é decoração de uso único — pilar, altar, grade de ventilação, banner fixo). `#arena`/`.wall` usam via `background-image` repetido.
+  - **"Cada lado da parede"** (pedido do Francisco): a folha não tem uma 2ª textura de parede pra variar por lado, então virou baixo-relevo por CSS — `.wall-h`/`.wall-v` (decidido pela proporção width/height do retângulo em `buildWorld()`, `js/main.js`) dão claro no topo/escuro embaixo (parede deitada) ou claro na esquerda/escuro na direita (parede em pé), via `box-shadow: inset`.
+  - **Porta** (`door-arch.png`, prop solto ~17×19px, não é tile de grade): ícone de arco centralizado e não repetido em `.door`; `.door.locked` (vira parede de verdade) ganha a MESMA textura de parede, reforçando visualmente que virou parede.
+  - **Pallet** (`wood-crate.png`, tile de grade, linha dos caixotes): textura de caixote de madeira tiled em `.pallet` (em pé); `.pallet.dropped` (vira parede) ganha a textura de parede, mesmo raciocínio da porta trancada.
+  - Manifesto `Game.CONFIG.tiles` (`{size, floor, wall, crate, door}`, mesmo padrão de `Game.CONFIG.sprites`, não um `assets.js` separado — mantém 1 fonte de verdade só). `main.js` resolve os caminhos pra URL absoluta (achado testando: URL relativa numa CSS custom property setada via JS resolve de forma inconsistente entre navegadores — vinha 404 pedindo `css/assets/tiles/...`).
+  - **Fallback de graça**: `background-color` sólido continua por baixo se a imagem não carregar — não precisou de código de fallback novo, só evitar o shorthand `background:` (que reseta a cor junto).
+  - **Ainda falta**: gate/hook continuam cor sólida, BUG-004 (camada de face), fallback "retângulo com ID" pra sprite de PERSONAGEM faltando (hoje só os elementos do mapa têm fallback de graça via CSS). Resto da folha (banners, tochas, pilares, barris) documentado mas não usado — coordenadas em `assets/tiles/dungeon-tileset.png`.
+  - Testado: todas as imagens carregam (`new Image()`), estrutura de paredes confere `.wall-h`/`.wall-v` corretos (38 paredes, 19/19 no layout padrão), screenshots reais conferindo chão/parede/porta/pallet/relevo visualmente; `npm test` sem regressão.
 
 ---
 
@@ -278,9 +287,9 @@ Seção 3 foi corrigida na tabela em si.
 - [ ] Controles de toque revisados (zona morta, tamanho de botão para dedo)
 
 ### v0.3 — Pipeline de arte
-- [ ] BUG-003 — Manifesto de assets + fallback visual
+- [x] BUG-003 (parcial) — Chão/parede com tileset de verdade (2026-08-16); objetos do mapa (porta/pallet/gate) ainda cor sólida
 - [ ] BUG-004 — Camada de face personalizada
-- [ ] BUG-001 / BUG-002 — Camadas de sombra e luz
+- [x] BUG-001 / [ ] BUG-002 — Sombra corrigida (Fase 1); luz ainda bloqueada
 
 ### v0.4 — Profundidade e equilíbrio
 - [ ] Palletes / janelas / loop de perseguição
@@ -321,6 +330,8 @@ Seção 3 foi corrigida na tabela em si.
 | 2026-08-16 | — | BUG-007 e DD-02 corrigidos e testados (ver cada entrada) — economia de vida finita (sangramento + teto de quedas) e colapso de fim de partida. Fase 3 do roadmap de correção concluída (Fase 2 já tinha sido coberta pela correção do BUG-006 na Fase 1). |
 | 2026-08-16 | — | BUG-008 (regressão de progresso do gerador), BUG-009 (landscape trava/bloqueia de verdade + safe-area) e BUG-005 parcial (filtro CSS que apagava feedback visual dos Sobreviventes 2-4) corrigidos e testados. Fases 4-6 do roadmap de correção concluídas — só falta pipeline de arte (v0.3) e profundidade/equilíbrio (v0.4). |
 | 2026-08-16 | — | Autorrevisão do código desta sessão + auditoria fresca em arquivos não lidos ainda (pallet.js, window.js, ability.js, sw.js, resto de menu.js). 2 bugs novos achados e corrigidos: BUG-011 (`intentionalClose` podia travar em `true`) e BUG-012 (menu de pausa não bloqueava teclado/gamepad). 1 achado de baixo risco registrado e aceito por ora sem correção: BUG-013 (colapso pode ser adiado reconectando de propósito). |
+| 2026-08-16 | — | BUG-003 (parcial): Francisco forneceu um tileset de mapa (`assets/tiles/dungeon-tileset.png`) — chão e paredes ganharam textura de verdade pela 1ª vez (antes eram cor sólida), via novo manifesto `Game.CONFIG.tiles`. Testado (imagens carregam, screenshot conferido, sem regressão). |
+| 2026-08-16 | — | BUG-003 expandido: porta (ícone de arco), pallet (caixote de madeira) e baixo-relevo por lado da parede (`.wall-h`/`.wall-v`, pedido explícito do Francisco) — mesmo tileset, mais peças usadas. Testado com screenshots reais de cada elemento. |
 
 ---
 

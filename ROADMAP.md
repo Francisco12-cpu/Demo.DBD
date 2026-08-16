@@ -18,9 +18,12 @@ host podendo kickar ou trocar o papel de alguém, marcador de comunicação
 pros Sobreviventes, remapeamento de tecla, histórico de partidas. Desde
 2026-08-16 (ver `BUGS.md`): dá pra sair da partida/sala a qualquer
 momento (botão de pausa), Sobrevivente caído sem resgate morre sozinho
-(sangramento + teto de 3 quedas — a partida sempre termina), e a partida
+(sangramento + teto de 3 quedas — a partida sempre termina), a partida
 colapsa sozinha (Assassino vence) se ninguém escapar 150s depois dos
-geradores prontos.
+geradores prontos, e **chão/parede/porta/pallet têm textura de verdade**
+(o tileset que você mandou — `assets/tiles/dungeon-tileset.png`) em vez
+de cor sólida, pela 1ª vez desde que o projeto existe — inclusive
+parede com relevo diferente por lado (horizontal vs vertical).
 
 Publicado em: https://francisco12-cpu.github.io/Demo.DBD/ (deploy
 automático a cada push na branch `main`).
@@ -43,13 +46,22 @@ nesta rodada (ver `BUGS.md` pra causa raiz e teste de cada um):
 - [x] BUG-009 — Landscape trava/bloqueia de verdade + HUD respeita notch
 - [x] BUG-005 (parcial) — feedback visual (ferido/pendurado) agora aparece
       certo pros Sobreviventes 2-4 no online
+- [x] BUG-011 / BUG-012 — 2 bugs achados em autorrevisão (não relatados):
+      queda de rede podia ser engolida por engano; menu de pausa não
+      bloqueava teclado/gamepad
+- [x] BUG-003 (parcial) — chão, parede (com relevo por lado), porta
+      (ícone de arco) e pallet (caixote de madeira) com o tileset que
+      você mandou, em vez de cor sólida (gate/gancho ainda são cor sólida)
 
 Pendente: BUG-002 (bloqueado até você descrever o defeito visto — a
 arquitetura de luz que você pediu já existe, só falta o array de focos
-estáticos), BUG-003/004 (pipeline de arte, precisa da sua arte pronta),
-2 peças que sobraram do BUG-005 (estado "barricada" da porta, Assassino
-arrancar do esconderijo), DD-04/DD-05 (interrupção/feedback), controles
-de toque (zona morta, tamanho de alvo).
+estáticos), BUG-004 (camada de face — pipeline igual ao tileset, precisa
+de arte de face), resto do BUG-003 (gate/gancho, e o resto da folha —
+banners/tochas/pilares/barris — ainda não usado), 2 peças que sobraram
+do BUG-005 (estado "barricada" da porta, Assassino arrancar do
+esconderijo), DD-04/DD-05 (interrupção/feedback), controles de toque
+(zona morta, tamanho de alvo), BUG-013 (baixo risco, aceito por ora —
+colapso pode ser adiado reconectando de propósito).
 
 ## Ideias pra próxima atualização
 
@@ -58,12 +70,13 @@ Itens pequenos e médios já viraram funcionalidade nesta sessão (ver
 item). O que sobra agora é maior — cada um precisa de uma decisão sua
 antes de eu começar:
 
-- **Mapa em pixel art de verdade** — hoje as salas são `<div>`/CSS
-  geradas a partir de retângulos; só os personagens têm arte sua. Pra
-  virar pixel art de verdade eu precisaria de tiles desenhados por você
-  (paredes, chão, decoração) — sem isso eu só teria como gerar algo
-  genérico, o que não bate com o padrão do projeto de nunca usar arte
-  que não seja sua.
+- **Mapa em pixel art de verdade** — **parcial desde 2026-08-16**: chão,
+  parede, porta e pallet já usam o tileset que você mandou
+  (`assets/tiles/`). Ainda faltam gate/gancho (continuam cor sólida) e
+  decoração de mais peças da própria folha (ela tem banners/tochas/
+  pilares/barris não usados ainda — dá pra aproveitar, é só decidir onde
+  cada peça entra no mapa; são props soltos sem alinhamento de grade,
+  então cada um precisa ter o recorte certo achado igual fiz com a porta).
 - **Sistema de tileset customizável** — você poder subir seu próprio
   spritesheet (PNG + config de tamanho/animação) em vez do sprite fixo
   de hoje. Dá pra construir o mecanismo de upload/parsing sem esperar a

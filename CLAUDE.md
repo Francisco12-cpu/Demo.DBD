@@ -375,6 +375,49 @@ toque). 1 achado de baixo risco registrado e aceito por ora sem correção
 (BUG-013 — colapso de fim de partida pode ser adiado reconectando de
 propósito; exige ação deliberada e não afeta os outros jogadores).
 
+**BUG-003 parcial — tileset de mapa de verdade (2026-08-16):** Francisco
+forneceu `Dungeon tileset.png` (384×192, grade 32px, licença livre) —
+movido pra `assets/tiles/dungeon-tileset.png`. Chão e paredes eram
+`div`/CSS de cor sólida desde sempre; agora têm textura de verdade:
+2 tiles recortados da folha (`floor-stone.png`/`wall-brick.png` — os
+únicos que repetem sem costura visível, o resto da folha é peça
+arquitetônica/decoração de uso único: arco de porta, banners, tochas,
+barris) num manifesto novo `Game.CONFIG.tiles` (`{size, floor, wall}`,
+mesmo padrão de `Game.CONFIG.sprites`, não um `assets.js` separado).
+`main.js` seta 3 custom properties 1x só (`--tile-size`/
+`--floor-tile-url`/`--wall-tile-url`, resolvidas pra URL ABSOLUTA — achado
+testando: URL relativa numa custom property setada via JS resolve
+inconsistente entre navegadores, dava 404 pedindo `css/assets/tiles/...`);
+`style.css` (`#arena`/`.wall`) lê como `background-image` repetido.
+Fallback (imagem não carrega → cor sólida) é de graça via CSS, sem
+código novo.
+
+**Expandido no mesmo dia** (pedido do Francisco, "usa tudo que poder" +
+"lembra que tem uma parte pra cada lado da parede"): auditando a folha
+pixel a pixel (flood-fill de componentes conectados via numpy — os props
+soltos tipo o arco de porta NÃO seguem a grade de 32px do resto da
+folha, um recorte ingênuo por coordenada de grid pegava vazio) achei mais
+2 peças de grade que repetem bem e 1 prop solto:
+- `wood-crate.png` (linha dos caixotes) → `.pallet` (madeira de verdade
+  pro obstáculo que É literalmente um móvel de madeira).
+- `door-arch.png` (prop pequeno ~17×19px, não repete — ícone centralizado
+  em `.door`).
+- `.door.locked`/`.pallet.dropped` (os 2 casos em que o objeto "vira
+  parede de verdade" na lógica) ganharam a MESMA textura de parede, pra
+  reforçar visualmente a virada de estado.
+- **"Cada lado da parede"**: a folha não tem uma 2ª textura de parede
+  plana pra variar por lado — não existe fisicamente na folha, conferido
+  auditando toda ela. Virou baixo-relevo via CSS: `.wall-h`/`.wall-v`
+  (classe decidida pela proporção do retângulo em `buildWorld()`, `js/
+  main.js` — largura≥altura = horizontal) dão `box-shadow: inset` claro
+  num lado/escuro no outro (topo/base pra horizontal, esquerda/direita
+  pra vertical). É a interpretação mais defensável dado o que existe de
+  verdade na folha — não uma 2ª imagem, luz e sombra mesmo.
+- Resto da folha (banners, tochas, pilares, barris, potes) documentado
+  mas não usado — `assets/tiles/dungeon-tileset.png` tem tudo, com
+  coordenadas em pixels, se quiser aproveitar mais peças depois (props
+  soltos exigem achar o bounding box real, não a grade de 32px).
+
 **Ainda aberto no BUGS.md** (não mexer sem reler o arquivo primeiro):
 BUG-002 (luzes — bloqueado até o Francisco descrever o defeito visto),
 BUG-003/004 (pipeline de arte, escopo grande, precisa de tiles/faces

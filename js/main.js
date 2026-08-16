@@ -7,6 +7,27 @@ window.Game = window.Game || {};
   const arena = document.getElementById('arena');
   const lightingEl = document.getElementById('lighting');
   const dangerVignetteEl = document.getElementById('danger-vignette');
+
+  // BUG-003 (BUGS.md): tileset de chão/parede lido do manifesto
+  // (Game.CONFIG.tiles) — nunca hardcoded aqui. Roda 1x só (não muda
+  // durante o jogo, não precisa refazer por partida); style.css lê essas
+  // custom properties pra pintar #arena/.wall.
+  (function applyTileset(){
+    const cfg = Game.CONFIG.tiles;
+    // resolve pra URL absoluta antes de jogar num custom property: uma
+    // URL relativa guardada numa CSS custom property setada via JS é
+    // resolvida de forma inconsistente entre navegadores (alguns resolvem
+    // relativo ao documento, outros relativo à folha de estilo onde o
+    // var() é lido — bug real, achado testando: vinha 404 pedindo
+    // css/assets/tiles/... em vez de assets/tiles/...). Absoluta não tem
+    // essa ambiguidade.
+    const abs = (path) => new URL(path, document.baseURI).href;
+    document.documentElement.style.setProperty('--tile-size', cfg.size + 'px');
+    document.documentElement.style.setProperty('--floor-tile-url', `url('${abs(cfg.floor)}')`);
+    document.documentElement.style.setProperty('--wall-tile-url', `url('${abs(cfg.wall)}')`);
+    document.documentElement.style.setProperty('--crate-tile-url', `url('${abs(cfg.crate)}')`);
+    document.documentElement.style.setProperty('--door-icon-url', `url('${abs(cfg.door)}')`);
+  })();
   // BUG-009 (BUGS.md): virou bloqueio de verdade em portrait (CSS, ver
   // style.css) — o botão agora é só o escape hatch ("Jogar mesmo assim",
   // pra falso positivo de detecção de orientação), não uma preferência
@@ -121,7 +142,15 @@ window.Game = window.Game || {};
     currentKillerSpawn = layout.killerSpawn || MAP.killer;
     currentLayoutWalls.forEach((wall) => {
       const div = document.createElement('div');
-      div.className = 'wall';
+      // BUG-003 (BUGS.md): "cada lado da parede" — a folha de tileset não
+      // tem uma 2ª textura plana pra parede lateral (só a de topo/frente,
+      // que já usamos pra tudo), então a diferença por lado vira luz/sombra
+      // via CSS (.wall-h/.wall-v abaixo) — parede "deitada" (mais larga que
+      // alta, tipicamente topo/base de uma sala) recebe o relevo num
+      // sentido, parede "em pé" (mais alta que larga, lateral de sala) no
+      // outro. wall.w === wall.h (raro, canto quadrado) cai em horizontal.
+      const orientationClass = wall.w >= wall.h ? 'wall-h' : 'wall-v';
+      div.className = 'wall ' + orientationClass;
       div.style.left = wall.x + 'px';
       div.style.top = wall.y + 'px';
       div.style.width = wall.w + 'px';
