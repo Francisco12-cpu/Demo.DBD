@@ -1966,7 +1966,10 @@ window.Game = window.Game || {};
 
           gates.forEach((g, index) => {
             const near = Math.hypot(localEntry.char.state.pos.x - g.state.pos.x, localEntry.char.state.pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius;
-            if (g.progressOpen(delta, near, gatesActive)){
+            // mesma cooperação que os geradores já tinham (ver helpers acima)
+            const helpers = near ? activeSurvivors().filter((e) => e !== localEntry &&
+              Math.hypot(e.char.state.pos.x - g.state.pos.x, e.char.state.pos.y - g.state.pos.y) <= Game.CONFIG.gate.radius).length : 0;
+            if (g.progressOpen(delta, near, gatesActive, 1 + helpers * Game.CONFIG.gate.cooperationBonusPerHelper)){
               net.sendEvent({ kind: 'gateOpened', index });
               Game.Audio.playGateOpen();
             }

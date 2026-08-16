@@ -188,6 +188,10 @@ Game.CONFIG = {
     radius: 130,
     openDuration: 15,
     progressDecayRate: 0.3, // progresso perdido por segundo ao sair do alcance antes de terminar
+    // mesma cooperação que geradores já tinham (Game.CONFIG.objective) —
+    // faltava aqui, canalizar o portão em grupo era igual de lento que
+    // sozinho, ao contrário do resto do jogo original
+    cooperationBonusPerHelper: 0.5,
   },
 
   // pallets (js/pallet.js): obstáculo solto que o Sobrevivente derruba na

@@ -25,11 +25,13 @@ window.Game = window.Game || {};
 
     // survivorNear: Sobrevivente ativo (não capturado/escondido) dentro do
     // raio do portão, no cliente local. active: geradores já concluídos?
-    function progressOpen(delta, survivorNear, active){
+    // helperMultiplier: mesma ideia de Game.CONFIG.objective (cooperação
+    // entre Sobreviventes) — 1 = sozinho, quem chama calcula o resto.
+    function progressOpen(delta, survivorNear, active, helperMultiplier = 1){
       if (state.open || !active) return false;
       const cfg = Game.CONFIG.gate;
       if (survivorNear){
-        state.progress += delta / cfg.openDuration;
+        state.progress += (delta * helperMultiplier) / cfg.openDuration;
         if (state.progress >= 1){
           state.open = true;
           state.progress = 0;
