@@ -33,13 +33,20 @@
     STRUGGLE_RESULT: 'struggleResult',
   };
 
-  // Inventário completo dos `kind` usados em js/main.js (só documentação —
-  // esses não passam por servidor/host de forma inspecionada, então não
-  // ganham constante própria; listados aqui só pra quem for adicionar um
-  // novo saber onde procurar todos os existentes): captureStart, downed,
-  // pickedUp, droppedFree, hooked, rescued, gateOpened, survivorEscaped,
-  // doorForceLock, doorLocked, doorBroken, palletDropped, palletBroken,
-  // palletStun, noise — e os 3 de RESUMABLE_EVENT_KINDS acima.
+  // Inventário completo dos `kind` usados em js/main.js — os que não estão
+  // em RESUMABLE_EVENT_KINDS não passam por servidor/host de forma
+  // inspecionada (só repasse cego), então antes um typo/rename num deles
+  // só ia aparecer em teste manual (o evento simplesmente não fazia nada
+  // em silêncio). KNOWN_EVENT_KINDS existe só pra isso: main.js confere
+  // todo evento recebido contra essa lista e avisa (console.warn) se vier
+  // um kind desconhecido — não bloqueia nada, é só sinal cedo de bug.
+  const KNOWN_EVENT_KINDS = new Set([
+    ...Object.values(RESUMABLE_EVENT_KINDS),
+    'captureStart', 'downed', 'pickedUp', 'droppedFree', 'hooked', 'rescued',
+    'revived', 'gateOpened', 'survivorEscaped', 'doorForceLock', 'doorLocked',
+    'doorBroken', 'palletDropped', 'palletBroken', 'palletStun', 'noise',
+    'trapPlaced', 'trapSprung',
+  ]);
 
-  return { RESUMABLE_EVENT_KINDS };
+  return { RESUMABLE_EVENT_KINDS, KNOWN_EVENT_KINDS };
 });

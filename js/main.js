@@ -1422,6 +1422,11 @@ window.Game = window.Game || {};
 
     Game.onlineEventHandler = function(fromId, data){
       if (!data) return;
+      // sinal cedo de bug (typo/rename num kind) — nunca bloqueia nada,
+      // só avisa; ver KNOWN_EVENT_KINDS em protocol.js
+      if (data.kind && !Game.Protocol.KNOWN_EVENT_KINDS.has(data.kind)){
+        console.warn(`[protocol] evento de rede com kind desconhecido: "${data.kind}"`);
+      }
 
       // 1º golpe machuca (fica ferido, mais lento, dá pra curar sozinho);
       // só o 2º derruba de vez — decidido no cliente de quem foi atingido,

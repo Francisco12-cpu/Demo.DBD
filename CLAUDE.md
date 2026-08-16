@@ -437,9 +437,18 @@ independente):
   localhost; sem fallback, o código já fica visível na tela pra copiar à
   mão). Testado via Playwright com permissão de clipboard concedida:
   clica, mostra "Copiado!" por 1.5s, clipboard recebe o código certo.
-- Validação/versionamento leve de protocolo em `protocol.js` — hoje só os
-  3 kinds "resumable" quebram cedo se tiverem um typo; os outros ~15
-  passam despercebidos até teste manual.
+- ~~Validação leve de protocolo~~ — **feito** (2026-08-15):
+  `Game.Protocol.KNOWN_EVENT_KINDS` (Set com os 21 kinds usados hoje,
+  atualizado nesta mesma sessão pra incluir `revived`/`trapPlaced`/
+  `trapSprung` que ainda não estavam listados). `onlineEventHandler` em
+  `main.js` confere todo evento recebido contra essa lista e dá
+  `console.warn` se vier um `kind` desconhecido — nunca bloqueia nada,
+  só avisa cedo em vez de falhar silenciosamente até alguém notar em
+  teste manual. Testado via Playwright: partida online real (2 clientes)
+  não gera nenhum warning nas ações normais; injetar um `kind`
+  inventado direto via `Game.onlineEventHandler` (exposto em `Game`)
+  gera o warning esperado; um `kind` conhecido injetado do mesmo jeito
+  não gera nada.
 - ~~Assert de sanidade em `map.js`~~ — **feito** (2026-08-15):
   `assertPointsOutsideRooms()` roda uma vez no carregamento, checa
   `hookSpots`/`gateSpots` contra `ROOM_DEF` (`objectiveSpots` e
