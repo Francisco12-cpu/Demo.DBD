@@ -18,7 +18,7 @@ const { RESUMABLE_EVENT_KINDS } = require('../js/protocol.js');
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
 const PASSWORD = process.env.ROOM_PASSWORD || 'dbd123';
 const MAX_SURVIVORS = 4;
-const MAP_LAYOUT_COUNT = 2; // precisa bater com Game.MAP.layouts.length em js/map.js
+const MAP_LAYOUT_COUNT = 3; // precisa bater com Game.MAP.layouts.length em js/map.js
 const RECONNECT_GRACE_MS = 25000; // tempo pra quem caiu no meio da partida voltar antes de contar como saída de vez
 
 const wss = new WebSocketServer({ port: PORT });

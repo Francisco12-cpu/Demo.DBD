@@ -22,7 +22,7 @@ abandonada.
   spritesheet real (`background-image`/`background-position`, ver seção
   `Sprite (pixel art autoral)`) — não é mais silhueta gerada por script.
   Cor dos 4 Sobreviventes: `filter: hue-rotate()` por jogador.
-- **Mapas:** 2 layouts fixos (obstáculos variam, sorteado a cada partida);
+- **Mapas:** 3 layouts fixos (obstáculos variam, sorteado a cada partida);
   randomização de verdade continua objetivo futuro
 - **Sobrevivente não ataca ninguém** — só foge, usa habilidade e completa
   objetivos. Só o Assassino tem ataque (que inicia a captura)
@@ -100,7 +100,7 @@ esquema de cores do jogo, sem depender de internet).
 index.html              esqueleto HTML (menu + jogo) + tags <script>
 css/style.css             todo o CSS (visual, animações, menu, controles touch)
 js/config.js               config central de balanceamento por tipo de personagem
-js/map.js                   dados do mapa (2 layouts, spawns, objetivos, porta) + colisão
+js/map.js                   dados do mapa (3 layouts, spawns, objetivos, porta) + colisão
 js/input.js                 teclado + joystick touch + gamepad, unificados (movimento/ação/habilidades)
 js/character.js             personagem único parametrizado (movimento/ataque/visual/cor)
 js/ability.js                estado genérico de habilidade (duração/cooldown/usos)
@@ -492,7 +492,7 @@ si (volume, presença, ritmo) deve estar audível em qualquer celular.
       parede à mão — bem menos chance de errar a aritmética, e cada porta já
       sai com o retângulo exato do vão, reaproveitado tanto pra colisão
       (trancada vira parede de verdade) quanto pra saber quem está perto o
-      bastante pra interagir. 2 layouts (lado da porta de cada sala + os
+      bastante pra interagir. 3 layouts (lado da porta de cada sala + os
       obstáculos soltos do campo aberto variam; a planta das salas em si é
       fixa) sorteados por partida, mesmo esquema de sempre pro modo online
       (`MAP_LAYOUT_COUNT` em `server/server.js` batendo com
@@ -740,7 +740,7 @@ trocar de host; ver `Planos futuros` pro failover completo.
   (paredes por layout) separado da lógica de jogo — é a base certa pra
   evoluir pra: desenhar/exportar um mapa em uma ferramenta (ex: Tiled) e o
   jogo só carregar esse arquivo e desenhar em cima, em vez de ter os
-  arrays de paredes escritos à mão como hoje (só 2 layouts fixos). Trocar o
+  arrays de paredes escritos à mão como hoje (só 3 layouts fixos). Trocar o
   "conteúdo" do mapa sem mexer no motor de colisão/jogo.
 - **Failover de host de verdade no modo P2P:** hoje só existe reconexão ao
   broker de sinalização em quedas curtas (a sala/código continuam os

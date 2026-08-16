@@ -385,8 +385,27 @@ independente):
   um `broken`) + integração (partida solo real com objetivo/duração
   encurtados via `page.evaluate`, completou um gerador de verdade,
   `gatesActive` disparou e a chamada de reset rodou sem erro).
-- Mais layouts de mapa além dos 2 atuais (`DOOR_SIDES_BY_LAYOUT`/
-  `PALLET_SPOTS_BY_LAYOUT`/`LOOSE_OBSTACLES_BY_LAYOUT` em `map.js`).
+- ~~Mais layouts de mapa além dos 2 atuais~~ — **feito** (2026-08-16): 3º
+  layout em `map.js` (`DOOR_SIDES_BY_LAYOUT[2]`/`LOOSE_OBSTACLES_BY_LAYOUT[2]`/
+  `PALLET_SPOTS_BY_LAYOUT[2]`/`KILLER_SPAWN_BY_LAYOUT[2]`, spawn do
+  Assassino em `{900,1000}` — corredor central, deslocado pro lado
+  oposto do layout 1). Mesma planta de sala fixa dos outros 2 (só lado da
+  porta/janela, obstáculos soltos, pallets e spawn variam, convenção já
+  estabelecida). `server/server.js` tem sua própria constante
+  `MAP_LAYOUT_COUNT` (não dá pra importar `Game.MAP` direto de dentro do
+  Node — só `js/protocol.js` é dual browser/CommonJS) que **precisa ser
+  atualizada manualmente** toda vez que `Game.MAP.layouts.length` mudar —
+  atualizada de `2` pra `3` (o comentário ao lado já avisava disso desde
+  que a constante existe). Testado: os 3 layouts têm a mesma contagem de
+  paredes/portas/janelas/pallets que os 2 antigos, sem warning nenhum do
+  sanity check (`assertPointsOutsideRooms`); e — mais importante pro
+  layout novo especificamente — os 3 forçados via `Math.random` stubado
+  (`0`/`0.4`/`0.9` → índice `0`/`1`/`2`) cada um renderiza de verdade
+  numa partida solo-como-Assassino real (38 paredes, 6 portas, 6 janelas,
+  4 pallets, spawn do Assassino na posição certa, zero erro de página) —
+  não só checagem de dados isolada, prova que o layout novo não gera
+  nenhuma sala degenerada ao construir o mundo de verdade. `npm test`
+  (3 suites) confirmando também.
 - ~~Spawn do Assassino variável por layout~~ — **feito** (2026-08-15):
   `KILLER_SPAWN_BY_LAYOUT` em `map.js` (layout 0 mantém `{1500,1000}`,
   layout 1 ganha `{2100,1000}` — os dois no corredor aberto central,
@@ -408,7 +427,7 @@ independente):
   bloqueia colisão) e `windowSpeedMultiplier()` usa
   `Game.CONFIG.window.radius` (config independente), não o tamanho do
   rect. Testado: `Game.MAP.layouts[0/1].doors/windows` confirma 96px vs
-  64px nos 2 layouts, sanity check de mapa (`assertPointsOutsideRooms`)
+  64px em todos os layouts, sanity check de mapa (`assertPointsOutsideRooms`)
   continua sem warning, `npm test` (3 suites) passa sem regressão.
 - Sistema de ping/marcador no mapa pra Sobreviventes se comunicarem sem
   voz (loop LAN/P2P não tem chat nem voz — só o ping falso da Distração).

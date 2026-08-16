@@ -89,6 +89,7 @@ window.Game = window.Game || {};
   const DOOR_SIDES_BY_LAYOUT = [
     ['right', 'bottom', 'left', 'top', 'right', 'top'],
     ['bottom', 'left', 'bottom', 'right', 'top', 'left'],
+    ['left', 'top', 'right', 'bottom', 'left', 'right'],
   ];
 
   const OPPOSITE_SIDE = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
@@ -96,6 +97,7 @@ window.Game = window.Game || {};
   const LOOSE_OBSTACLES_BY_LAYOUT = [
     [{ x: 900, y: 900, w: 200, h: 50 }, { x: 1700, y: 1650, w: 50, h: 200 }],
     [{ x: 1900, y: 900, w: 200, h: 50 }, { x: 700, y: 1650, w: 50, h: 200 }],
+    [{ x: 1400, y: 900, w: 200, h: 50 }, { x: 1400, y: 1650, w: 50, h: 200 }],
   ];
 
   // pallets: obstáculos soltos em campo aberto (ver js/pallet.js) — em pé
@@ -114,6 +116,12 @@ window.Game = window.Game || {};
       { x: 2300, y: 700, w: 110, h: 36 },
       { x: 520, y: 1620, w: 110, h: 36 },
       { x: 2300, y: 1620, w: 110, h: 36 },
+    ],
+    [
+      { x: 1445, y: 780, w: 110, h: 36 },
+      { x: 600, y: 1620, w: 110, h: 36 },
+      { x: 2300, y: 780, w: 110, h: 36 },
+      { x: 1445, y: 1620, w: 110, h: 36 },
     ],
   ];
 
@@ -141,6 +149,7 @@ window.Game = window.Game || {};
   const KILLER_SPAWN_BY_LAYOUT = [
     { x: 1500, y: 1000 }, // centro do mapa — era o único spawn antes disso existir
     { x: 2100, y: 1000 }, // deslocado pro lado direito
+    { x: 900, y: 1000 },  // deslocado pro lado esquerdo
   ];
 
   const MAP = {
@@ -196,6 +205,7 @@ window.Game = window.Game || {};
     layouts: [
       buildRoomLayout(DOOR_SIDES_BY_LAYOUT[0], LOOSE_OBSTACLES_BY_LAYOUT[0], PALLET_SPOTS_BY_LAYOUT[0], KILLER_SPAWN_BY_LAYOUT[0]),
       buildRoomLayout(DOOR_SIDES_BY_LAYOUT[1], LOOSE_OBSTACLES_BY_LAYOUT[1], PALLET_SPOTS_BY_LAYOUT[1], KILLER_SPAWN_BY_LAYOUT[1]),
+      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[2], LOOSE_OBSTACLES_BY_LAYOUT[2], PALLET_SPOTS_BY_LAYOUT[2], KILLER_SPAWN_BY_LAYOUT[2]),
     ],
   };
 
