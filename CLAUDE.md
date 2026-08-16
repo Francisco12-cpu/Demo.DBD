@@ -345,9 +345,16 @@ independente):
 - Validação/versionamento leve de protocolo em `protocol.js` — hoje só os
   3 kinds "resumable" quebram cedo se tiverem um typo; os outros ~15
   passam despercebidos até teste manual.
-- Assert de sanidade (dev-only) checando que `hookSpots`/
-  `objectiveSpots`/`gateSpots` não caem dentro de nenhuma sala de
-  `ROOM_DEF` em `map.js` — hoje é checagem manual só comentada no código.
+- ~~Assert de sanidade em `map.js`~~ — **feito** (2026-08-15):
+  `assertPointsOutsideRooms()` roda uma vez no carregamento, checa
+  `hookSpots`/`gateSpots` contra `ROOM_DEF` (`objectiveSpots` e
+  `hideoutSpots` ficaram de fora de propósito — os 4 primeiros
+  objectiveSpots e todos os hideoutSpots são intencionalmente dentro de
+  sala). Sem flag de "modo dev": custo desprezível (poucos pontos × 6
+  salas) e só imprime `console.warn` se achar um problema de verdade —
+  num mapa correto fica 100% silencioso. Testado: mapa atual não gera
+  nenhum warning (dados já estavam certos), lógica confirmada capturando
+  um ponto propositalmente inválido.
 
 **UX/acessibilidade**
 - Seta/indicador apontando pro objetivo incompleto mais próximo (ajuda

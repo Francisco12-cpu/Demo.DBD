@@ -220,6 +220,28 @@ window.Game = window.Game || {};
     return result;
   }
 
+  // Checagem de sanidade: gancho e portão de saída "precisam" ficar fora de
+  // qualquer retângulo de sala (ver comentário em hookSpots/gateSpots acima
+  // — antes disso era só disciplina manual ao editar coordenada). Roda uma
+  // vez, no carregamento — custo desprezível (poucos pontos × 6 salas) — e
+  // só imprime algo se achar um problema de verdade; num mapa correto fica
+  // 100% silencioso, então não precisa de nenhuma flag de "modo dev".
+  // hideoutSpots e os 4 primeiros objectiveSpots ("arriscados") são
+  // INTENCIONALMENTE dentro de sala, por isso não entram nessa checagem.
+  function pointInsideRoom(pt, room){
+    return pt.x >= room.x && pt.x <= room.x + room.w && pt.y >= room.y && pt.y <= room.y + room.h;
+  }
+  function assertPointsOutsideRooms(label, points){
+    points.forEach((pt, i) => {
+      const room = ROOM_DEF.find((r) => pointInsideRoom(pt, r));
+      if (room){
+        console.warn(`[map.js] ${label}[${i}] (${pt.x},${pt.y}) cai dentro da sala em (${room.x},${room.y}) ${room.w}x${room.h} — mover esse ponto.`);
+      }
+    });
+  }
+  assertPointsOutsideRooms('hookSpots', MAP.hookSpots);
+  assertPointsOutsideRooms('gateSpots', MAP.gateSpots);
+
   Game.MAP = MAP;
   Game.mapCollision = { resolvePosition };
 })();
