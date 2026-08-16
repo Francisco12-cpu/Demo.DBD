@@ -659,7 +659,13 @@ window.Game = window.Game || {};
     lobbyReady.classList.toggle('active', !!me && me.ready);
     lobbyReady.textContent = !!me && me.ready ? 'Pronto ✓ (clique pra desmarcar)' : 'Marcar como pronto';
     const everyoneReady = msg.players.length > 0 && msg.players.every((p) => p.ready);
-    lobbyStart.disabled = !everyoneReady;
+    // espelha as 4 checagens que o servidor já faz no startMatch (>=2
+    // jogadores, exatamente 1 Assassino, todo mundo com papel escolhido —
+    // implícito em "ready", e todo mundo pronto) — sem isso, o botão
+    // parecia habilitado (todo mundo pronto) num quarto sem nenhum
+    // Assassino ou com só 1 jogador, e clicar dava erro em vez de já vir
+    // desabilitado
+    lobbyStart.disabled = !everyoneReady || killerCount !== 1 || msg.players.length < 2;
   }
 
   // delegação de evento: 1 listener só, em vez de 1 por botão de kick
