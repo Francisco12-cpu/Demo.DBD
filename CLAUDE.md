@@ -418,12 +418,51 @@ folha, um recorte ingênuo por coordenada de grid pegava vazio) achei mais
   coordenadas em pixels, se quiser aproveitar mais peças depois (props
   soltos exigem achar o bounding box real, não a grade de 32px).
 
+**Rodada 3, mesmo dia — Francisco organizou `sprites_organizados/` (folha
+inteira recortada por categoria, nome descritivo) e pediu 5 coisas
+específicas, todas feitas e testadas:**
+1. **Nomes errados em `06_barris_potes/` corrigidos**: `pote_barro_marrom.png`/
+   `pote_metal_cinza.png` tinham o CONTEÚDO trocado (nome dizia
+   marrom/barro mas mostrava o pote cinza-metálico e vice-versa — trocado
+   o conteúdo, nomes batem agora); `barril_individual_1.png` era um
+   recorte quebrado (bbox vazio) — substituído por um barril de verdade
+   achado na folha crua via flood-fill de componentes conectados.
+2. **BUG-002 corrigido de vez** (Francisco descreveu o defeito: "paredes
+   completamente pretas, não aparece pixel art") — causa raiz real:
+   `js/lighting.js` só tinha UM gradiente radial centrado no jogador: por
+   definição de raycasting, a parede bem na SUA FRENTE sempre cai na
+   BORDA do polígono de visão, onde esse gradiente é mais fraco — o caso
+   mais óbvio de "devia estar clara" ficava quase preto. Corrigido com um
+   piso mínimo de visibilidade (preenchimento plano antes do gradiente) +
+   focos de luz estáticos de verdade (`spawnTorches()`, tochas ancoradas
+   em paredes horizontais, `Game.CONFIG.tiles.torch`). Sistema de parede
+   também virou frente/topo DE VERDADE (`wallFront`/`wallTop`, texturas
+   diferentes, não só CSS como na rodada 2 — a folha nova finalmente tem
+   as 2 peças utilizáveis).
+3. **Porta grande integrada**: `porta_arco_escura.png` (16×32) via
+   `background-size:contain` (sem esticar), trocando o ícone pequeno de
+   17×19px da rodada 2.
+4. **Variação de chão**: `spawnFloorDecals()` espalha 16 decalques
+   rachados aleatórios por partida (`.floor-decal`, puramente visual).
+5. **Assassino força saída de esconderijo**: canaliza por proximidade em
+   qualquer esconderijo (igual porta/pallet); só avança se tiver alguém
+   de verdade ali (esconderijo continua idêntico ocupado/vazio de longe).
+   Achou e corrigiu **BUG-014** no caminho: `entry.hideout.state.hidden`
+   de uma entry remota é uma instância LOCAL isolada por cliente, nunca
+   sincronizada — o Assassino nunca conseguia detectar quem estava
+   escondido. Campo novo `hiddenInHideout` no `sendState()` resolve.
+
+**Achado auditando (fora do pedido, registrado pro Francisco)**: em
+`05_colunas/`, `coluna_simples.png` está 100% vazio (recorte quebrado) e
+`coluna_ornamentada_1/2.png` estão cortados pela metade. Em `01_paredes/`,
+`bloco_parede_escura_grande/pequeno.png` têm o mesmo problema. Não usados.
+
 **Ainda aberto no BUGS.md** (não mexer sem reler o arquivo primeiro):
-BUG-002 (luzes — bloqueado até o Francisco descrever o defeito visto),
-BUG-003/004 (pipeline de arte, escopo grande, precisa de tiles/faces
-prontos), BUG-013 (colapso adiável reconectando, baixo risco, aceito por
-ora), DD-04/DD-05 (interrupção/feedback), controles de toque (zona morta,
-tamanho de alvo), e as 2 peças que sobraram do BUG-005.
+BUG-004 (camada de face, precisa de arte de face), resto do BUG-003
+(gate/gancho ainda cor sólida; resto da folha — banners/pilares/barris —
+não usado), BUG-013 (colapso adiável reconectando, baixo risco, aceito
+por ora), DD-04/DD-05 (interrupção/feedback), controles de toque (zona
+morta, tamanho de alvo), e as 2 peças que sobraram do BUG-005.
 
 ## Ideias futuras (auditoria de código, 2026-08-15)
 

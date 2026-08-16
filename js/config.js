@@ -43,34 +43,55 @@ Game.CONFIG = {
 
   // BUG-003 (BUGS.md, "pipeline de arte não é plug and play"): chão/parede/
   // porta/pallet eram só `div`/CSS de cor sólida — o mapa nunca teve arte
-  // de verdade, só os personagens. Francisco forneceu um tileset
-  // (`assets/tiles/dungeon-tileset.png`, 384×192 — licença de uso livre,
-  // mesmo esquema dos spritesheets de personagem abaixo). A folha mistura
-  // 2 formatos bem diferentes:
-  //   - Chão/parede/caixote: peças de 32×32 alinhadas à grade, feitas pra
-  //     REPETIR (`floor`/`wall`/`crate` abaixo). A maioria das outras
-  //     células da grade (banners de pé fixo, tochas, pilares, grama) são
-  //     de uso único, não repetem bem — não usadas como textura de fundo.
-  //   - Props pequenos soltos (arco de porta, barris, potes...) NÃO seguem
-  //     a grade de 32px — têm tamanho e posição próprios, tipo um recorte
-  //     de spritesheet de UI. `door` (17×19px) é um desses: usado como
-  //     ícone centrado (`background-repeat: no-repeat`), não repetido.
-  // CSS lê isso via custom properties (`--floor-tile-url` etc., setadas 1x
-  // em main.js) como `background-image`. Se o arquivo não carregar, o
-  // `background-color` sólido de sempre continua aparecendo por baixo —
-  // já é o fallback pedido no BUG-003, de graça, sem código novo.
-  // Parede também ganha um baixo-relevo diferente por lado (`.wall-h`
-  // horizontal vs `.wall-v` vertical, decidido pela proporção do
-  // retângulo em `buildWorld()`) — a folha não tem uma 2ª textura plana de
-  // parede pra usar como variante por lado, então "cada lado é diferente"
-  // aqui é luz/sombra via CSS (claro no topo/esquerda, escuro embaixo/
-  // direita) em vez de uma 2ª imagem.
+  // de verdade, só os personagens. 1ª rodada (2026-08-16) usou 4 recortes
+  // manuais de `assets/tiles/dungeon-tileset.png` — ainda existem no disco
+  // (histórico, não usados mais aqui). 2ª rodada (mesma data, mais tarde):
+  // Francisco organizou a folha inteira em `sprites_organizados/`, já
+  // recortada por categoria com nome descritivo — muito melhor que garimpar
+  // a folha crua à mão. Cada peça abaixo tem `src` + `w`/`h` PRÓPRIOS
+  // (tamanhos variam: 16×16, 16×32, 64×16, 64×32, 64×48 — não é uma grade
+  // uniforme de 32px como a 1ª rodada), lidos por `main.js` (`applyTileset`)
+  // como pares de custom property `--X-url`/`--X-size`.
+  //
+  // Sistema de parede em 2 faces (pedido do Francisco, corrige o bug de
+  // "parede preta" — ver BUGS.md BUG-002/BUG-003 pra causa raiz real, que
+  // era de iluminação, não de sprite faltando):
+  //   - `wallFront`: face vista de frente (onde tocha/bandeira ficam
+  //     penduradas) — usada em paredes HORIZONTAIS (`.wall-h` em
+  //     buildWorld(), js/main.js — mais larga que alta, tipicamente topo/
+  //     base de uma sala, "de frente" pra quem entra andando).
+  //   - `wallTop`: borda de cima vista de cima — usada em paredes
+  //     VERTICALES (`.wall-v`, mais alta que larga, lateral de sala) E
+  //     como acabamento de canto (o pedido original de "canto" não tem uma
+  //     peça própria utilizável em `01_paredes/` — `parede_canto_vazio.png`
+  //     é vazio/void de propósito, não uma textura; `bloco_parede_escura_*`
+  //     e `coluna_simples`/`coluna_ornamentada_*` estão com recorte
+  //     quebrado, avisado ao Francisco, não usados).
   tiles: {
-    size: 32,
-    floor: 'assets/tiles/floor-stone.png',
-    wall: 'assets/tiles/wall-brick.png',
-    crate: 'assets/tiles/wood-crate.png',
-    door: 'assets/tiles/door-arch.png',
+    floor: { src: 'sprites_organizados/08_chao_piso/piso_pedra_liso.png', w: 64, h: 48 },
+    // variação de chão (item 4 do pedido): decalques espalhados por cima do
+    // chão base, não um tile de fundo — ver spawnFloorDecals() em main.js
+    floorVariants: [
+      { src: 'sprites_organizados/08_chao_piso/piso_pedra_rachado_A.png', w: 48, h: 48 },
+      { src: 'sprites_organizados/08_chao_piso/piso_pedra_rachado_B.png', w: 64, h: 48 },
+    ],
+    wallFront: { src: 'sprites_organizados/01_paredes/faixa_tijolo_A.png', w: 64, h: 16 },
+    wallTop: { src: 'sprites_organizados/01_paredes/parede_topo_clara_04.png', w: 16, h: 16 },
+    // item 3 do pedido: porta grande redimensionada pro tamanho de sempre
+    // (ver DOOR_GAP_SIZE em map.js) — a original é 16×32, bem menor que os
+    // 96×~35px de uma porta no mapa; escalada em múltiplo inteiro (6x) via
+    // image-rendering:pixelated, sem esticar fora de proporção
+    door: { src: 'sprites_organizados/02_portas_janelas_grades/porta_arco_escura.png', w: 16, h: 32 },
+    crate: { src: 'sprites_organizados/07_baus_madeira/parede_caixotes_A.png', w: 64, h: 32 },
+    // focos de luz estáticos (BUG-002/DD-05) — tocha na parede, 2 quadros
+    // pra animar o fogo (ver .torch-flame em style.css)
+    torch: {
+      frame1: 'sprites_organizados/04_iluminacao/tocha_parede_acesa_1.png',
+      frame2: 'sprites_organizados/04_iluminacao/tocha_parede_acesa_2.png',
+      w: 16, h: 16,
+      fps: 3,
+      radius: 180, // px (mundo) — alcance do foco de luz estático, ver js/lighting.js
+    },
   },
 
   // spritesheets em pixel art de verdade (assets/killer-sheet.png,
@@ -342,6 +363,19 @@ Game.CONFIG = {
     // só vale a pena sair achando que vai poder voltar rápido se realmente
     // precisar (ex: skill check), não como tática de resetar o timer.
     reentryCooldown: 5,
+
+    // item 5 do pedido do Francisco (BUGS.md): Assassino consegue "quebrar"
+    // o esconderijo — fica parado perto de QUALQUER spot (igual porta/
+    // pallet, sem precisar segurar botão) e, SE tiver alguém escondido
+    // bem ali, o progresso avança e força a saída depois de
+    // forceOutDuration; se estiver vazio, o progresso não anda (só assim o
+    // Assassino descobre — igual "checar o armário" do jogo original, o
+    // esconderijo continua visualmente idêntico ocupado/vazio até alguém
+    // tentar). Mesmo raciocínio de tempo de door.breakDuration (mais
+    // rápido que travar/entrar), só um pouco mais lento — vasculhar TODOS
+    // os esconderijos do mapa não pode ser mais rápido que só perseguir.
+    forceOutDuration: 3.5,
+    forceOutDecayRate: 0.6, // progresso perdido por segundo ao sair do alcance antes de terminar (mesmo padrão de porta/pallet)
   },
 
   // marcador de comunicação entre Sobreviventes (loop LAN/P2P não tem chat

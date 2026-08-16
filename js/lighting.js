@@ -82,8 +82,9 @@ window.Game = window.Game || {};
 
     // visionBlockingWalls: paredes que bloqueiam luz NESTE instante (portas
     // trancadas contam, pallet derrubado não — decidido por quem chama,
-    // porque isso depende do estado do mundo daquela partida)
-    function drawLighting(followWorldPos, followScreenX, followScreenY, offsetX, offsetY, zoom, revealAll, visionBlockingWalls){
+    // porque isso depende do estado do mundo daquela partida). lightSources:
+    // focos estáticos (tochas, BUG-002/BUG-003) — [{x,y,radius}], mundo.
+    function drawLighting(followWorldPos, followScreenX, followScreenY, offsetX, offsetY, zoom, revealAll, visionBlockingWalls, lightSources){
       if (!ctx) return; // navegador sem canvas: fica sem o efeito, sem quebrar o jogo
       const w = window.innerWidth, h = window.innerHeight;
       if (w !== canvasW || h !== canvasH){
@@ -127,12 +128,49 @@ window.Game = window.Game || {};
       ctx.clip();
 
       ctx.globalCompositeOperation = 'destination-out';
+
+      // BUG-002/BUG-003 (BUGS.md) — causa raiz real da "parede preta"
+      // relatada: antes disso, só existia o gradiente radial abaixo,
+      // centrado no jogador. Por definição de raycasting, uma parede bem
+      // na FRENTE do jogador sempre cai na BORDA do polígono de visão (é o
+      // próprio obstáculo que faz o raio parar ali) — exatamente onde
+      // aquele gradiente é mais fraco (perto de 0% de apagamento). Então a
+      // parede que você está literalmente encostado nela — o caso mais
+      // óbvio de "deveria estar bem clara" — ficava quase 100% coberta
+      // pela escuridão de base (rgba(4,3,6,0.98), quase preto puro).
+      // Esse preenchimento plano (mesma cor, alpha fixo) garante um piso
+      // mínimo de visibilidade em TUDO dentro do polígono, não importa a
+      // distância — o gradiente do jogador (logo abaixo) continua
+      // reforçando o centro por cima disso.
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillRect(0, 0, w, h);
+
       const grad = ctx.createRadialGradient(followScreenX, followScreenY, 0, followScreenX, followScreenY, zoomPx + 60);
       grad.addColorStop(0, 'rgba(255,255,255,1)');
       grad.addColorStop(Math.min(1, zoomPx / (zoomPx + 60)), 'rgba(255,255,255,0.9)');
       grad.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
+
+      // focos de luz estáticos (tochas, BUG-002/DD-05) — mesma ideia do
+      // gradiente do jogador acima, centrado em cada tocha perto o
+      // bastante pra importar. Continua dentro do MESMO clip do polígono
+      // de visão do jogador, então uma tocha do outro lado de uma parede
+      // não vaza luz pro cômodo escondido atrás dela (simplificação
+      // consciente — um raycasting próprio por tocha, todo frame, seria
+      // caro demais pro ganho; a tocha só reforça o que já é potencialmente
+      // visível, não revela salas inteiras escondidas).
+      (lightSources || []).forEach((light) => {
+        const lx = offsetX + light.x * zoom;
+        const ly = offsetY + light.y * zoom;
+        const lr = light.radius * zoom;
+        if (Math.hypot(lx - followScreenX, ly - followScreenY) > maxRadius + lr) return; // longe demais pra aparecer, nem desenha
+        const lightGrad = ctx.createRadialGradient(lx, ly, 0, lx, ly, lr);
+        lightGrad.addColorStop(0, 'rgba(255,255,255,0.85)');
+        lightGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = lightGrad;
+        ctx.fillRect(0, 0, w, h);
+      });
 
       // reforço de contorno nas paredes perto: a queda de luz do gradiente
       // deixa a face da parede fraca demais bem na borda da visão, fazendo
@@ -157,8 +195,9 @@ window.Game = window.Game || {};
     // followPos: posição de mundo do personagem local a seguir; revealAll:
     // true só quando o Assassino local está com Sentido ativo no modo
     // online (some com a escuridão por completo enquanto durar); visionBlockingWalls:
-    // lista de paredes (incluindo portas trancadas) que bloqueiam luz agora
-    function update(followPos, revealAll, visionBlockingWalls){
+    // lista de paredes (incluindo portas trancadas) que bloqueiam luz agora;
+    // lightSources: focos estáticos (tochas) — [{x,y,radius}], opcional
+    function update(followPos, revealAll, visionBlockingWalls, lightSources){
       const MAP = Game.MAP;
       const zoom = currentZoom();
       const viewW = window.innerWidth;
@@ -179,7 +218,7 @@ window.Game = window.Game || {};
 
       const screenX = offsetX + followPos.x * zoom;
       const screenY = offsetY + followPos.y * zoom;
-      drawLighting(followPos, screenX, screenY, offsetX, offsetY, zoom, revealAll, visionBlockingWalls || []);
+      drawLighting(followPos, screenX, screenY, offsetX, offsetY, zoom, revealAll, visionBlockingWalls || [], lightSources || []);
     }
 
     return { update, currentZoom };

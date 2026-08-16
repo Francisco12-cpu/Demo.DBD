@@ -21,9 +21,11 @@ momento (botão de pausa), Sobrevivente caído sem resgate morre sozinho
 (sangramento + teto de 3 quedas — a partida sempre termina), a partida
 colapsa sozinha (Assassino vence) se ninguém escapar 150s depois dos
 geradores prontos, e **chão/parede/porta/pallet têm textura de verdade**
-(o tileset que você mandou — `assets/tiles/dungeon-tileset.png`) em vez
-de cor sólida, pela 1ª vez desde que o projeto existe — inclusive
-parede com relevo diferente por lado (horizontal vs vertical).
+em vez de cor sólida, pela 1ª vez desde que o projeto existe — parede
+com textura DIFERENTE por lado (frente com tijolo/tocha/bandeira, topo
+liso pra lateral de sala), tochas acesas iluminando o mapa de verdade
+(corrigiu o bug de "parede preta" que você relatou), chão variado com
+decalques rachados aleatórios, e porta grande de verdade.
 
 Publicado em: https://francisco12-cpu.github.io/Demo.DBD/ (deploy
 automático a cada push na branch `main`).
@@ -49,19 +51,28 @@ nesta rodada (ver `BUGS.md` pra causa raiz e teste de cada um):
 - [x] BUG-011 / BUG-012 — 2 bugs achados em autorrevisão (não relatados):
       queda de rede podia ser engolida por engano; menu de pausa não
       bloqueava teclado/gamepad
-- [x] BUG-003 (parcial) — chão, parede (com relevo por lado), porta
-      (ícone de arco) e pallet (caixote de madeira) com o tileset que
-      você mandou, em vez de cor sólida (gate/gancho ainda são cor sólida)
+- [x] BUG-003 (parcial) — chão, parede (frente/topo de verdade por lado),
+      porta grande, pallet e focos de luz com o tileset que você mandou,
+      em vez de cor sólida (gate/gancho ainda são cor sólida)
+- [x] BUG-002 — Luzes corrigidas de vez (a causa raiz real era o
+      gradiente de luz nunca cobrir bem quem está na frente de uma
+      parede — nada a ver com sprite faltando) + tochas estáticas
+- [x] BUG-006 (completo) — Assassino agora consegue forçar a saída de um
+      esconderijo ocupado (achou e corrigiu um bug de sincronização de
+      rede no caminho, BUG-014 — o Assassino nunca sabia quem estava
+      escondido de verdade)
+- [x] 3 nomes de sprite corrigidos em `sprites_organizados/06_barris_potes/`
 
-Pendente: BUG-002 (bloqueado até você descrever o defeito visto — a
-arquitetura de luz que você pediu já existe, só falta o array de focos
-estáticos), BUG-004 (camada de face — pipeline igual ao tileset, precisa
+Pendente: BUG-004 (camada de face — pipeline igual ao tileset, precisa
 de arte de face), resto do BUG-003 (gate/gancho, e o resto da folha —
-banners/tochas/pilares/barris — ainda não usado), 2 peças que sobraram
-do BUG-005 (estado "barricada" da porta, Assassino arrancar do
-esconderijo), DD-04/DD-05 (interrupção/feedback), controles de toque
-(zona morta, tamanho de alvo), BUG-013 (baixo risco, aceito por ora —
-colapso pode ser adiado reconectando de propósito).
+banners/pilares/barris — ainda não usado), 2 peças que sobraram do
+BUG-005 (estado "barricada" da porta, Assassino arrancar do esconderijo
+já feito — falta só a porta), DD-04/DD-05 (interrupção/feedback),
+controles de toque (zona morta, tamanho de alvo), BUG-013 (baixo risco,
+aceito por ora — colapso pode ser adiado reconectando de propósito).
+Achado auditando (registrado, não corrigido): `coluna_simples.png` e
+`bloco_parede_escura_grande/pequeno.png` são recortes 100% vazios;
+`coluna_ornamentada_1/2.png` estão cortados pela metade.
 
 ## Ideias pra próxima atualização
 
@@ -70,13 +81,16 @@ Itens pequenos e médios já viraram funcionalidade nesta sessão (ver
 item). O que sobra agora é maior — cada um precisa de uma decisão sua
 antes de eu começar:
 
-- **Mapa em pixel art de verdade** — **parcial desde 2026-08-16**: chão,
-  parede, porta e pallet já usam o tileset que você mandou
-  (`assets/tiles/`). Ainda faltam gate/gancho (continuam cor sólida) e
-  decoração de mais peças da própria folha (ela tem banners/tochas/
-  pilares/barris não usados ainda — dá pra aproveitar, é só decidir onde
-  cada peça entra no mapa; são props soltos sem alinhamento de grade,
-  então cada um precisa ter o recorte certo achado igual fiz com a porta).
+- **Mapa em pixel art de verdade** — **bem mais completo desde
+  2026-08-16**: chão, parede (frente/topo por lado), porta, pallet e
+  tochas acesas já usam o tileset organizado. Ainda faltam gate/gancho
+  (continuam cor sólida) e decoração de mais peças da própria folha
+  (banners, pilares, barris, potes — não usados ainda, dá pra aproveitar,
+  é só decidir onde cada peça entra no mapa). Se quiser recortar mais
+  peças da folha original você mesmo, cuidado: alguns arquivos em
+  `sprites_organizados/05_colunas/` e `01_paredes/` (`coluna_simples`,
+  `coluna_ornamentada_1/2`, `bloco_parede_escura_grande/pequeno`) saíram
+  com recorte quebrado (vazios ou cortados pela metade) — não usei esses.
 - **Sistema de tileset customizável** — você poder subir seu próprio
   spritesheet (PNG + config de tamanho/animação) em vez do sprite fixo
   de hoje. Dá pra construir o mecanismo de upload/parsing sem esperar a

@@ -8,25 +8,34 @@ window.Game = window.Game || {};
   const lightingEl = document.getElementById('lighting');
   const dangerVignetteEl = document.getElementById('danger-vignette');
 
+  // resolve pra URL absoluta: uma URL relativa guardada numa CSS custom
+  // property setada via JS é resolvida de forma inconsistente entre
+  // navegadores (alguns resolvem relativo ao documento, outros relativo à
+  // folha de estilo onde o var() é lido — bug real, achado testando: vinha
+  // 404 pedindo css/assets/tiles/... em vez de assets/tiles/...). Também
+  // usada por spawnFloorDecals()/spawnTorches() (background-image inline).
+  function resolveAssetUrl(path){
+    return new URL(path, document.baseURI).href;
+  }
+
   // BUG-003 (BUGS.md): tileset de chão/parede lido do manifesto
   // (Game.CONFIG.tiles) — nunca hardcoded aqui. Roda 1x só (não muda
   // durante o jogo, não precisa refazer por partida); style.css lê essas
   // custom properties pra pintar #arena/.wall.
   (function applyTileset(){
     const cfg = Game.CONFIG.tiles;
-    // resolve pra URL absoluta antes de jogar num custom property: uma
-    // URL relativa guardada numa CSS custom property setada via JS é
-    // resolvida de forma inconsistente entre navegadores (alguns resolvem
-    // relativo ao documento, outros relativo à folha de estilo onde o
-    // var() é lido — bug real, achado testando: vinha 404 pedindo
-    // css/assets/tiles/... em vez de assets/tiles/...). Absoluta não tem
-    // essa ambiguidade.
-    const abs = (path) => new URL(path, document.baseURI).href;
-    document.documentElement.style.setProperty('--tile-size', cfg.size + 'px');
-    document.documentElement.style.setProperty('--floor-tile-url', `url('${abs(cfg.floor)}')`);
-    document.documentElement.style.setProperty('--wall-tile-url', `url('${abs(cfg.wall)}')`);
-    document.documentElement.style.setProperty('--crate-tile-url', `url('${abs(cfg.crate)}')`);
-    document.documentElement.style.setProperty('--door-icon-url', `url('${abs(cfg.door)}')`);
+    // cada peça tem tamanho PRÓPRIO (16×16 até 64×48 — não é uma grade
+    // uniforme), então --X-size vai junto de --X-url, não um --tile-size
+    // global único como na 1ª rodada do BUG-003.
+    function setTileVar(name, tile){
+      document.documentElement.style.setProperty(`--${name}-url`, `url('${resolveAssetUrl(tile.src)}')`);
+      document.documentElement.style.setProperty(`--${name}-size`, `${tile.w}px ${tile.h}px`);
+    }
+    setTileVar('floor', cfg.floor);
+    setTileVar('wall-front', cfg.wallFront);
+    setTileVar('wall-top', cfg.wallTop);
+    setTileVar('door', cfg.door);
+    setTileVar('crate', cfg.crate);
   })();
   // BUG-009 (BUGS.md): virou bloqueio de verdade em portrait (CSS, ver
   // style.css) — o botão agora é só o escape hatch ("Jogar mesmo assim",
@@ -108,6 +117,12 @@ window.Game = window.Game || {};
   let windows = [];
   let gates = [];
   let hooks = [];
+  // focos de luz estáticos (BUG-002/DD-05) — {x,y,radius}, sem elemento
+  // de jogo associado (só o div .torch visual + js/lighting.js lendo isso
+  // pra apagar escuridão num raio fixo, independente da posição do
+  // jogador). Populado em spawnTorches(), chamado de buildWorld().
+  let torches = [];
+  let hideoutSpotEls = [];
   let currentLayoutWalls = [];
   let currentKillerSpawn = MAP.killer; // atualizado em buildWorld() — varia por layout (ver map.js)
 
@@ -133,7 +148,7 @@ window.Game = window.Game || {};
 
   // ---------- mundo (mapa + objetivos + portas + esconderijos + portões + ganchos), compartilhado entre solo e online ----------
   function buildWorld(objectiveCount, layoutIndex){
-    arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .trap-marker, .door, .pallet, .window, .hideout-spot, .gate, .hook').forEach((n) => n.remove());
+    arena.querySelectorAll('.wall, .objective, .char, .ping-marker, .trap-marker, .door, .pallet, .window, .hideout-spot, .gate, .hook, .floor-decal, .torch').forEach((n) => n.remove());
     arena.style.width = MAP.width + 'px';
     arena.style.height = MAP.height + 'px';
 
@@ -142,13 +157,13 @@ window.Game = window.Game || {};
     currentKillerSpawn = layout.killerSpawn || MAP.killer;
     currentLayoutWalls.forEach((wall) => {
       const div = document.createElement('div');
-      // BUG-003 (BUGS.md): "cada lado da parede" — a folha de tileset não
-      // tem uma 2ª textura plana pra parede lateral (só a de topo/frente,
-      // que já usamos pra tudo), então a diferença por lado vira luz/sombra
-      // via CSS (.wall-h/.wall-v abaixo) — parede "deitada" (mais larga que
-      // alta, tipicamente topo/base de uma sala) recebe o relevo num
-      // sentido, parede "em pé" (mais alta que larga, lateral de sala) no
-      // outro. wall.w === wall.h (raro, canto quadrado) cai em horizontal.
+      // BUG-003 (BUGS.md): sistema de 2 faces — parede "deitada" (mais
+      // larga que alta, tipicamente topo/base de uma sala, "de frente" pra
+      // quem entra andando) usa a textura de FRENTE (.wall-h); parede "em
+      // pé" (mais alta que larga, lateral de sala) usa a textura de TOPO
+      // (.wall-v), não a de frente — senão fica com a textura errada numa
+      // quina lateral (era o pedido explícito do Francisco). wall.w===wall.h
+      // (raro, canto quadrado) cai em horizontal.
       const orientationClass = wall.w >= wall.h ? 'wall-h' : 'wall-v';
       div.className = 'wall ' + orientationClass;
       div.style.left = wall.x + 'px';
@@ -157,6 +172,9 @@ window.Game = window.Game || {};
       div.style.height = wall.h + 'px';
       arena.insertBefore(div, arena.firstChild);
     });
+
+    spawnFloorDecals();
+    spawnTorches();
 
     doors = layout.doors.map((rect) => {
       const div = document.createElement('div');
@@ -191,12 +209,16 @@ window.Game = window.Game || {};
       return Game.createWindow(rect, div);
     });
 
-    MAP.hideoutSpots.forEach((spot) => {
+    // item 5 do pedido (BUGS.md): guarda a referência do elemento (antes
+    // era só criado e esquecido) pra dar feedback visual de "vasculhando"
+    // pro Assassino em startOnline() — ver Game.CONFIG.hideout.forceOutDuration
+    hideoutSpotEls = MAP.hideoutSpots.map((spot) => {
       const div = document.createElement('div');
       div.className = 'hideout-spot';
       div.style.left = spot.x + 'px';
       div.style.top = spot.y + 'px';
       arena.appendChild(div);
+      return div;
     });
 
     gates = MAP.gateSpots.map((spot) => {
@@ -231,6 +253,85 @@ window.Game = window.Game || {};
       return objective;
     });
     updateObjectivesStatus();
+  }
+
+  // item 4 do pedido (variação de chão): decalques rachados espalhados por
+  // cima do chão base, pra quebrar o padrão óbvio de textura repetida lado
+  // a lado. Aleatório A CADA PARTIDA (não precisa ser determinístico —
+  // é puramente cosmético, ninguém decora posição de decalque). Checagem
+  // de sobreposição com parede é só uma rejeição simples por AABB, não
+  // precisa ser perfeita: pior caso é um decalque nascer meio por baixo de
+  // uma parede, invisível de qualquer jeito (parede cobre por cima).
+  function spawnFloorDecals(){
+    const variants = Game.CONFIG.tiles.floorVariants;
+    const count = 16;
+    let placed = 0;
+    let attempts = 0;
+    while (placed < count && attempts < count * 6){
+      attempts++;
+      const variant = variants[Math.floor(Math.random() * variants.length)];
+      const x = Math.random() * (MAP.width - variant.w);
+      const y = Math.random() * (MAP.height - variant.h);
+      const overlapsWall = currentLayoutWalls.some((w) =>
+        x < w.x + w.w && x + variant.w > w.x && y < w.y + w.h && y + variant.h > w.y);
+      if (overlapsWall) continue;
+      const div = document.createElement('div');
+      div.className = 'floor-decal';
+      div.style.left = x + 'px';
+      div.style.top = y + 'px';
+      div.style.width = variant.w + 'px';
+      div.style.height = variant.h + 'px';
+      div.style.backgroundImage = `url('${resolveAssetUrl(variant.src)}')`;
+      div.style.backgroundSize = variant.w + 'px ' + variant.h + 'px';
+      arena.appendChild(div);
+      placed++;
+    }
+  }
+
+  // focos de luz estáticos (BUG-002/BUG-003 — causa raiz real da "parede
+  // preta": ver comentário longo em js/lighting.js). Reaproveita as
+  // próprias paredes horizontais do layout como ponto de ancoragem — uma
+  // tocha faz sentido só numa parede "de frente" (.wall-h, onde a face
+  // de tijolo já é a que recebe bandeira/tocha no sistema de 2 faces),
+  // nunca numa lateral. Espaçado (no máximo ~8 por layout, `step`
+  // calculado a partir de quantas paredes horizontais grandes existem)
+  // pra não virar um mapa todo iluminado — o ponto é criar POÇOS de luz,
+  // não anular a escuridão.
+  function spawnTorches(){
+    torches = [];
+    const cfg = Game.CONFIG.tiles.torch;
+    const candidates = currentLayoutWalls.filter((w) => w.w >= w.h && w.w >= 80);
+    if (candidates.length === 0) return;
+    const step = Math.max(1, Math.floor(candidates.length / 8));
+    for (let i = 0; i < candidates.length; i += step){
+      const wall = candidates[i];
+      const x = wall.x + wall.w / 2;
+      const y = wall.y + wall.h / 2;
+      const div = document.createElement('div');
+      div.className = 'torch';
+      div.style.left = x + 'px';
+      div.style.top = y + 'px';
+      div.style.width = cfg.w + 'px';
+      div.style.height = cfg.h + 'px';
+      div.style.backgroundImage = `url('${resolveAssetUrl(cfg.frame1)}')`;
+      div.style.backgroundSize = cfg.w + 'px ' + cfg.h + 'px';
+      arena.appendChild(div);
+      torches.push({ x, y, radius: cfg.radius, el: div });
+    }
+  }
+
+  // anima a chama alternando os 2 quadros — chamado 1x por frame do jogo
+  // nos 3 modos (mesmo padrão de qualquer outro update() visual); custo
+  // desprezível (poucas tochas por layout, só troca background-image)
+  let lastTorchFrameAt = 0;
+  let torchFrameToggle = false;
+  function updateTorchAnimation(now){
+    const cfg = Game.CONFIG.tiles.torch;
+    if (now - lastTorchFrameAt < 1000 / cfg.fps) return;
+    lastTorchFrameAt = now;
+    torchFrameToggle = !torchFrameToggle;
+    const url = resolveAssetUrl(torchFrameToggle ? cfg.frame2 : cfg.frame1);
+    torches.forEach((t) => { t.el.style.backgroundImage = `url('${url}')`; });
   }
 
   function allWalls(){
@@ -1035,7 +1136,8 @@ window.Game = window.Game || {};
       Game.Input.setAbilityButtonsVisible(true, !!engagedObjective, 'X', true);
       updateKillerAI(delta);
       player.render();
-      lighting.update(player.state.pos, false, visionBlockingWalls());
+      updateTorchAnimation(now);
+      lighting.update(player.state.pos, false, visionBlockingWalls(), torches);
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
@@ -1410,7 +1512,8 @@ window.Game = window.Game || {};
 
       updateSurvivorAI(delta);
       killer.render();
-      lighting.update(killer.state.pos, false, visionBlockingWalls());
+      updateTorchAnimation(now);
+      lighting.update(killer.state.pos, false, visionBlockingWalls(), torches);
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
@@ -1518,6 +1621,9 @@ window.Game = window.Game || {};
     let carryingEntry = null; // só o Assassino usa: quem ele está carregando agora (null = ninguém)
     let activeTrap = null; // { x, y, el } — só usado quando killerAbility3Key === 'trap', null = nenhuma armada agora
     let pingCooldownUntil = 0; // performance.now() — evita spam do marcador de comunicação (ver Game.CONFIG.survivorPing)
+    // item 5 do pedido (BUGS.md): progresso de "vasculhar" cada esconderijo,
+    // só o Assassino usa — indexado igual MAP.hideoutSpots/hideoutSpotEls
+    const hideoutSearchProgress = MAP.hideoutSpots.map(() => 0);
 
     // enquanto alguém está "carried" (js/capture.js), a posição dele segue
     // a do Assassino em todo cliente — o Assassino já transmite a própria
@@ -1629,6 +1735,16 @@ window.Game = window.Game || {};
       entry.char.render();
       entry.camouflaged = !!data.camouflaged;
       entry.invisible = !!data.invisible; // só o Assassino manda isso (habilidade Invisibilidade)
+      // item 5 do pedido (BUGS.md): achado implementando o "Assassino
+      // vasculha o esconderijo" — `entry.hideout` de uma entry REMOTA é uma
+      // instância local isolada (Game.createHideout() por entry, criada no
+      // roster), NUNCA atualizada por rede — só o dono de cada hideout
+      // chama enter()/exit() nela, no PRÓPRIO cliente. `camouflaged` já
+      // cobre "some da visão" (reaproveita hideout.state.hidden por baixo,
+      // ver sendState abaixo), mas não distingue esconderijo de Camuflagem
+      // (a habilidade) — sem campo próprio, o Assassino nunca sabia
+      // detectar "tem alguém ESPECIFICAMENTE nesse esconderijo aqui".
+      entry.hiddenInHideout = !!data.hiddenInHideout;
       entry.el.classList.toggle('injured', !!data.injured);
       entry.el.classList.toggle('snared', !!data.snared);
     };
@@ -1673,6 +1789,35 @@ window.Game = window.Game || {};
           net.sendEvent({ kind: 'struggleResult', playerId: localId, result });
           // libera o gancho no PRÓPRIO cliente também — sendEvent não volta
           // pro remetente, então sem isso só os outros clientes soltavam
+          const usedHook = hooks.find((h) => h.occupiedBy === localId);
+          if (usedHook) setHookOccupied(usedHook, null);
+          if (result === 'eliminated'){
+            localEntry.eliminated = true;
+            checkMatchResolution();
+          }
+        });
+        net.sendEvent({ kind: 'downed', targetId: localId });
+        return;
+      }
+
+      // item 5 do pedido (BUGS.md): Assassino vasculhou o esconderijo até o
+      // fim e achou alguém — força a saída e machuca, mesma escalada de
+      // dano que um golpe normal (1º = ferido, 2º = derruba). Igual
+      // captureStart acima, decidido no cliente de quem foi achado.
+      if (data.kind === 'hideoutForceOut' && data.targetId === localId && localEntry.hideout){
+        localEntry.hideout.exit();
+        if (localEntry.health && !localEntry.health.state.injured){
+          Game.Audio.playAttackSwing();
+          localEntry.health.hit();
+          Game.Input.vibrate(120);
+          localEntry.char.playHit();
+          localEntry.el.classList.add('hit-flash');
+          setTimeout(() => localEntry.el.classList.remove('hit-flash'), 200);
+          return;
+        }
+        Game.Audio.playCaptureHit();
+        localEntry.capture.down((result) => {
+          net.sendEvent({ kind: 'struggleResult', playerId: localId, result });
           const usedHook = hooks.find((h) => h.occupiedBy === localId);
           if (usedHook) setHookOccupied(usedHook, null);
           if (result === 'eliminated'){
@@ -2278,6 +2423,33 @@ window.Game = window.Game || {};
               emitNoiseOnline(net, p.center.x, p.center.y, { radius: Game.CONFIG.noise.palletBreakRadius, ping: 1.5, sound: 'palletBreak' });
             }
           });
+          // item 5 do pedido (BUGS.md): Assassino vasculha esconderijo por
+          // proximidade, igual porta/pallet (sem precisar segurar botão).
+          // O esconderijo continua visualmente idêntico ocupado/vazio —
+          // só o próprio progresso avançando (ou não) entrega se tinha
+          // alguém ali, e isso só aparece na TELA DO ASSASSINO (o estado
+          // hcfg.forceOutDuration/hideoutSearchProgress é 100% local, nunca
+          // sincronizado — a vítima só descobre quando o evento chega).
+          const hcfg = Game.CONFIG.hideout;
+          MAP.hideoutSpots.forEach((spot, index) => {
+            const near = Math.hypot(localEntry.char.state.pos.x - spot.x, localEntry.char.state.pos.y - spot.y) <= hcfg.radius;
+            const occupant = near ? activeSurvivors().find((e) => e.hiddenInHideout &&
+              Math.hypot(e.char.state.pos.x - spot.x, e.char.state.pos.y - spot.y) <= hcfg.radius) : null;
+            if (occupant){
+              hideoutSearchProgress[index] += delta / hcfg.forceOutDuration;
+              if (hideoutSearchProgress[index] >= 1){
+                hideoutSearchProgress[index] = 0;
+                net.sendEvent({ kind: 'hideoutForceOut', targetId: occupant.info.id });
+              }
+            } else if (hideoutSearchProgress[index] > 0){
+              hideoutSearchProgress[index] = Math.max(0, hideoutSearchProgress[index] - delta * hcfg.forceOutDecayRate);
+            }
+            const el = hideoutSpotEls[index];
+            if (el){
+              el.style.setProperty('--search-progress', Math.round(hideoutSearchProgress[index] * 100) + '%');
+              el.classList.toggle('searching', hideoutSearchProgress[index] > 0.02);
+            }
+          });
         }
 
         if (stunned || engagedObjective){
@@ -2329,7 +2501,8 @@ window.Game = window.Game || {};
       localEntry.char.render();
       const senseActive = !isSurvivor && localAbility1.state.activeLeft > 0;
       const spectating = spectatorFollowEntry();
-      lighting.update(spectating ? spectating.char.state.pos : localEntry.char.state.pos, senseActive, visionBlockingWalls());
+      updateTorchAnimation(now);
+      lighting.update(spectating ? spectating.char.state.pos : localEntry.char.state.pos, senseActive, visionBlockingWalls(), torches);
 
       if (now - lastStateSent > 70){
         lastStateSent = now;
@@ -2344,6 +2517,12 @@ window.Game = window.Game || {};
             (localAbilityKey2 === 'camouflage' && localAbility3.state.activeLeft > 0) ||
             localEntry.hideout.state.hidden
           ),
+          // item 5 do pedido (BUGS.md): campo PRÓPRIO pra esconderijo
+          // especificamente (camouflaged sozinho não distingue de
+          // Camuflagem, a habilidade) — sem isso o Assassino nunca
+          // conseguia detectar "tem alguém ESPECIFICAMENTE nesse
+          // esconderijo aqui" pra vasculhar (ver onlineStateHandler acima)
+          hiddenInHideout: isSurvivor && localEntry.hideout.state.hidden,
           injured: isSurvivor && localEntry.health.state.injured,
           snared: isSurvivor && performance.now() < localEntry.char.state.snaredUntil,
           invisible: !isSurvivor && killerAbility3Key === 'invisibility' && localAbility3.state.activeLeft > 0,

@@ -59,7 +59,7 @@ Seção 3 foi corrigida na tabela em si.
 
 ---
 
-### BUG-002 · Sistema de luzes bugado · 🔴 P2 `[VIS]`
+### BUG-002 · Sistema de luzes bugado · 🟢 P2 `[VIS]` — corrigido 2026-08-16
 - **Sintoma:** As luzes estão se comportando de forma errada (posição, intensidade ou sobreposição).
 - **Esperado:** Iluminação simples e previsível: escuridão global + máscara de visão do jogador + focos estáticos no mapa.
 - **Causa provável:** Luzes acopladas ao render das entidades em vez de existirem como uma camada de composição própria.
@@ -67,6 +67,8 @@ Seção 3 foi corrigida na tabela em si.
 - **Critério de aceite:** Adicionar/remover uma luz é mudar um item de array; a cena continua a 60fps no celular.
 - **Depende de:** BUG-001 (mesma refatoração de camadas).
 - **Triagem:** a arquitetura pedida já existe — `js/lighting.js` desenha num canvas próprio (`#lighting`), por cima do mundo, em `destination-out`, via raycasting. O que falta é só o array de focos estáticos no mapa (`{x,y,raio,intensidade}`) — isso é feature nova, não conserto de bug. **Bloqueado até o Francisco descrever o que exatamente viu de errado** ("posição, intensidade ou sobreposição" não é reproduzível sem mais detalhe).
+- **Causa raiz real, achada 2026-08-16** (Francisco descreveu: "as paredes ficam completamente pretas/escuras e não aparece pixel art nelas"): reproduzido via screenshot local — é estrutural, não falta de sprite. `js/lighting.js` apagava a escuridão só com um ÚNICO gradiente radial centrado no jogador. Por definição de raycasting, uma parede bem na FRENTE do jogador sempre cai na BORDA do polígono de visão (é o próprio obstáculo que faz o raio parar ali) — exatamente onde aquele gradiente é mais fraco. Resultado: a parede que você está encostado nela — o caso mais óbvio de "devia estar bem clara" — ficava quase 100% coberta pela escuridão de base (quase preto puro).
+- **Corrigido:** `drawLighting()` ganhou um preenchimento plano (piso mínimo de visibilidade, alpha fixo) aplicado a TUDO dentro do polígono de visão antes do gradiente do jogador — garante que nada dentro da linha de visão fica 100% preto, não importa a distância. Além disso, focos de luz estáticos de verdade (o array `{x,y,radius}` que o texto original pedia) — `spawnTorches()` (`js/main.js`) ancora uma tocha em ~8 paredes horizontais por layout (reaproveitando `assets/tiles`/sprites organizados, ver BUG-003), cada uma criando seu próprio gradiente radial independente da posição do jogador, dentro do mesmo clip (uma tocha do outro lado de uma parede não vaza luz pro cômodo escondido). Testado: screenshot antes/depois mostrando a parede virando de "quase invisível" pra "textura de tijolo legível", e um teste isolado perto de uma tocha real mostrando a sala inteira iluminada. `npm test` sem regressão.
 
 ---
 
@@ -89,6 +91,24 @@ Seção 3 foi corrigida na tabela em si.
   - **Fallback de graça**: `background-color` sólido continua por baixo se a imagem não carregar — não precisou de código de fallback novo, só evitar o shorthand `background:` (que reseta a cor junto).
   - **Ainda falta**: gate/hook continuam cor sólida, BUG-004 (camada de face), fallback "retângulo com ID" pra sprite de PERSONAGEM faltando (hoje só os elementos do mapa têm fallback de graça via CSS). Resto da folha (banners, tochas, pilares, barris) documentado mas não usado — coordenadas em `assets/tiles/dungeon-tileset.png`.
   - Testado: todas as imagens carregam (`new Image()`), estrutura de paredes confere `.wall-h`/`.wall-v` corretos (38 paredes, 19/19 no layout padrão), screenshots reais conferindo chão/parede/porta/pallet/relevo visualmente; `npm test` sem regressão.
+- **Corrigido (rodada 3, mesmo dia — sistema de frente/topo de verdade):** Francisco organizou a folha inteira em `sprites_organizados/` (categorias com nome descritivo, cada peça já recortada certa — muito melhor que garimpar a folha crua). Trocado o manifesto pra usar essa fonte:
+  - `wallFront` (`faixa_tijolo_A.png`, 64×16) — face de tijolo de frente, onde bandeira/tocha penduram. `wallTop` (`parede_topo_clara_04.png`, 16×16) — vista de cima. Agora são texturas DE VERDADE diferentes por lado (não só luz/sombra como na rodada 2): `.wall-h` (parede deitada) usa `wallFront`, `.wall-v` (parede em pé, lateral de sala) usa `wallTop` — pedido explícito do Francisco ("cada lado da parede"), a rodada 2 só simulava isso com CSS porque a folha antiga não tinha uma 2ª textura de parede utilizável.
+  - `floor` trocado pra `piso_pedra_liso.png` (64×48, tile maior, menos repetitivo). Variação de chão nova: `spawnFloorDecals()` espalha 16 decalques rachados (`piso_pedra_rachado_A/B.png`) em posições aleatórias por partida, evitando sobrepor parede.
+  - `door` trocado pro arco grande (`porta_arco_escura.png`, 16×32, bem mais legível que o prop pequeno de 17×19px da rodada 2) — `background-size:contain` redimensiona proporcionalmente (sem esticar) pro tamanho de cada vão.
+  - `crate` (pallet) trocado pra `parede_caixotes_A.png` (64×32, melhor qualidade).
+  - Focos de luz estáticos de verdade (ver BUG-002 — causa raiz real da "parede preta" era de iluminação, não de sprite faltando): `spawnTorches()` ancora tochas (`tocha_parede_acesa_1/2.png`, anima entre os 2 quadros) nas paredes horizontais do layout.
+  - **Achado auditando `05_colunas/`** (fora do pedido, registrado pro Francisco decidir): `coluna_simples.png` está **completamente vazio** (recorte quebrado, sem nenhum pixel visível) e `coluna_ornamentada_1.png`/`coluna_ornamentada_2.png` estão cortados pela metade (faltam a base). Não usados nesta rodada. Também em `01_paredes/`: `bloco_parede_escura_grande.png` e `bloco_parede_escura_pequeno.png` têm o MESMO problema (recorte 100% vazio) — o que parecia "bloco cinza sólido" no contact sheet gerado era na verdade o FUNDO do próprio contact sheet aparecendo atrás de um sprite invisível.
+  - Testado: screenshot real mostrando parede horizontal (tijolo) e vertical (topo) lado a lado com texturas visivelmente diferentes, tocha iluminando uma sala inteira, porta grande legível, `npm test` sem regressão.
+
+---
+
+### BUG-014 · Sincronização de "escondido" nunca chegava ao Assassino online · 🟢 P1 `[REDE]` `[SIS]` — achado e corrigido 2026-08-16
+- **Sintoma:** achado implementando o item 5 do pedido do Francisco (Assassino vasculhar esconderijo). `entry.hideout` de uma entry REMOTA (`js/main.js`, `entries` Map) é uma instância `Game.createHideout()` isolada por cliente — só o DONO daquele esconderijo chama `enter()`/`exit()` nela, no próprio cliente. Em NENHUM outro cliente (incluindo o Assassino) esse objeto é atualizado por rede. Resultado: `entry.hideout.state.hidden` do lado do Assassino é sempre `false`, não importa o que o Sobrevivente esteja fazendo de verdade.
+- **Como reproduzir:** difícil sem a funcionalidade nova (vasculhar esconderijo) pra expor — o sintoma só aparece tentando LER esse campo do lado de um cliente que não é o dono.
+- **Esperado:** o Assassino conseguir saber (via evento/estado de rede, não a instância local) se um Sobrevivente específico está escondido.
+- **Causa provável:** confundi `entry.hideout.state.hidden` (estado LOCAL, nunca sincronizado) com `entry.camouflaged` (que JÁ é sincronizado via `sendState`, e JÁ inclui esconderijo — mas também inclui a habilidade Camuflagem, não dá pra distinguir as duas fontes a partir dele).
+- **Corrigido:** campo novo e específico `hiddenInHideout` no payload de `sendState()` (`isSurvivor && localEntry.hideout.state.hidden`) e espelhado em `onlineStateHandler` (`entry.hiddenInHideout`). A lógica de vasculhar esconderijo passou a checar esse campo em vez da instância local.
+- **Critério de aceite:** o Assassino consegue detectar corretamente quando um Sobrevivente específico está escondido num esconderijo específico. ✅ testado via LAN real (2 clientes): sem a correção, o progresso de "vasculhar" nunca avançava mesmo com o Assassino em cima do esconderijo ocupado; com a correção, avança e força a saída corretamente.
 
 ---
 
@@ -128,6 +148,7 @@ Seção 3 foi corrigida na tabela em si.
 - **Critério de aceite:** Não existe nenhuma sequência de ações que deixe um jogador travado sem poder agir até o fim da partida.
 - **Triagem:** saída voluntária (botão de ataque), saída forçada (14s) e cooldown de reentrada já existem em `hideout.js`. Causa real achada: `hideout.state.hidden` nunca é limpo quando o jogador é derrubado enquanto escondido — o branch `captured` em `main.js` vem antes do branch do esconderijo e nunca chama `hideout.exit()`, então o timer congela com `hidden:true`. Ao ser resgatado, o jogador volta imóvel/`.hidden-in-spot` longe de qualquer esconderijo. É a mesma armadilha que já foi corrigida pro gerador engajado (`main.js`, comentário "segurança: se o Assassino derrubou o jogador ENQUANTO..."), só que o esconderijo ficou de fora dessa correção. 3 linhas.
 - **Corrigido:** `hideout.exit()` adicionado no mesmo bloco `if (capture.state.captured)` que já desengaja o gerador, em `startSolo` e `startOnline` (o `startSoloAsKiller` não usa esconderijo). Testado junto com o resto de `npm test` (3 suites, sem regressão).
+- **Completado 2026-08-16 (item 5 do pedido do Francisco):** a "saída forçada: assassino arranca o sobrevivente" da correção proposta original agora existe de verdade — `Game.CONFIG.hideout.forceOutDuration` (3.5s), Assassino canaliza por proximidade em QUALQUER esconderijo (igual porta/pallet, sem precisar segurar botão) — só avança progresso se tiver alguém de verdade escondido ali (esconderijo continua visualmente idêntico ocupado/vazio de longe, só quem já está canalizando vê a barra, `.hideout-spot.searching`). Ao completar, força a saída e machuca (mesma escalada de dano de um golpe normal — 1º ferido, 2º derruba). Achou e corrigiu um bug de sincronização real no caminho — ver BUG-014. Confirmado que o timer de saída forçada (14s) continua funcionando (teste isolado). Testado via LAN real (2 clientes): Sobrevivente entra, Assassino vasculha, progresso avança só porque tem alguém ali, força a saída e machuca corretamente.
 
 ---
 
@@ -274,7 +295,7 @@ Seção 3 foi corrigida na tabela em si.
 
 ### v0.1 — Estabilidade (a partida precisa terminar)
 - [x] BUG-010 — Sair da partida/sala + limpeza de estado (2026-08-16)
-- [x] BUG-006 — Nenhum estado sem saída (2026-08-16, esconderijo; gerador engajado já cobria antes)
+- [x] BUG-006 — Nenhum estado sem saída (2026-08-16, esconderijo; gerador engajado já cobria antes) + Assassino consegue forçar a saída (completado mais tarde no mesmo dia)
 - [x] BUG-008 — Objetivo só progride com input + skill check + regressão (2026-08-16)
 - [x] BUG-007 — Economia de vida finita (2026-08-16: sangramento + teto de quedas)
 - [x] DD-01 — já era verdade, só faltava documentar (ver Seção 2)
@@ -287,9 +308,9 @@ Seção 3 foi corrigida na tabela em si.
 - [ ] Controles de toque revisados (zona morta, tamanho de botão para dedo)
 
 ### v0.3 — Pipeline de arte
-- [x] BUG-003 (parcial) — Chão/parede com tileset de verdade (2026-08-16); objetos do mapa (porta/pallet/gate) ainda cor sólida
+- [x] BUG-003 (parcial) — Chão/parede/porta/pallet com tileset de verdade, sistema de frente/topo por lado da parede, variação de chão, focos de luz (2026-08-16); gate/gancho ainda cor sólida
 - [ ] BUG-004 — Camada de face personalizada
-- [x] BUG-001 / [ ] BUG-002 — Sombra corrigida (Fase 1); luz ainda bloqueada
+- [x] BUG-001 / [x] BUG-002 — Sombra corrigida (Fase 1); luz corrigida (causa raiz real: gradiente nunca cobria bem a parede na frente do jogador) + focos estáticos de verdade (2026-08-16)
 
 ### v0.4 — Profundidade e equilíbrio
 - [ ] Palletes / janelas / loop de perseguição
@@ -332,6 +353,7 @@ Seção 3 foi corrigida na tabela em si.
 | 2026-08-16 | — | Autorrevisão do código desta sessão + auditoria fresca em arquivos não lidos ainda (pallet.js, window.js, ability.js, sw.js, resto de menu.js). 2 bugs novos achados e corrigidos: BUG-011 (`intentionalClose` podia travar em `true`) e BUG-012 (menu de pausa não bloqueava teclado/gamepad). 1 achado de baixo risco registrado e aceito por ora sem correção: BUG-013 (colapso pode ser adiado reconectando de propósito). |
 | 2026-08-16 | — | BUG-003 (parcial): Francisco forneceu um tileset de mapa (`assets/tiles/dungeon-tileset.png`) — chão e paredes ganharam textura de verdade pela 1ª vez (antes eram cor sólida), via novo manifesto `Game.CONFIG.tiles`. Testado (imagens carregam, screenshot conferido, sem regressão). |
 | 2026-08-16 | — | BUG-003 expandido: porta (ícone de arco), pallet (caixote de madeira) e baixo-relevo por lado da parede (`.wall-h`/`.wall-v`, pedido explícito do Francisco) — mesmo tileset, mais peças usadas. Testado com screenshots reais de cada elemento. |
+| 2026-08-16 | — | Francisco organizou a folha inteira em `sprites_organizados/` + pediu 5 coisas: (1) corrigidos 3 nomes errados em `06_barris_potes/`; (2) BUG-002 corrigido de vez (causa raiz real da "parede preta": gradiente de luz nunca cobria bem quem está na frente de uma parede) + sistema de parede frente/topo de verdade (não só CSS) + focos de tocha estáticos; (3) porta grande redimensionada e integrada; (4) variação de chão (decalques rachados aleatórios); (5) Assassino consegue forçar a saída de esconderijo ocupado — achou e corrigiu BUG-014 no caminho (sincronização de "escondido" nunca chegava ao Assassino online). `npm test` + vários scripts ad-hoc (LAN real, screenshots) sem regressão. |
 
 ---
 

@@ -173,11 +173,24 @@ html,body{
   background-color: var(--bg-floor);
   border: 3px solid var(--wall);
   box-shadow: 0 0 0 8px var(--bg-deep), 0 0 40px rgba(0,0,0,.6) inset;
-  background-image: var(--floor-tile-url, none);
-  background-size: var(--tile-size, 40px) var(--tile-size, 40px);
+  background-image: var(--floor-url, none);
+  background-size: var(--floor-size, 64px 48px);
   background-repeat: repeat;
   image-rendering: pixelated;
   transform-origin: 0 0; /* main.js move/escala a partir daqui pra fazer a câmera seguir o personagem */
+}
+/* item 4 do pedido (variação de chão): decalques soltos por cima do chão
+   base, gerados em spawnFloorDecals() (js/main.js) — número fixo de
+   posições aleatórias (mas determinísticas por layout, via RNG com seed)
+   espalhadas pelo mapa, evitando ficar tudo idêntico lado a lado. Fica
+   ABAIXO de tudo (mesmo z-index natural do chão, sem sombra/borda) —
+   puramente decorativo, não afeta colisão nem gameplay. */
+.floor-decal{
+  position:absolute;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+  opacity: .85;
 }
 /* raio de visão: escurece tudo menos um círculo ao redor do próprio
    personagem — igual pro Sobrevivente e pro Assassino, puramente visual
@@ -284,24 +297,31 @@ html,body{
 .wall{
   position:absolute;
   /* BUG-003 (BUGS.md): mesma ideia do #arena — background-color continua
-     como fallback se --wall-tile-url não carregar */
+     como fallback se a imagem (setada em .wall-h/.wall-v abaixo) não
+     carregar */
   background-color: var(--wall);
-  background-image: var(--wall-tile-url, none);
-  background-size: var(--tile-size, 32px) var(--tile-size, 32px);
   background-repeat: repeat;
   image-rendering: pixelated;
   border: 1px solid var(--muted);
   box-shadow: 0 2px 4px rgba(0,0,0,.4);
 }
-/* "cada lado da parede" (BUG-003): a folha não tem uma 2ª textura plana
-   pra parede lateral, então o baixo-relevo por lado vem de luz/sombra
-   encaixada por dentro da borda — .wall-h/.wall-v decididos por
-   proporção em buildWorld() (js/main.js). Horizontal (mais larga que
-   alta, tipo topo/base de sala): claro em cima, escuro embaixo — lido
-   como "olhando de frente pra parede". Vertical (mais alta que larga,
-   lateral de sala): claro à esquerda, escuro à direita. */
-.wall-h{ box-shadow: 0 2px 4px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.16), inset 0 -3px 0 rgba(0,0,0,.4); }
-.wall-v{ box-shadow: 0 2px 4px rgba(0,0,0,.4), inset 2px 0 0 rgba(255,255,255,.16), inset -3px 0 0 rgba(0,0,0,.4); }
+/* sistema de 2 faces (pedido do Francisco): parede HORIZONTAL (mais larga
+   que alta — topo/base de uma sala, "de frente" pra quem entra andando)
+   usa a textura de frente (tijolo, onde tocha/bandeira penduram);
+   VERTICAL (mais alta que larga — lateral de sala) usa a textura de topo
+   (vista de cima), não a de frente — senão fica com a textura errada
+   numa quina lateral. Decidido por proporção do retângulo em
+   buildWorld() (js/main.js). */
+.wall-h{
+  background-image: var(--wall-front-url, none);
+  background-size: var(--wall-front-size, 64px 16px);
+  box-shadow: 0 2px 4px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.16), inset 0 -3px 0 rgba(0,0,0,.4);
+}
+.wall-v{
+  background-image: var(--wall-top-url, none);
+  background-size: var(--wall-top-size, 16px 16px);
+  box-shadow: 0 2px 4px rgba(0,0,0,.4), inset 2px 0 0 rgba(255,255,255,.16), inset -3px 0 0 rgba(0,0,0,.4);
+}
 .wall.temporary-wall{
   background: rgba(201,162,75,.35);
   border: 2px dashed var(--gold);
@@ -309,26 +329,26 @@ html,body{
 /* porta de sala (mapa V3, ver js/map.js): vão destrancado por padrão
    (dá pra atravessar), vira uma parede de verdade quando trancada —
    Sobrevivente tranca ficando por perto, Assassino sempre arromba de
-   volta (só custa um tempo, ver js/door.js). Ícone do arco (BUG-003,
-   --door-icon-url) só marca visualmente "isto é uma porta" — pequeno e
-   centralizado, não repetido (é um prop solto da folha, não um tile). */
+   volta (só custa um tempo, ver js/door.js). item 3 do pedido: arco de
+   porta grande (16×32) redimensionado em múltiplo inteiro (contain,
+   sem esticar fora de proporção) — cobre a largura do vão, centralizado. */
 .door{
   position:absolute;
   background-color: rgba(90,70,40,.35);
-  background-image: var(--door-icon-url, none);
+  background-image: var(--door-url, none);
   background-repeat: no-repeat;
   background-position: center;
-  background-size: auto 65%;
+  background-size: contain;
   image-rendering: pixelated;
   border: 1px dashed var(--muted);
   box-sizing: border-box;
 }
 .door.locked{
-  /* trancada vira parede de verdade — mesma textura de parede, faz
-     sentido visual ela "virar parede" de fato, não só logicamente */
+  /* trancada vira parede de verdade — mesma textura de frente de parede,
+     faz sentido visual ela "virar parede" de fato, não só logicamente */
   background-color: var(--blood);
-  background-image: var(--wall-tile-url, none);
-  background-size: var(--tile-size, 32px) var(--tile-size, 32px);
+  background-image: var(--wall-front-url, none);
+  background-size: var(--wall-front-size, 64px 16px);
   background-repeat: repeat;
   border: 1px solid var(--ink);
   box-shadow: 0 2px 6px rgba(0,0,0,.5);
@@ -343,23 +363,23 @@ html,body{
 /* pallet (obstáculo solto, ver js/pallet.js): em pé não bloqueia nada;
    derrubado vira parede de verdade e atordoa o Assassino se ele tava perto
    — papel invertido do de porta (trancada = parede). Textura de caixote
-   de madeira (BUG-003, --crate-tile-url) faz sentido pro objeto em si
-   (é literalmente um móvel de madeira solto). */
+   de madeira (BUG-003, --crate-url) faz sentido pro objeto em si (é
+   literalmente um móvel de madeira solto). */
 .pallet{
   position:absolute;
   background-color: rgba(120,90,50,.5);
-  background-image: var(--crate-tile-url, none);
-  background-size: var(--tile-size, 32px) var(--tile-size, 32px);
+  background-image: var(--crate-url, none);
+  background-size: var(--crate-size, 64px 32px);
   background-repeat: repeat;
   image-rendering: pixelated;
   border: 1px dashed var(--muted);
   box-sizing: border-box;
 }
 .pallet.dropped{
-  /* derrubado vira parede de verdade — mesma textura de parede */
+  /* derrubado vira parede de verdade — mesma textura de frente de parede */
   background-color: var(--wall);
-  background-image: var(--wall-tile-url, none);
-  background-size: var(--tile-size, 32px) var(--tile-size, 32px);
+  background-image: var(--wall-front-url, none);
+  background-size: var(--wall-front-size, 64px 16px);
   background-repeat: repeat;
   border: 1px solid var(--muted);
   box-shadow: 0 2px 4px rgba(0,0,0,.4);
@@ -393,6 +413,19 @@ html,body{
   border-radius: 4px;
   background: rgba(60,50,70,.55);
   border: 1px dashed var(--muted);
+  overflow: hidden;
+}
+/* item 5 do pedido (BUGS.md): feedback de "vasculhando" — só aparece na
+   TELA DO PRÓPRIO ASSASSINO (--search-progress é estado 100% local, ver
+   js/main.js), nunca sincronizado — não entrega nada pro Sobrevivente
+   escondido nem revela ocupado/vazio de longe, só pra quem já está ali
+   canalizando */
+.hideout-spot.searching{ border-color: var(--gold); }
+.hideout-spot.searching::after{
+  content:'';
+  position:absolute; left:0; bottom:0; width:100%;
+  height: var(--search-progress, 0%);
+  background: rgba(201,162,75,.5);
 }
 .char.hidden-in-spot{ opacity: .35; }
 
@@ -460,6 +493,19 @@ html,body{
   border: 2px solid var(--gold);
   animation: pingPulse 1s ease-out infinite;
   pointer-events:none;
+}
+/* foco de luz estático (BUG-002/BUG-003) — puramente visual, o alcance
+   real de "apagar escuridão" é calculado em js/lighting.js a partir de
+   Game.CONFIG.tiles.torch.radius (mundo), não tem nada a ver com o
+   tamanho do sprite aqui. Ancorada na parede (ver spawnTorches, js/
+   main.js), sempre acima do próprio sprite de parede. */
+.torch{
+  position:absolute;
+  transform: translate(-50%,-50%);
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 2;
 }
 @keyframes pingPulse{
   0%{ transform: scale(1); opacity:1; }
