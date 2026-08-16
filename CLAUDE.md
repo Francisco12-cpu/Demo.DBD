@@ -424,8 +424,14 @@ independente):
 **UX/acessibilidade**
 - Seta/indicador apontando pro objetivo incompleto mais próximo (ajuda
   quem tá jogando pela 1ª vez a não vagar sem rumo).
-- Indicador extra (não só cor) pros 4 Sobreviventes — o `hue-rotate` pode
-  ser difícil de distinguir pra jogador daltônico.
+- ~~Indicador extra pros 4 Sobreviventes~~ — **feito** (2026-08-15):
+  `.survivor-badge` — círculo com o número (1-4) no canto do sprite,
+  criado junto com `setColorOverride()` em `startOnline` (só modo online,
+  só sobrevivente — solo só tem 1, sem precisar numerar). É filho do
+  `.char`, então some/aparece junto com o resto do personagem sob o
+  overlay de iluminação/fog, sem precisar de lógica de visibilidade
+  própria. Testado via Playwright com 3 clientes LAN: cada Sobreviventes
+  recebe o número certo (1, 2), Assassino não tem badge nenhum.
 - Configuração de remapeamento de tecla (hoje E/Q/R/WASD são fixos).
 - Histórico de partidas (não só o agregado que já existe em
   `localStorage`/`dbd_stats`).

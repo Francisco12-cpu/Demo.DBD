@@ -1226,6 +1226,12 @@ window.Game = window.Game || {};
       } else {
         const spawn = MAP.survivorSpawns[survivorIndex % MAP.survivorSpawns.length];
         char.setColorOverride(Game.CONFIG.survivorHues[survivorIndex % Game.CONFIG.survivorHues.length]);
+        // número além da cor — hue-rotate sozinho é difícil de distinguir
+        // pra jogador daltônico (não muda o brilho/contraste, só o matiz)
+        const badge = document.createElement('div');
+        badge.className = 'survivor-badge';
+        badge.textContent = String(survivorIndex + 1);
+        el.appendChild(badge);
         survivorIndex++;
         char.state.pos.x = spawn.x;
         char.state.pos.y = spawn.y;
