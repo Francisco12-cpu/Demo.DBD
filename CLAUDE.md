@@ -401,8 +401,15 @@ independente):
   diferentes, e um teste online com 2 clientes LAN confirmou que os dois
   concordam na mesma posição (prova que o `mapLayoutIndex` sincronizado
   continua funcionando).
-- Diferenciar `GAP_SIZE` (hoje 96px fixo pros dois) de porta vs janela em
-  `map.js`, pra telegraphing melhor de qual vão é qual à distância.
+- ~~Diferenciar `GAP_SIZE` de porta vs janela~~ — **feito** (2026-08-16):
+  `DOOR_GAP_SIZE` (96px, inalterado) e `WINDOW_GAP_SIZE` (64px, novo) em
+  `map.js` — `edgeWithGaps()` escolhe o tamanho certo por `kind` do gap.
+  Não afeta jogabilidade: janela nunca entra em `allWalls()` (nunca
+  bloqueia colisão) e `windowSpeedMultiplier()` usa
+  `Game.CONFIG.window.radius` (config independente), não o tamanho do
+  rect. Testado: `Game.MAP.layouts[0/1].doors/windows` confirma 96px vs
+  64px nos 2 layouts, sanity check de mapa (`assertPointsOutsideRooms`)
+  continua sem warning, `npm test` (3 suites) passa sem regressão.
 - Sistema de ping/marcador no mapa pra Sobreviventes se comunicarem sem
   voz (loop LAN/P2P não tem chat nem voz — só o ping falso da Distração).
 
@@ -426,17 +433,22 @@ independente):
   OUTROS Sobreviventes por perto (que o sistema de ruído não cobria).
   Implementado nos 2 modos solo e online (local + remoto).
 
-  **Achado durante o teste, não corrigido** (fora de escopo desta
-  entrega): `js/net-webrtc.js` → `host()` → `sendEvent()` não passa
-  `exceptId` pro `broadcast()`, então quando o **próprio host P2P** é
-  quem dispara um evento, ele recebe de volta via `deliverLocally` (ao
-  contrário do `server.js`, que corretamente exclui o remetente). Isso é
-  inofensivo pra maioria dos handlers (idempotentes — reaplicar o mesmo
-  estado não quebra nada) mas pode duplicar efeitos sonoros/vibração só
-  quando o host P2P (não jogadores comuns, nem LAN) é o autor do evento.
-  Consertar exigiria mexer no `broadcast()` genérico usado por todo
-  `net-webrtc.js`, risco maior que o benefício pra essa entrega — anotado
-  aqui pra uma rodada futura dedicada só a isso.
+  ~~Achado durante o teste, não corrigido~~ — **corrigido** (2026-08-16):
+  `js/net-webrtc.js` → `host()` → `sendState()`/`sendEvent()` agora
+  passam `localId` como `exceptId` pro `broadcast()` (igual ao padrão que
+  `processMessage()` já usa pro relay de eventos de jogadores remotos, e
+  igual ao `server.js` do LAN, que sempre excluiu o remetente). Antes, o
+  próprio host recebia de volta o próprio evento/estado via
+  `deliverLocally` — inofensivo pra handlers idempotentes, mas podia
+  duplicar efeitos sonoros/vibração quando o host P2P (não jogadores
+  comuns, nem LAN) era o autor do evento. Testado via Playwright: `Peer`
+  global stubado (com `page.route()` bloqueando `vendor/peerjs.min.js`,
+  que senão sobrescreve o stub — real PeerJS nunca dispara `open` nesse
+  sandbox) pra simular um host isolado; confirmado que o código antigo
+  ecoava `sendEvent`/`sendState` de volta pro próprio `onEvent`/`onState`
+  (reproduzido de propósito antes da correção) e que o código novo não
+  ecoa mais nada, sem afetar o roteamento pra jogadores remotos de
+  verdade (mesma função `broadcast()`, só o `exceptId` novo).
 - ~~Sinalizar na UI quando Web Audio indisponível~~ — **feito**
   (2026-08-15): `Game.Audio.init()` agora retorna `true`/`false`
   (Web Audio existe nesse navegador ou não). O `pointerdown` de
