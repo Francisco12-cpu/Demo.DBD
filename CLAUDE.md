@@ -429,8 +429,25 @@ independente):
   rect. Testado: `Game.MAP.layouts[0/1].doors/windows` confirma 96px vs
   64px em todos os layouts, sanity check de mapa (`assertPointsOutsideRooms`)
   continua sem warning, `npm test` (3 suites) passa sem regressão.
-- Sistema de ping/marcador no mapa pra Sobreviventes se comunicarem sem
-  voz (loop LAN/P2P não tem chat nem voz — só o ping falso da Distração).
+- ~~Sistema de ping/marcador no mapa~~ — **feito** (2026-08-16): botão
+  dedicado (tecla `V` / `#touch-ping` / L1 no gamepad — novo 4º slot de
+  input em `input.js`, mesmo padrão de `consumeAbility3Request`, mas fora
+  do grupo de habilidades: `setPingButtonVisible()` própria em vez de
+  reaproveitar `setAbilityButtonsVisible`) deixa o Sobrevivente marcar a
+  própria posição no mapa pros aliados, com cooldown de 2.5s do lado do
+  cliente (`Game.CONFIG.survivorPing`) pra evitar spam. Só existe no
+  **online**, só pro papel Sobrevivente (botão fica escondido nos 2 modos
+  solo e pro Assassino online) — evento `survivorPing` novo em
+  `protocol.js`, e só quem é Sobrevivente processa o evento recebido (o
+  Assassino nunca vê o marcador — comunicação privada do time, diferente
+  do sistema de `noise`, que é uma pista de jogo). Visual próprio
+  (`.comm-ping`, gota dourada com bounce) bem diferente do `.ping-marker`
+  do ruído, pra nunca confundir os dois. Testado via Playwright com 3
+  clientes LAN (Assassino + 2 Sobreviventes): botão só visível pros
+  Sobreviventes; quem aciona vê o próprio marcador local na hora (mesma
+  técnica client-authoritative de sempre: aplica local, depois manda
+  evento); o aliado recebe; o Assassino nunca recebe nada; e um 2º toque
+  imediato é bloqueado pelo cooldown (aliado continua com só 1 marcador).
 
 **Áudio**
 - ~~SFX dedicados de porta/pallet/portão/fuga~~ — **feito** (2026-08-15):
