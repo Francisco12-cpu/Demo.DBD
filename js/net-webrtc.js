@@ -324,9 +324,9 @@ window.Game = window.Game || {};
       rematch(){ processMessage(localId, { type: 'rematch' }, null); },
       forceRole(targetId, role){ processMessage(localId, { type: 'forceRole', targetId, role }, null); },
       kick(targetId){ processMessage(localId, { type: 'kick', targetId }, null); },
-      sendState(data){ broadcast({ type: 'state', id: localId, data }); },
+      sendState(data){ broadcast({ type: 'state', id: localId, data }, localId); },
       sendEvent(data){
-        broadcast({ type: 'event', id: localId, data });
+        broadcast({ type: 'event', id: localId, data }, localId);
         if (data && data.kind === Game.Protocol.RESUMABLE_EVENT_KINDS.MATCH_END) matchState = 'ended';
       },
       close(){ peer.destroy(); },

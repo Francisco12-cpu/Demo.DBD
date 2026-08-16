@@ -17,12 +17,19 @@ window.Game = window.Game || {};
   // pra colisão (quando trancada vira uma parede temporária) quanto pra
   // saber quando um jogador está perto o bastante pra interagir com ela.
   const THICK = 36;   // espessura das paredes das salas
-  const GAP_SIZE = 96; // largura do vão (porta OU janela — mesmo tamanho por simplicidade)
+  const DOOR_GAP_SIZE = 96;
+  // vão de janela mais estreito que o de porta — telegraphing à distância
+  // (dá pra saber qual vão é qual antes de chegar perto, sem precisar de
+  // sprite dedicado); não afeta jogabilidade, já que a janela nunca entra
+  // em `allWalls()` (nunca bloqueia ninguém) e o multiplicador de
+  // velocidade usa `Game.CONFIG.window.radius`, não o tamanho do rect.
+  const WINDOW_GAP_SIZE = 64;
 
   // gaps: [{ at: 0..1, kind: 'door' | 'window' }] — porta vira parede
   // temporária quando trancada (ver js/door.js/allWalls), janela nunca
   // bloqueia ninguém (ver js/window.js) — mesmo mecanismo de "abrir um
-  // vão na parede", só o array de destino muda conforme o `kind`.
+  // vão na parede", só o array de destino (e o tamanho do vão) muda
+  // conforme o `kind`.
   function edgeWithGaps(walls, doors, windows, vertical, fixedCoord, start, end, gaps){
     const length = end - start;
     const sorted = gaps
@@ -30,15 +37,16 @@ window.Game = window.Game || {};
       .sort((a, b) => a.pos - b.pos);
     let cursor = start;
     sorted.forEach(({ pos, kind }) => {
-      const gapStart = pos - GAP_SIZE / 2, gapEnd = pos + GAP_SIZE / 2;
+      const gapSize = kind === 'window' ? WINDOW_GAP_SIZE : DOOR_GAP_SIZE;
+      const gapStart = pos - gapSize / 2, gapEnd = pos + gapSize / 2;
       if (gapStart > cursor){
         walls.push(vertical
           ? { x: fixedCoord, y: cursor, w: THICK, h: gapStart - cursor }
           : { x: cursor, y: fixedCoord, w: gapStart - cursor, h: THICK });
       }
       const rect = vertical
-        ? { x: fixedCoord, y: gapStart, w: THICK, h: GAP_SIZE }
-        : { x: gapStart, y: fixedCoord, w: GAP_SIZE, h: THICK };
+        ? { x: fixedCoord, y: gapStart, w: THICK, h: gapSize }
+        : { x: gapStart, y: fixedCoord, w: gapSize, h: THICK };
       (kind === 'window' ? windows : doors).push(rect);
       cursor = gapEnd;
     });
