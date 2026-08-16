@@ -9,6 +9,7 @@ window.Game = window.Game || {};
   let ability1Requested = false; // KeyE
   let ability2Requested = false; // KeyQ (Investida do Assassino; pro Sobrevivente só faz algo enquanto engajado num gerador)
   let ability3Requested = false; // KeyR (3º slot — 2ª habilidade do Sobrevivente / 3ª do Assassino)
+  let pingRequested = false; // KeyV (marcador de comunicação, só Sobrevivente online)
 
   window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
@@ -19,6 +20,7 @@ window.Game = window.Game || {};
     if (e.code === 'KeyE') ability1Requested = true;
     if (e.code === 'KeyQ') ability2Requested = true;
     if (e.code === 'KeyR') ability3Requested = true;
+    if (e.code === 'KeyV') pingRequested = true;
   });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
@@ -39,6 +41,7 @@ window.Game = window.Game || {};
   let touchAbility1Requested = false;
   let touchAbility2Requested = false;
   let touchAbility3Requested = false;
+  let touchPingRequested = false;
   // sensibilidade do joystick virtual (1 = padrão) — configurável no menu
   // de opções; maior = alcança velocidade máxima com um arrasto menor
   let joystickSensitivity = 1;
@@ -54,6 +57,7 @@ window.Game = window.Game || {};
     const ability1Btn = document.getElementById('touch-ability1');
     const ability2Btn = document.getElementById('touch-ability2');
     const ability3Btn = document.getElementById('touch-ability3');
+    const pingBtn = document.getElementById('touch-ping');
     if (!controls || !joystickBase || !attackBtn) return;
 
     controls.style.display = 'flex';
@@ -140,6 +144,12 @@ window.Game = window.Game || {};
         touchAbility3Requested = true;
       }, { passive: false });
     }
+    if (pingBtn){
+      pingBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        touchPingRequested = true;
+      }, { passive: false });
+    }
   }
 
   // label2/label3: texto dos botões de habilidade 2/3 — "Q" pro dash do
@@ -160,8 +170,16 @@ window.Game = window.Game || {};
     }
   }
 
+  // marcador de comunicação (só Sobrevivente, só online) — botão dedicado
+  // fora do grupo de habilidades, então tem visibilidade própria em vez de
+  // reaproveitar setAbilityButtonsVisible.
+  function setPingButtonVisible(show){
+    const btn = document.getElementById('touch-ping');
+    if (btn) btn.style.display = show ? '' : 'none';
+  }
+
   // ---------- gamepad ----------
-  let gamepadState = { x: 0, y: 0, attack: false, ability1: false, ability2: false, ability3: false };
+  let gamepadState = { x: 0, y: 0, attack: false, ability1: false, ability2: false, ability3: false, ping: false };
   let gamepadConnected = false;
 
   // nomes dos botões variam por fabricante — Xbox chama de A/X/Y/B, PlayStation
@@ -205,12 +223,13 @@ window.Game = window.Game || {};
       const ability1 = !!(pad.buttons[1] && pad.buttons[1].pressed);
       const ability2 = !!(pad.buttons[2] && pad.buttons[2].pressed);
       const ability3 = !!(pad.buttons[3] && pad.buttons[3].pressed);
-      if (Math.abs(dx) > 0.15 || Math.abs(dy) > 0.15 || attack || ability1 || ability2 || ability3){
-        gamepadState = { x: dx, y: dy, attack, ability1, ability2, ability3 };
+      const ping = !!(pad.buttons[4] && pad.buttons[4].pressed); // L1/LB
+      if (Math.abs(dx) > 0.15 || Math.abs(dy) > 0.15 || attack || ability1 || ability2 || ability3 || ping){
+        gamepadState = { x: dx, y: dy, attack, ability1, ability2, ability3, ping };
         return;
       }
     }
-    gamepadState = { x: 0, y: 0, attack: false, ability1: false, ability2: false, ability3: false };
+    gamepadState = { x: 0, y: 0, attack: false, ability1: false, ability2: false, ability3: false, ping: false };
   }
 
   // ---------- API pública ----------
@@ -270,6 +289,14 @@ window.Game = window.Game || {};
     return requested;
   }
 
+  function consumePingRequest(){
+    let requested = false;
+    if (pingRequested){ requested = true; pingRequested = false; }
+    if (touchPingRequested){ requested = true; touchPingRequested = false; }
+    if (gamepadState.ping) requested = true;
+    return requested;
+  }
+
   Game.Input = {
     init: setupTouchControls,
     update,
@@ -278,7 +305,9 @@ window.Game = window.Game || {};
     consumeAbility1Request,
     consumeAbility2Request,
     consumeAbility3Request,
+    consumePingRequest,
     setAbilityButtonsVisible,
+    setPingButtonVisible,
     setJoystickSensitivity,
     isTouchDevice,
     vibrate,

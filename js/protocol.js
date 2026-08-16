@@ -45,7 +45,7 @@
     'captureStart', 'downed', 'pickedUp', 'droppedFree', 'hooked', 'rescued',
     'revived', 'gateOpened', 'survivorEscaped', 'doorForceLock', 'doorLocked',
     'doorBroken', 'palletDropped', 'palletBroken', 'palletStun', 'noise',
-    'trapPlaced', 'trapSprung',
+    'trapPlaced', 'trapSprung', 'survivorPing',
   ]);
 
   return { RESUMABLE_EVENT_KINDS, KNOWN_EVENT_KINDS };

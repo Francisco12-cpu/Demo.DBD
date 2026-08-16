@@ -316,6 +316,19 @@ window.Game = window.Game || {};
     setTimeout(() => div.remove(), durationSec * 1000);
   }
 
+  // marcador de comunicação entre Sobreviventes (botão dedicado, ver
+  // js/input.js consumePingRequest/Game.CONFIG.survivorPing) — visual
+  // próprio (.comm-ping) pra nunca ser confundido com o .ping-marker do
+  // sistema de ruído acima, que é involuntário
+  function spawnCommPingMarker(x, y, durationSec){
+    const div = document.createElement('div');
+    div.className = 'comm-ping';
+    div.style.left = x + 'px';
+    div.style.top = y + 'px';
+    arena.appendChild(div);
+    setTimeout(() => div.remove(), durationSec * 1000);
+  }
+
   // Armadilha do Assassino (habilidade killerTrap) — diferente do ping (que
   // some sozinho depois de `durationSec`), o marcador da armadilha precisa
   // ser removido manualmente no exato instante em que ela dispara (por isso
@@ -483,6 +496,7 @@ window.Game = window.Game || {};
 
     beginMatchUi();
     Game.Input.setAbilityButtonsVisible(true, false, null, true);
+    Game.Input.setPingButtonVisible(false); // marcador de comunicação só existe no online (não tem aliado no solo)
 
     let distraction = null; // { x, y, until } — pra onde a IA vai correr em vez do jogador
     const matchStartAt = performance.now();
@@ -926,6 +940,7 @@ window.Game = window.Game || {};
     // só Investida (Q) e Armadilha (R) — Sentido não faz sentido sem
     // sistema de camuflagem pra IA
     Game.Input.setAbilityButtonsVisible(false, true, null, true);
+    Game.Input.setPingButtonVisible(false); // marcador de comunicação só existe no online
 
     const matchStartAt = performance.now();
     let lastStepAt = 0;
@@ -1311,11 +1326,13 @@ window.Game = window.Game || {};
 
     beginMatchUi();
     Game.Input.setAbilityButtonsVisible(true, !isSurvivor, null, true);
+    Game.Input.setPingButtonVisible(isSurvivor); // marcador de comunicação: só Sobrevivente, só online
     const matchStartAt = performance.now();
     let lastStepAt = 0;
     let gatesActive = false; // vira true quando os 5 geradores terminam (todo mundo calcula igual, é só olhar objectives.state.done, já sincronizado)
     let carryingEntry = null; // só o Assassino usa: quem ele está carregando agora (null = ninguém)
     let activeTrap = null; // { x, y, el } — só usado quando killerAbility3Key === 'trap', null = nenhuma armada agora
+    let pingCooldownUntil = 0; // performance.now() — evita spam do marcador de comunicação (ver Game.CONFIG.survivorPing)
 
     // enquanto alguém está "carried" (js/capture.js), a posição dele segue
     // a do Assassino em todo cliente — o Assassino já transmite a própria
@@ -1685,6 +1702,15 @@ window.Game = window.Game || {};
         return;
       }
 
+      // marcador de comunicação (botão dedicado do Sobrevivente, ver
+      // consumePingRequest abaixo) — só os PRÓPRIOS aliados veem; o
+      // Assassino nunca recebe esse marcador na tela (comunicação privada
+      // do time, não uma pista de jogo)
+      if (data.kind === 'survivorPing'){
+        if (isSurvivor) spawnCommPingMarker(data.x, data.y, Game.CONFIG.survivorPing.durationSec);
+        return;
+      }
+
       if (data.kind === 'matchEnd' && !matchOver){
         endMatch(data.result === 'survivors', data.result === 'survivors'
           ? 'Os Sobreviventes escaparam!'
@@ -1795,10 +1821,21 @@ window.Game = window.Game || {};
       // tempo, então dá pra consumir sempre e rotear pelo papel abaixo.
       const ability2Requested = Game.Input.consumeAbility2Request();
       const ability3Requested = Game.Input.consumeAbility3Request();
+      const pingRequested = Game.Input.consumePingRequest();
 
       const captured = isSurvivor && localEntry.capture.state.captured;
       const eliminated = isSurvivor && (localEntry.capture.state.eliminated || localEntry.escaped);
       let engagedObjective = null; // gerador que o Sobrevivente engajou pra reparar, se houver
+
+      // marcador de comunicação: independente do estado (capturado/
+      // escondido/livre) — não é uma ação de jogo, só um "olha aqui" pros
+      // aliados, então não faz sentido travar atrás das mesmas condições
+      // de attackRequested/ability. Cooldown do lado do cliente evita spam.
+      if (isSurvivor && pingRequested && !eliminated && performance.now() >= pingCooldownUntil){
+        pingCooldownUntil = performance.now() + Game.CONFIG.survivorPing.cooldownSec * 1000;
+        spawnCommPingMarker(localEntry.char.state.pos.x, localEntry.char.state.pos.y, Game.CONFIG.survivorPing.durationSec);
+        net.sendEvent({ kind: 'survivorPing', x: localEntry.char.state.pos.x, y: localEntry.char.state.pos.y });
+      }
 
       // segurança: se o Assassino derrubou o jogador ENQUANTO ele estava
       // engajado num gerador, o bloco de baixo nunca roda (captured entra

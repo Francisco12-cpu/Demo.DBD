@@ -272,6 +272,16 @@ Game.CONFIG = {
     reentryCooldown: 5,
   },
 
+  // marcador de comunicação entre Sobreviventes (loop LAN/P2P não tem chat
+  // nem voz) — só existe no modo online, só pro papel Sobrevivente, e só
+  // aparece pros próprios aliados (o Assassino nunca recebe esse evento).
+  // Diferente do `noise` acima: é uma ação deliberada do jogador (botão
+  // dedicado), não uma consequência involuntária de outra ação.
+  survivorPing: {
+    cooldownSec: 2.5, // evita spam de marcador
+    durationSec: 4,   // quanto tempo o marcador fica visível na tela
+  },
+
   // Sobrevivente controlado pela IA (modo solo, jogando de Assassino) —
   // foge do Assassino, repara geradores sozinho e tenta escapar pelo
   // portão. Espelha `characters.killer` (IA que persegue no modo solo
