@@ -286,6 +286,102 @@ caso de uso), comparação de features com o jogo original. Se o usuário
 mencionar de novo, ele provavelmente já viu a análise anterior — perguntar
 se é pra continuar analisando ou já implementar algo específico.
 
+## BUGS.md — rastreamento de bugs (a partir de 2026-08-16)
+
+**Existe um `BUGS.md` na raiz do projeto** — se ele existir, é a fonte de
+verdade sobre bugs abertos/corrigidos e débitos de design, **leia-o antes
+de continuar** qualquer trabalho de correção (tem convenção própria de ID
+fixo, severidade e critério de aceite, documentada no próprio arquivo).
+Não duplicar o rastreamento aqui — só registrar aqui, resumido, o que uma
+sessão futura precisa saber de bugs já corrigidos que mudam premissas do
+código (ex: "captura agora tem 3 causas de eliminação", não a lista
+completa de todo item do BUGS.md).
+
+**Corrigido em 2026-08-16 (1ª e 3ª fase do roadmap do BUGS.md — a 2ª foi
+coberta de graça pela 1ª):**
+- **BUG-010 (sair da partida/sala)** — botão de pausa sempre visível
+  durante a partida (`#pause-btn`/`#pause-menu`, 1 passo de confirmação),
+  `Game.requestExitMatch()` central (main.js) chamando `exitMatch()`
+  específico de cada modo (solo/solo-assassino/online), que por sua vez
+  chama `Game.Menu.exitToStart()` (menu.js, novo) — fecha a rede se
+  online. Saída intencional agora manda `{type:'leave'}` antes de fechar
+  (`net.js`/`net-webrtc.js`/`server.js`), pulando o `RECONNECT_GRACE_MS`
+  de 25s (que é só pra queda de rede acidental) — os outros jogadores veem
+  a saída na hora, não 25s depois. P2P: host saindo manda `roomClosed`
+  pra todo mundo (não tem failover de host, limitação já documentada).
+  `setupTouchControls` (`input.js`) ganhou guarda de idempotência — era o
+  vazamento real de listener por trás do "acumula lentidão" relatado.
+- **BUG-006 (esconderijo travava)** — `hideout.exit()` adicionado no
+  mesmo lugar em que o gerador engajado já era desengajado quando o
+  Assassino derruba o jogador NO MEIO do esconderijo (`main.js`, solo e
+  online) — sem isso o timer do esconderijo congelava com `hidden:true`
+  pra sempre.
+- **BUG-001 (sombra por cima de sprite)** — `character.js render()` seta
+  `z-index` por Y (`Math.round(state.pos.y)`) — a sombra em si já estava
+  certa, faltava só ordenar quem desenha por cima de quem.
+- **BUG-007 (reviver infinito) + DD-02 (fim de partida)** — `capture.js`
+  ganhou `state.downCount`/`state.bleedOut` e `Game.CONFIG.capture.
+  bleedOutDuration`/`maxDowns`: um Sobrevivente caído sem ser
+  pego/reanimado morre sozinho depois de `bleedOutDuration` (60s, pausa
+  enquanto `carried`/`hooked`), e a partir da queda além de `maxDowns` (3)
+  a queda elimina direto. `resolve()` ganhou um `reason` (`'hook'`|
+  `'bleedOut'`|`'maxDowns'`|`'collapse'`) propagado pro callback — `main.js`
+  usa isso (`eliminationMessage()`) pra não mostrar sempre "sacrificado no
+  gancho" quando a causa foi outra. **DD-02** (colapso de fim de partida):
+  `Game.CONFIG.match.collapseDuration` (150s) — quando os geradores ficam
+  prontos, começa uma contagem regressiva; quem não escapou quando ela
+  zera é eliminado (Assassino vence por colapso), em todos os 3 modos.
+  Online usa `capture.forceEliminate()` (novo) + o evento `struggleResult`
+  que já existia, sem precisar de `kind` novo no protocolo.
+- Ver `BUGS.md` pros detalhes completos (causa raiz de cada um, o que foi
+  testado) — a Seção 3 dele (comparação com o gênero) também foi corrigida
+  nessa sessão: estava desatualizada dizendo que pallets/janelas/portões/
+  raio de terror não existiam, quando já estavam implementados e testados
+  há sessões.
+
+**Corrigido em 2026-08-16, 2ª rodada (fases 4-6 do roadmap do BUGS.md):**
+- **BUG-008 (objetivo sem regressão)** — `objective.js` ganhou
+  `decayIfAbandoned(delta)`, chamada em TODO objetivo (não só o
+  engajado) todo frame nos 3 modos — decai 0.01/s até zerar
+  (`Game.CONFIG.objective.regressRate`/`regressFloor`) quando abandonado,
+  bem mais devagar que o ganho (~0.029/s). Estado `regressing` (+ classe
+  CSS, borda vermelha) liga/desliga sozinho.
+- **BUG-009 (landscape)** — `#rotate-prompt` virou overlay de tela cheia
+  bloqueante (era só uma faixinha dispensável); `beginMatchUi()` tenta
+  `requestFullscreen()` + `screen.orientation.lock('landscape')`
+  (best-effort, silencioso onde não suporta — iOS nunca suporta).
+  Escape hatch mantido ("Jogar mesmo assim") mas não é mais permanente
+  (`localStorage`) — reseta a cada partida nova, só existe pra não
+  contradizer a própria convenção do projeto contra estado sem saída.
+  `env(safe-area-inset-*)` somado no HUD/bússolas/controles de toque.
+- **BUG-005 (parcial)** — o filtro CSS inline que apagava
+  ferido/pendurado/dano pros Sobreviventes 2-4 online: `setColorOverride()`
+  agora seta uma custom property (`--survivor-hue` no `.char`) em vez de
+  `torso.style.filter` direto; todo `filter` de estado no CSS ganhou
+  `hue-rotate(var(--survivor-hue, 0deg))` encadeado no final — os dois
+  `hue-rotate()` somam matematicamente, cor do jogador e cor do estado
+  convivem. Ainda faltam: estado "barricada" da porta (hoje é binária) e
+  o Assassino conseguir arrancar alguém do esconderijo — escopo maior,
+  ficam pra depois.
+
+**Autorrevisão do código desta sessão + auditoria fresca (2026-08-16)** —
+depois de fechar as fases 1-6, revisei o próprio código escrito nesta
+sessão (não só os arquivos que o BUGS.md original apontava) e li
+pallet.js/window.js/ability.js/sw.js/resto de menu.js, que ainda não
+tinham sido reabertos. 2 bugs novos achados e corrigidos (BUG-011/012 no
+BUGS.md — flag `intentionalClose` podia travar em `true` engolindo uma
+queda de rede real; menu de pausa não bloqueava teclado/gamepad, só
+toque). 1 achado de baixo risco registrado e aceito por ora sem correção
+(BUG-013 — colapso de fim de partida pode ser adiado reconectando de
+propósito; exige ação deliberada e não afeta os outros jogadores).
+
+**Ainda aberto no BUGS.md** (não mexer sem reler o arquivo primeiro):
+BUG-002 (luzes — bloqueado até o Francisco descrever o defeito visto),
+BUG-003/004 (pipeline de arte, escopo grande, precisa de tiles/faces
+prontos), BUG-013 (colapso adiável reconectando, baixo risco, aceito por
+ora), DD-04/DD-05 (interrupção/feedback), controles de toque (zona morta,
+tamanho de alvo), e as 2 peças que sobraram do BUG-005.
+
 ## Ideias futuras (auditoria de código, 2026-08-15)
 
 Depois de fechar o backlog pendente (estado pronto, controle de papel pelo

@@ -7,16 +7,75 @@ window.Game = window.Game || {};
   const arena = document.getElementById('arena');
   const lightingEl = document.getElementById('lighting');
   const dangerVignetteEl = document.getElementById('danger-vignette');
+  // BUG-009 (BUGS.md): virou bloqueio de verdade em portrait (CSS, ver
+  // style.css) — o botão agora é só o escape hatch ("Jogar mesmo assim",
+  // pra falso positivo de detecção de orientação), não uma preferência
+  // permanente. `rotate-override` é resetado a cada partida nova em
+  // beginMatchUi(), então nunca fica "esquecido" desligado pra sempre.
   const rotateDismissBtn = document.getElementById('rotate-dismiss');
-  if (localStorage.getItem('dbd_rotate_dismissed') === '1') document.body.classList.add('rotate-dismissed');
   rotateDismissBtn.addEventListener('click', () => {
-    document.body.classList.add('rotate-dismissed');
-    localStorage.setItem('dbd_rotate_dismissed', '1');
+    document.body.classList.add('rotate-override');
   });
-  // rede de segurança: some sozinho depois de alguns segundos, mesmo que o
-  // toque no botão não funcione por algum motivo (navegador estranho, dedo
-  // errou o botão, etc.) — nunca pode ficar preso bloqueando o jogo
-  let rotateAutoHideTimer = null;
+
+  // tentativa de travar em paisagem de verdade (Android, dentro de
+  // fullscreen — a Orientation Lock API exige isso na maioria dos
+  // navegadores). iOS Safari não suporta a API de jeito nenhum: falha
+  // sempre, silenciosamente — é exatamente pra isso que o bloqueio visual
+  // acima existe (fallback obrigatório do BUG-009). Nunca deixa a
+  // ausência de suporte virar erro visível pro jogador.
+  async function tryLockLandscape(){
+    try {
+      if (!Game.Input.isTouchDevice) return;
+      if (document.documentElement.requestFullscreen && !document.fullscreenElement){
+        await document.documentElement.requestFullscreen().catch(() => {});
+      }
+      if (screen.orientation && screen.orientation.lock){
+        await screen.orientation.lock('landscape').catch(() => {});
+      }
+    } catch (err){ /* best-effort — navegador sem suporte, sem fullscreen, etc. */ }
+  }
+
+  // ---------- pausa / sair da partida (BUG-010) ----------
+  // Botão sempre visível durante a partida (display controlado só por CSS,
+  // via body.in-match) — abre um overlay com 1 passo de confirmação antes
+  // de encerrar de verdade, pra toque acidental não derrubar a partida.
+  const pauseBtn = document.getElementById('pause-btn');
+  const pauseMenu = document.getElementById('pause-menu');
+  const pauseMenuMain = document.getElementById('pause-menu-main');
+  const pauseMenuConfirm = document.getElementById('pause-menu-confirm');
+  const pauseResumeBtn = document.getElementById('pause-resume');
+  const pauseExitBtn = document.getElementById('pause-exit');
+  const pauseExitConfirmBtn = document.getElementById('pause-exit-confirm');
+  const pauseExitCancelBtn = document.getElementById('pause-exit-cancel');
+
+  function openPauseMenu(){
+    pauseMenuMain.style.display = 'flex';
+    pauseMenuConfirm.style.display = 'none';
+    pauseMenu.style.display = 'flex';
+    // achado numa auditoria (BUG-010): o overlay já bloqueava toque
+    // sozinho (cobre a tela com pointer-events:auto), mas teclado/gamepad
+    // continuavam sendo lidos pelo loop por baixo — dava pra continuar
+    // andando/atacando "às cegas" com o menu aberto por cima
+    Game.Input.setPaused(true);
+  }
+  function closePauseMenu(){
+    pauseMenu.style.display = 'none';
+    Game.Input.setPaused(false);
+  }
+  pauseBtn.addEventListener('click', openPauseMenu);
+  pauseResumeBtn.addEventListener('click', closePauseMenu);
+  pauseExitBtn.addEventListener('click', () => {
+    pauseMenuMain.style.display = 'none';
+    pauseMenuConfirm.style.display = 'flex';
+  });
+  pauseExitCancelBtn.addEventListener('click', () => {
+    pauseMenuConfirm.style.display = 'none';
+    pauseMenuMain.style.display = 'flex';
+  });
+  pauseExitConfirmBtn.addEventListener('click', () => {
+    closePauseMenu();
+    Game.requestExitMatch();
+  });
   const objectivesStatus = document.getElementById('objectives-status');
   const abilityHudEl = document.getElementById('ability-hud');
   const panel = document.getElementById('panel');
@@ -40,6 +99,16 @@ window.Game = window.Game || {};
   // travado) continuava rodando em paralelo, consumindo input junto com o
   // novo.
   let onlineSessionId = 0;
+
+  // referência pra função de saída da partida ATUAL (solo ou online) —
+  // setada no início de cada startX(), limpada (null) assim que a partida
+  // termina de qualquer jeito (matchOver). O botão de pausa (BUG-010) só
+  // aciona essa referência; cada modo sabe limpar o que é seu (objetivo
+  // engajado, esconderijo, rede) antes de voltar pro menu.
+  let activeExitMatch = null;
+  Game.requestExitMatch = function(){
+    if (activeExitMatch) activeExitMatch();
+  };
 
   // ---------- mundo (mapa + objetivos + portas + esconderijos + portões + ganchos), compartilhado entre solo e online ----------
   function buildWorld(objectiveCount, layoutIndex){
@@ -426,10 +495,9 @@ window.Game = window.Game || {};
 
   function beginMatchUi(){
     stage.style.display = 'flex';
-    document.body.classList.add('in-match'); // liga o aviso de girar o celular (só existe durante a partida, não no menu)
-    if (localStorage.getItem('dbd_rotate_dismissed') !== '1'){
-      rotateAutoHideTimer = setTimeout(() => document.body.classList.add('rotate-dismissed'), 6000);
-    }
+    document.body.classList.remove('rotate-override'); // bloqueio de girar (BUG-009) sempre volta ligado numa partida nova
+    document.body.classList.add('in-match'); // liga o bloqueio de girar (só existe durante a partida, não no menu)
+    tryLockLandscape();
     Game.Input.init();
     Game.Audio.init();
     Game.Audio.startAmbient();
@@ -439,14 +507,24 @@ window.Game = window.Game || {};
   function hideMatchUi(){
     stage.style.display = 'none';
     document.body.classList.remove('in-match');
-    if (rotateAutoHideTimer){ clearTimeout(rotateAutoHideTimer); rotateAutoHideTimer = null; }
-    // some sozinho só nessa partida (a menos que tenha sido dispensado de
-    // vez pelo botão) — próxima partida mostra o aviso de novo brevemente
-    if (localStorage.getItem('dbd_rotate_dismissed') !== '1') document.body.classList.remove('rotate-dismissed');
+    closePauseMenu();
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (err){ /* sem suporte, ignora */ }
     Game.Audio.stopHeartbeat();
     Game.Audio.stopAmbient();
     killerCompassEl.classList.remove('active');
     dangerVignetteEl.style.setProperty('--danger', 0);
+  }
+
+  // texto de derrota pro Sobrevivente conforme a causa da eliminação
+  // (BUG-007) — capture.js passa 'reason' só quando result==='eliminated';
+  // 'hook' é o caminho de sempre, 'bleedOut'/'maxDowns' são os 2 caminhos
+  // novos que fecham o "reviver infinito" (sangrou até morrer sem ser
+  // reanimado a tempo; ou já tinha caído demais nesta partida)
+  function eliminationMessage(reason){
+    if (reason === 'bleedOut') return 'Você sangrou até a morte sem ser reanimado a tempo.';
+    if (reason === 'maxDowns') return 'Você caiu demais nesta partida e não resistiu.';
+    return 'Você foi sacrificado no gancho.';
   }
 
   function charDom(){
@@ -480,6 +558,7 @@ window.Game = window.Game || {};
     const health = Game.createHealth(playerEl);
     let lastKnownPlayerPos = { x: MAP.player.x, y: MAP.player.y };
     let gatesActive = false; // vira true quando os 5 geradores terminam
+    let collapseAt = 0; // DD-02: performance.now() do colapso, setado quando gatesActive vira true
 
     const abilityCfg = Game.CONFIG.abilities.survivor[abilityKey] || Game.CONFIG.abilities.survivor.sprint;
     const abilityCfg2 = Game.CONFIG.abilities.survivor[abilityKey2] || Game.CONFIG.abilities.survivor.camouflage;
@@ -507,12 +586,30 @@ window.Game = window.Game || {};
     function endMatch(won, detail){
       if (matchOver) return;
       matchOver = true;
+      activeExitMatch = null;
       Game.Audio.stopHeartbeat();
       const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
       const doneCount = updateObjectivesStatus();
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
       Game.Menu.showResult(won, fullDetail, () => startSolo(name, abilityKey, abilityKey2), 'survivor');
     }
+
+    // saída voluntária (BUG-010, botão de pausa) — mesma limpeza de estado
+    // que o fim normal de partida faz (parar o loop), mais desengajar
+    // qualquer coisa em andamento (gerador, esconderijo) antes de sumir,
+    // já que quem chama não vai rodar mais nenhum update() depois disso
+    function exitMatch(){
+      if (matchOver) return;
+      matchOver = true;
+      activeExitMatch = null;
+      Game.Audio.stopHeartbeat();
+      const staleEngaged = objectives.find((o) => o.state.engaged);
+      if (staleEngaged) staleEngaged.disengage();
+      if (hideout.state.hidden) hideout.exit();
+      hideMatchUi(); // showResult() faz isso pro fim normal — aqui não passa por ela
+      Game.Menu.exitToStart();
+    }
+    activeExitMatch = exitMatch;
 
     function attemptKillerHit(){
       const origin = attackOrigin(killer.state, killer.characterConfig());
@@ -535,8 +632,8 @@ window.Game = window.Game || {};
       }
 
       Game.Audio.playCaptureHit();
-      capture.down((result) => {
-        if (result === 'eliminated') endMatch(false, 'Você foi sacrificado no gancho.');
+      capture.down((result, reason) => {
+        if (result === 'eliminated') endMatch(false, eliminationMessage(reason));
       });
     }
 
@@ -716,7 +813,18 @@ window.Game = window.Game || {};
       const delta = (now - lastTime) / 1000;
       lastTime = now;
 
+      // DD-02: colapso de fim de partida — sem isso, ficar parado depois
+      // dos geradores prontos deixava a partida se arrastar pra sempre
+      if (gatesActive && collapseAt && now >= collapseAt){
+        endMatch(false, 'A saída colapsou — tempo esgotado depois dos geradores prontos.');
+        return;
+      }
+
       Game.Input.update();
+      // BUG-008: gerador abandonado perde progresso aos poucos — a própria
+      // função já se ignora sozinha se for o gerador engajado no momento
+      // ou já estiver concluído, então dá pra chamar em todos sem filtrar
+      objectives.forEach((o) => o.decayIfAbandoned(delta));
       capture.update(delta);
       survivorAbility.update(delta);
       survivorAbility2.update(delta);
@@ -744,9 +852,18 @@ window.Game = window.Game || {};
       // mesmo gerador (agora longe dele), travado nele de novo sem
       // conseguir sair a não ser pelo botão X. Desengaja aqui, sempre que
       // captured, antes de mais nada.
+      // Mesma armadilha existia pro esconderijo (BUG-006 do BUGS.md): se o
+      // Assassino derruba o jogador ENQUANTO escondido, o branch de baixo
+      // nunca roda e hideout.state.hidden fica travado em true pra sempre
+      // — ao ser resgatado, o jogador voltava imóvel/"hidden-in-spot" longe
+      // de qualquer esconderijo, sem conseguir se mexer de verdade até o
+      // timer congelado (que nunca mais atualiza, hideout.update() só roda
+      // no branch de baixo) ou apertar atacar. hideout.exit() aqui resolve
+      // igual ao disengage() acima.
       if (capture.state.captured){
         const staleEngaged = objectives.find((o) => o.state.engaged);
         if (staleEngaged) staleEngaged.disengage();
+        if (hideout.state.hidden) hideout.exit();
       }
 
       if (capture.state.captured){
@@ -790,6 +907,7 @@ window.Game = window.Game || {};
             const done = updateObjectivesStatus();
             if (done >= objectives.length && !gatesActive){
               gatesActive = true;
+              collapseAt = performance.now() + Game.CONFIG.match.collapseDuration * 1000; // DD-02
               objectivesStatus.textContent = 'Geradores prontos! Ache um portão pra escapar.';
               pallets.forEach((p) => p.reset()); // volta pallets já quebrados, pra não esgotar os loops na fase final
             }
@@ -914,6 +1032,7 @@ window.Game = window.Game || {};
     const aiCapture = Game.createCapture(survivorEl);
     const aiHealth = Game.createHealth(survivorEl);
     let gatesActive = false;
+    let collapseAt = 0; // DD-02: performance.now() do colapso, setado quando gatesActive vira true
 
     // 3ª habilidade: escolha 1-de-2 (Armadilha ou Invisibilidade). A IA
     // Sobrevivente não usa bússola/batimento (tem informação perfeita por
@@ -952,11 +1071,24 @@ window.Game = window.Game || {};
     function endMatch(won, detail){
       if (matchOver) return;
       matchOver = true;
+      activeExitMatch = null;
       const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
       const doneCount = updateObjectivesStatus();
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
       Game.Menu.showResult(won, fullDetail, () => startSoloAsKiller(name, killerAbilityKey), 'killer');
     }
+
+    // saída voluntária (BUG-010, botão de pausa) — ver a mesma função em
+    // startSolo pro comentário completo; aqui não tem gerador/esconderijo
+    // do lado do jogador (é o Assassino) pra desengajar antes de sair
+    function exitMatch(){
+      if (matchOver) return;
+      matchOver = true;
+      activeExitMatch = null;
+      hideMatchUi(); // showResult() faz isso pro fim normal — aqui não passa por ela
+      Game.Menu.exitToStart();
+    }
+    activeExitMatch = exitMatch;
 
     function attemptKillerHit(){
       const origin = attackOrigin(killer.state, killer.characterConfig());
@@ -1132,6 +1264,7 @@ window.Game = window.Game || {};
             const done = updateObjectivesStatus();
             if (done >= objectives.length && !gatesActive){
               gatesActive = true;
+              collapseAt = performance.now() + Game.CONFIG.match.collapseDuration * 1000; // DD-02
               objectivesStatus.textContent = 'Geradores prontos! O Sobrevivente vai tentar escapar.';
               pallets.forEach((p) => p.reset()); // volta pallets já quebrados, pra não esgotar os loops na fase final
             }
@@ -1159,7 +1292,18 @@ window.Game = window.Game || {};
       const delta = (now - lastTime) / 1000;
       lastTime = now;
 
+      // DD-02: colapso de fim de partida — favorece o Assassino, igual ao
+      // jogo original (Sobrevivente que não escapa a tempo do colapso é
+      // sacrificado automaticamente)
+      if (gatesActive && collapseAt && now >= collapseAt){
+        endMatch(true, 'O Sobrevivente não escapou a tempo — a saída colapsou.');
+        return;
+      }
+
       Game.Input.update();
+      // BUG-008: gerador abandonado (a IA Sobrevivente fugiu no meio do
+      // reparo, por exemplo) perde progresso aos poucos, igual startSolo
+      objectives.forEach((o) => o.decayIfAbandoned(delta));
       aiCapture.update(delta);
       killerDash.update(delta);
       killerAbility3.update(delta);
@@ -1330,6 +1474,18 @@ window.Game = window.Game || {};
     const matchStartAt = performance.now();
     let lastStepAt = 0;
     let gatesActive = false; // vira true quando os 5 geradores terminam (todo mundo calcula igual, é só olhar objectives.state.done, já sincronizado)
+    // DD-02: performance.now() do colapso, setado (igual em todo cliente,
+    // já que gatesActive nasce do mesmo objectiveDone sincronizado) quando
+    // gatesActive vira true — ver checkWinFromObjectives()
+    let collapseAt = 0;
+    // reconectar depois que os geradores já tinham terminado deixava
+    // gatesActive/collapseAt zerados nesse cliente até o próximo
+    // objectiveDone (que não vem mais, já terminaram todos) — sem isso, só
+    // quem estava conectado no instante exato em que o último gerador
+    // terminou ganhava o reset de pallets e o colapso de fim de partida.
+    // Só pode rodar aqui, depois de isSurvivor/gatesActive/collapseAt
+    // existirem (checkWinFromObjectives lê os 3).
+    if (resumeData) checkWinFromObjectives();
     let carryingEntry = null; // só o Assassino usa: quem ele está carregando agora (null = ninguém)
     let activeTrap = null; // { x, y, el } — só usado quando killerAbility3Key === 'trap', null = nenhuma armada agora
     let pingCooldownUntil = 0; // performance.now() — evita spam do marcador de comunicação (ver Game.CONFIG.survivorPing)
@@ -1353,6 +1509,7 @@ window.Game = window.Game || {};
     function endMatch(won, detail, announce){
       if (matchOver) return;
       matchOver = true;
+      activeExitMatch = null;
       Game.Audio.stopHeartbeat();
       if (announce) net.sendEvent({ kind: 'matchEnd', result: won ? 'survivors' : 'killer' });
       const localWon = localEntry.info.role === 'killer' ? !won : won;
@@ -1362,6 +1519,26 @@ window.Game = window.Game || {};
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length} · Sobreviventes restantes: ${aliveCount}/${survivors.length}`;
       Game.Menu.showResult(localWon, fullDetail, null, localEntry.info.role); // "jogar de novo" online volta pro lobby (ver menu.js)
     }
+
+    // saída voluntária (BUG-010, botão de pausa) — ver comentário completo
+    // na mesma função em startSolo. Não manda nenhum evento de rede
+    // customizado: fechar a conexão (Game.Menu.exitToStart -> net.close())
+    // já manda 'leave', que o servidor/host traduz em 'playerLeft' pros
+    // outros clientes na hora — Game.onlinePlayerLeftHandler (já existe,
+    // mais abaixo) já sabe resolver a partida certo pra quem ficou,
+    // idêntico ao caminho de queda de conexão.
+    function exitMatch(){
+      if (matchOver) return;
+      matchOver = true;
+      activeExitMatch = null;
+      Game.Audio.stopHeartbeat();
+      const staleEngaged = objectives.find((o) => o.state.engaged);
+      if (staleEngaged) staleEngaged.disengage();
+      if (isSurvivor && localEntry.hideout && localEntry.hideout.state.hidden) localEntry.hideout.exit();
+      hideMatchUi(); // showResult() faz isso pro fim normal — aqui não passa por ela
+      Game.Menu.exitToStart();
+    }
+    activeExitMatch = exitMatch;
 
     // "ativos" = ainda em jogo (não eliminados nem já escaparam) — só esses
     // continuam sendo perseguidos/capturáveis
@@ -1386,6 +1563,7 @@ window.Game = window.Game || {};
       const done = updateObjectivesStatus();
       if (done >= objectives.length && !gatesActive){
         gatesActive = true;
+        collapseAt = performance.now() + Game.CONFIG.match.collapseDuration * 1000; // DD-02
         if (isSurvivor) objectivesStatus.textContent = 'Geradores prontos! Ache um portão pra escapar.';
         // volta pallets já quebrados, pra não esgotar os loops de
         // perseguição na fase final — sem evento de rede novo: todo
@@ -1777,6 +1955,10 @@ window.Game = window.Game || {};
       lastTime = now;
 
       Game.Input.update();
+      // BUG-008: gerador abandonado perde progresso aos poucos, igual solo
+      // — cada cliente decai a própria cópia local do progresso (mesma
+      // simulação client-side de sempre; só a conclusão é sincronizada)
+      objectives.forEach((o) => o.decayIfAbandoned(delta));
       if (isSurvivor) localEntry.capture.update(delta);
       localAbility1.update(delta);
       if (localAbility2) localAbility2.update(delta);
@@ -1827,6 +2009,24 @@ window.Game = window.Game || {};
       const eliminated = isSurvivor && (localEntry.capture.state.eliminated || localEntry.escaped);
       let engagedObjective = null; // gerador que o Sobrevivente engajou pra reparar, se houver
 
+      // DD-02: colapso de fim de partida — cada Sobrevivente decide por si
+      // (client-authoritative de sempre): se ainda está ativo (livre ou em
+      // qualquer fase de captura) quando o colapso chega, é eliminado na
+      // hora. Reaproveita o mesmo evento 'struggleResult' que toda outra
+      // eliminação já manda — é o que o servidor usa pra popular
+      // eliminatedIds em quem reconecta (ver RESUMABLE_EVENT_KINDS em
+      // server.js/net-webrtc.js), então não precisa de kind novo.
+      if (isSurvivor && gatesActive && collapseAt && now >= collapseAt && !eliminated){
+        localEntry.capture.forceEliminate(() => {
+          localEntry.eliminated = true;
+          localEntry.el.classList.add('eliminated');
+          net.sendEvent({ kind: 'struggleResult', playerId: localId, result: 'eliminated' });
+          const usedHook = hooks.find((h) => h.occupiedBy === localId);
+          if (usedHook) setHookOccupied(usedHook, null);
+          checkMatchResolution();
+        });
+      }
+
       // marcador de comunicação: independente do estado (capturado/
       // escondido/livre) — não é uma ação de jogo, só um "olha aqui" pros
       // aliados, então não faz sentido travar atrás das mesmas condições
@@ -1843,10 +2043,13 @@ window.Game = window.Game || {};
       // sempre — ao ser resgatado, o jogador reengajava sozinho nesse
       // mesmo gerador (agora longe dele), travado nele de novo sem
       // conseguir sair a não ser pelo botão X. Desengaja aqui, sempre que
-      // captured, antes de mais nada.
+      // captured, antes de mais nada. Mesma armadilha existia pro
+      // esconderijo (BUG-006 do BUGS.md) — ver comentário completo no
+      // mesmo ponto em startSolo.
       if (captured){
         const staleEngaged = objectives.find((o) => o.state.engaged);
         if (staleEngaged) staleEngaged.disengage();
+        if (localEntry.hideout.state.hidden) localEntry.hideout.exit();
       }
 
       if (captured){

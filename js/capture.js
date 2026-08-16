@@ -40,11 +40,14 @@ window.Game = window.Game || {};
      * @property {{x:number,y:number}|null} hookPos
      * @property {number} timeLeft - segundos até o sacrifício, enquanto hooked
      * @property {number} immunity - segundos de imunidade após escapar/ser resgatado
+     * @property {number} downCount - quantas vezes já caiu nesta partida (BUG-007, teto de vidas)
+     * @property {number} bleedOut - segundos até morrer sozinho, só conta enquanto downed (BUG-007)
      */
     /** @type {CaptureState} */
     const state = {
       captured: false, downed: false, carried: false, hooked: false, eliminated: false,
       wiggleProgress: 0, hookProgress: 0, hookPos: null, timeLeft: 0, immunity: 0,
+      downCount: 0, bleedOut: 0,
     };
     let onResolve = null; // (result: 'escaped'|'rescued'|'eliminated') => void
 
@@ -62,13 +65,24 @@ window.Game = window.Game || {};
     // 2º golpe do Assassino: derruba (não é mais eliminação instantânea de
     // struggle) — onResolveCb só é chamado no desfecho final, lá na frente
     // (fugiu do gancho, foi resgatado ou foi sacrificado).
+    //
+    // BUG-007 (BUGS.md, "reviver infinito"): a partir da queda além de
+    // maxDowns, não tem mais chance de reanimar/resgatar — vai direto pro
+    // desfecho final (eliminado), igual bater o teto de vidas do jogo
+    // original sem precisar adicionar um 2º estágio de gancho.
     function down(onResolveCb){
       if (state.eliminated || state.captured || state.immunity > 0) return;
+      state.downCount += 1;
+      onResolve = onResolveCb;
+      if (state.downCount > Game.CONFIG.capture.maxDowns){
+        resolve('eliminated', 'maxDowns');
+        return;
+      }
       state.captured = true;
       state.downed = true;
       state.wiggleProgress = 0;
       state.hookProgress = 0;
-      onResolve = onResolveCb;
+      state.bleedOut = Game.CONFIG.capture.bleedOutDuration;
       render();
     }
 
@@ -121,6 +135,10 @@ window.Game = window.Game || {};
       state.carried = false;
       state.downed = true;
       state.wiggleProgress = 0;
+      // reinicia o sangramento (BUG-007) — enquanto carried o relógio fica
+      // pausado (só conta em state.downed), cair nesse ciclo de novo dá o
+      // tempo cheio de novo, não o que sobrou de antes de ser pego
+      state.bleedOut = Game.CONFIG.capture.bleedOutDuration;
       render();
     }
 
@@ -161,7 +179,24 @@ window.Game = window.Game || {};
       else if (state.hooked) hookPulse();
     }
 
-    function resolve(result){
+    // DD-02 (colapso de fim de partida): elimina direto, não importa em que
+    // fase estava (livre, downed, carried ou hooked) — o tempo simplesmente
+    // acabou. Se já havia um onResolve pendente (ex: estava hooked, com o
+    // callback que o captureStart original registrou), esse é respeitado
+    // em vez do novo — ele já sabe fazer a limpeza certa (soltar gancho,
+    // mandar evento de rede); só usa onResolveCb quando não havia nenhum
+    // (jogador livre no instante do colapso).
+    function forceEliminate(onResolveCb){
+      if (state.eliminated) return;
+      onResolve = onResolve || onResolveCb;
+      resolve('eliminated', 'collapse');
+    }
+
+    // reason (só relevante quando result === 'eliminated'): 'hook' | 'bleedOut'
+    // | 'maxDowns' — deixa quem chama (main.js) dar a mensagem certa em vez
+    // de sempre "sacrificado no gancho", que não é mais verdade pras 2
+    // causas novas de eliminação do BUG-007.
+    function resolve(result, reason){
       state.captured = false;
       state.downed = false;
       state.carried = false;
@@ -176,20 +211,30 @@ window.Game = window.Game || {};
       render();
       const cb = onResolve;
       onResolve = null;
-      if (cb) cb(result);
+      if (cb) cb(result, reason);
     }
 
     function update(delta){
       if (state.immunity > 0) state.immunity = Math.max(0, state.immunity - delta);
+      // BUG-007 (BUGS.md): caído sem ninguém pegar/reanimar morria de
+      // "esquecido" — a partida ficava sem fim garantido. Só conta enquanto
+      // downed de verdade (carried/hooked pausam, ver dropFree/pickUp).
+      if (state.downed){
+        state.bleedOut -= delta;
+        if (state.bleedOut <= 0){
+          resolve('eliminated', 'bleedOut');
+          return;
+        }
+      }
       if (!state.hooked) return;
       state.timeLeft -= delta;
       // decai um pouco com o tempo, então só apertar de vez em quando não basta
       state.hookProgress = Math.max(0, state.hookProgress - Game.CONFIG.capture.decayPerSec * delta);
       render();
-      if (state.timeLeft <= 0) resolve('eliminated');
+      if (state.timeLeft <= 0) resolve('eliminated', 'hook');
     }
 
-    return { state, down, pickUp, revive, wigglePulse, dropFree, hook, hookPulse, rescue, pulse, update, render };
+    return { state, down, pickUp, revive, wigglePulse, dropFree, hook, hookPulse, rescue, pulse, forceEliminate, update, render };
   }
 
   Game.createCapture = createCapture;

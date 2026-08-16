@@ -96,6 +96,17 @@ try {
   await killerPage.keyboard.press('KeyE');
   await killerPage.waitForTimeout(300);
 
+  // BUG-010 (sair da partida/sala): o Assassino sai pelo botão de pausa —
+  // o Sobrevivente que ficou precisa ver o fim de partida quase na hora
+  // (evento 'leave' pulando o RECONNECT_GRACE_MS de 25s do servidor),
+  // não travado esperando reconexão de uma saída que foi voluntária.
+  await killerPage.click('#pause-btn');
+  await killerPage.click('#pause-exit');
+  await killerPage.click('#pause-exit-confirm');
+  const killerBackAtMenu = await killerPage.waitForSelector('#menu-start', { state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
+  const survivorSawEnd = await survivorPage.waitForSelector('#menu-result', { state: 'visible', timeout: 8000 }).then(() => true).catch(() => false);
+  const survivorEndText = survivorSawEnd ? await survivorPage.textContent('#result-detail') : '';
+
   await browser.close();
 
   const checks = [
@@ -103,6 +114,8 @@ try {
     ['Sobrevivente entrou na partida', survivorInMatch === true],
     ['zero erros de console/página (Assassino)', errors.killer.length === 0],
     ['zero erros de console/página (Sobrevivente)', errors.survivor.length === 0],
+    ['Assassino saiu pelo botão de pausa e voltou pro menu', killerBackAtMenu],
+    ['Sobrevivente viu o fim de partida na hora (sem esperar o grace period)', survivorSawEnd && survivorEndText.includes('desistência')],
   ];
   for (const [label, passed] of checks){
     console.log(`${passed ? 'OK  ' : 'FAIL'} — ${label}`);

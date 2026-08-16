@@ -266,6 +266,14 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (msg.type === 'leave'){
+      // saída intencional do jogador (BUG-010) — diferente de queda de
+      // rede: não espera RECONNECT_GRACE_MS, avisa os outros na hora
+      players.delete(id);
+      finalizeDeparture(id);
+      return;
+    }
+
     if (msg.type === 'kick'){
       // só o host (ver hostId()) pode kickar, e só antes da partida
       // começar — kickar no meio da partida abriria um monte de caso de

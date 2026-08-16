@@ -49,7 +49,13 @@ window.Game = window.Game || {};
       kick(targetId){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'kick', targetId })); },
       sendState(data){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'state', data })); },
       sendEvent(data){ socket.readyState === socket.OPEN && socket.send(JSON.stringify({ type: 'event', data })); },
-      close(){ socket.close(); },
+      // saída intencional (BUG-010): avisa o servidor com 'leave' antes de
+      // fechar, pra não cair no RECONNECT_GRACE_MS de 25s (esse grace period
+      // é só pra queda de rede acidental, não pra quem apertou "sair")
+      close(){
+        if (socket.readyState === socket.OPEN) socket.send(JSON.stringify({ type: 'leave' }));
+        socket.close();
+      },
     };
   }
 

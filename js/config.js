@@ -102,6 +102,16 @@ Game.CONFIG = {
     // nessa fração — com o máximo de 4 Sobreviventes por partida, o teto
     // natural é 1 + 3*0.5 = 2.5x (3 ajudantes), sem precisar de clamp extra
     cooperationBonusPerHelper: 0.5,
+
+    // BUG-008 (BUGS.md): antes disso, um gerador abandonado (não engaged)
+    // nunca perdia progresso — só existia decaimento durante o skill check
+    // errado do "modo difícil". regressRate é bem mais devagar que o ganho
+    // (1/duration ≈ 0.029/s) de propósito: cria pressão real (não dá pra
+    // simplesmente ignorar um gerador pela metade) sem punir um afastamento
+    // rápido de alguns segundos. regressFloor=0 decai até zerar de vez,
+    // igual ao jogo original (sem "piso" de progresso garantido).
+    regressRate: 0.01,  // fração de progresso perdida por segundo enquanto abandonado
+    regressFloor: 0,
   },
 
   // skill check circular (estilo DBD): dispara de vez em quando enquanto o
@@ -166,9 +176,35 @@ Game.CONFIG = {
     hookRange: 70,             // px — o quão perto de um gancho o Assassino precisa estar pra pendurar
     rescueRange: 55,           // px — o quão perto um Sobrevivente aliado precisa estar pra resgatar quem tá pendurado
     reviveRange: 55,           // px — o quão perto um Sobrevivente aliado precisa estar pra reanimar quem caiu (antes do Assassino pegar), sem precisar de gancho
+
+    // BUG-007 (BUGS.md): antes disso, um Sobrevivente caído (downed) nunca
+    // morria sozinho — capture.update() só decrementava timeLeft na fase
+    // *hooked*, então "esquecer" alguém caído travava a partida sem fim
+    // (nenhum aliado por perto pra reanimar, Assassino sem interesse em
+    // voltar lá). bleedOutDuration fecha esse buraco: sangra até morrer se
+    // ninguém reanimar/pendurar a tempo. maxDowns fecha o outro lado
+    // (reviver infinito): a partir da queda além desse número, down()
+    // elimina direto (sem chance de reanimar/resgatar) — dá um teto real
+    // pra quantas vezes um mesmo Sobrevivente pode ser salvo na partida,
+    // igual ao espírito da escalada de estados do jogo original, só que
+    // sem precisar adicionar um 2º estágio de gancho (isso continua
+    // decisão consciente, ver README/ROADMAP).
+    bleedOutDuration: 60, // segundos caído sem ser pego/reanimado até morrer sozinho
+    maxDowns: 3,          // quedas permitidas antes da queda virar eliminação direta
   },
 
   maxSurvivors: 4, // limite de sobreviventes por partida (modo online)
+
+  // DD-02 (BUGS.md): colapso de fim de partida — sem isso, uma vez os
+  // geradores prontos (gatesActive), a partida podia se arrastar pra
+  // sempre se ninguém arriscasse ir pro portão. Igual ao "colapso do
+  // gerador de emergência" do jogo original: quando o portão abre pra
+  // canalizar, começa uma contagem regressiva global; quem ainda não
+  // escapou quando ela zera é eliminado (Assassino vence por colapso).
+  // Só corre depois de gatesActive=true, nunca antes.
+  match: {
+    collapseDuration: 150, // segundos após os geradores prontos até o colapso
+  },
 
   // sistema de vida (js/health.js): 1º golpe do Assassino machuca (fica
   // mais lento, sangrando, dá pra curar sozinho parado); só o 2º golpe

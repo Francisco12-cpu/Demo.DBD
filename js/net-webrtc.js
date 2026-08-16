@@ -233,6 +233,14 @@ window.Game = window.Game || {};
         if (target.conn) target.conn.close();
         return;
       }
+
+      if (msg.type === 'leave'){
+        // saída intencional do jogador (BUG-010), espelhando server.js —
+        // não espera RECONNECT_GRACE_MS, avisa os outros na hora
+        players.delete(id);
+        finalizeDeparture(id);
+        return;
+      }
     }
 
     function handleJoin(msg, conn){
@@ -329,7 +337,15 @@ window.Game = window.Game || {};
         broadcast({ type: 'event', id: localId, data }, localId);
         if (data && data.kind === Game.Protocol.RESUMABLE_EVENT_KINDS.MATCH_END) matchState = 'ended';
       },
-      close(){ peer.destroy(); },
+      // o host É a sala em P2P (sem failover de verdade, ver comentário no
+      // topo do arquivo) — sair fecha pra todo mundo, não só pra ele.
+      // Avisa com 'roomClosed' antes de destruir o peer, pra quem ficar
+      // receber uma mensagem clara em vez de cair no reconnect automático
+      // genérico (que tentaria e falharia, já que não há mais host nenhum).
+      close(){
+        broadcast({ type: 'roomClosed' });
+        peer.destroy();
+      },
     };
   }
 
@@ -341,6 +357,12 @@ window.Game = window.Game || {};
 
     const peer = new Peer(undefined, { debug: 0 });
     let conn = null;
+    // true assim que 'roomClosed' chega — evita que o 'close' da conexão
+    // (que vem logo em seguida, já que o host se destrói) dispare
+    // handlers.onClose() duplicado tentando reconectar num host que não
+    // existe mais (onRoomClosed já cuidou de navegar a UI com uma
+    // mensagem clara)
+    let roomWasClosed = false;
 
     function dispatch(msg){
       if (msg.type === 'error' && handlers.onServerError) handlers.onServerError(msg.message);
@@ -351,13 +373,17 @@ window.Game = window.Game || {};
       if (msg.type === 'state' && handlers.onState) handlers.onState(msg.id, msg.data);
       if (msg.type === 'event' && handlers.onEvent) handlers.onEvent(msg.id, msg.data);
       if (msg.type === 'playerLeft' && handlers.onPlayerLeft) handlers.onPlayerLeft(msg.id);
+      if (msg.type === 'roomClosed'){
+        roomWasClosed = true;
+        handlers.onRoomClosed && handlers.onRoomClosed();
+      }
     }
 
     peer.on('open', () => {
       conn = peer.connect(code, { reliable: true });
       conn.on('open', () => { conn.send({ type: 'join', password, name, token }); });
       conn.on('data', dispatch);
-      conn.on('close', () => { handlers.onClose && handlers.onClose(); });
+      conn.on('close', () => { if (!roomWasClosed) handlers.onClose && handlers.onClose(); });
       conn.on('error', (err) => {
         handlers.onError && handlers.onError('Erro P2P: ' + (err && err.type ? err.type : err));
       });
@@ -382,7 +408,13 @@ window.Game = window.Game || {};
       kick(targetId){ conn && conn.open && conn.send({ type: 'kick', targetId }); },
       sendState(data){ conn && conn.open && conn.send({ type: 'state', data }); },
       sendEvent(data){ conn && conn.open && conn.send({ type: 'event', data }); },
-      close(){ conn && conn.close(); peer.destroy(); },
+      // saída intencional (BUG-010) — mesma ideia do net.js: avisa o host
+      // com 'leave' antes de fechar, pra ele não esperar RECONNECT_GRACE_MS
+      close(){
+        if (conn && conn.open) conn.send({ type: 'leave' });
+        if (conn) conn.close();
+        peer.destroy();
+      },
     };
   }
 

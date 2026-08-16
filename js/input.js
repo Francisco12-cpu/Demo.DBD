@@ -89,8 +89,17 @@ window.Game = window.Game || {};
   let joystickSensitivity = 1;
   function setJoystickSensitivity(v){ joystickSensitivity = Math.max(0.5, Math.min(2, v)); }
 
+  // BUG-010 (BUGS.md): Game.Input.init() (= setupTouchControls) é chamado
+  // de novo toda vez que uma partida começa (beginMatchUi() em main.js) —
+  // sem essa guarda, cada partida registrava outro conjunto inteiro de
+  // listeners de toque em cima dos anteriores (o "#touch-controls" nunca é
+  // recriado, é sempre o mesmo elemento do DOM), acumulando pra sempre.
+  // Depois de sair e entrar 10x, cada toque disparava 10 handlers.
+  let touchControlsInitialized = false;
   function setupTouchControls(){
     if (!isTouchDevice) return;
+    if (touchControlsInitialized) return;
+    touchControlsInitialized = true;
 
     const controls = document.getElementById('touch-controls');
     const joystickBase = document.getElementById('touch-joystick');
@@ -275,12 +284,25 @@ window.Game = window.Game || {};
   }
 
   // ---------- API pública ----------
+  // Achado numa auditoria (não era bug relatado, achado revisando o
+  // próprio código do menu de pausa, BUG-010): abrir o menu de pausa só
+  // mostrava um overlay por cima — não impedia teclado/gamepad de
+  // continuar sendo lido pelo loop por baixo (touch já ficava bloqueado
+  // de graça, o overlay cobre a tela toda com pointer-events:auto). Quem
+  // jogava de teclado podia continuar andando/atacando "às cegas" com o
+  // menu aberto por cima, sem ver nada. `setPaused(true)` zera e passa a
+  // ignorar tudo (inclusive limpando os requests de toque/gamepad
+  // pendentes, pra nada "vazar" pro primeiro frame depois de despausar).
+  let paused = false;
+  function setPaused(v){ paused = v; }
+
   // Chamar uma vez por frame antes de ler movimento/ataque/habilidades.
   function update(){
     pollGamepad();
   }
 
   function readMovement(){
+    if (paused) return { x: 0, y: 0 };
     let dx = 0, dy = 0;
     if (isDown('KeyA','ArrowLeft')) dx -= 1;
     if (isDown('KeyD','ArrowRight')) dx += 1;
@@ -304,7 +326,7 @@ window.Game = window.Game || {};
     if (spaceRequested){ requested = true; spaceRequested = false; }
     if (touchAttackRequested){ requested = true; touchAttackRequested = false; }
     if (gamepadState.attack) requested = true;
-    return requested;
+    return paused ? false : requested;
   }
 
   function consumeAbility1Request(){
@@ -312,7 +334,7 @@ window.Game = window.Game || {};
     if (ability1Requested){ requested = true; ability1Requested = false; }
     if (touchAbility1Requested){ requested = true; touchAbility1Requested = false; }
     if (gamepadState.ability1) requested = true;
-    return requested;
+    return paused ? false : requested;
   }
 
   function consumeAbility2Request(){
@@ -320,7 +342,7 @@ window.Game = window.Game || {};
     if (ability2Requested){ requested = true; ability2Requested = false; }
     if (touchAbility2Requested){ requested = true; touchAbility2Requested = false; }
     if (gamepadState.ability2) requested = true;
-    return requested;
+    return paused ? false : requested;
   }
 
   function consumeAbility3Request(){
@@ -328,7 +350,7 @@ window.Game = window.Game || {};
     if (ability3Requested){ requested = true; ability3Requested = false; }
     if (touchAbility3Requested){ requested = true; touchAbility3Requested = false; }
     if (gamepadState.ability3) requested = true;
-    return requested;
+    return paused ? false : requested;
   }
 
   function consumePingRequest(){
@@ -336,12 +358,13 @@ window.Game = window.Game || {};
     if (pingRequested){ requested = true; pingRequested = false; }
     if (touchPingRequested){ requested = true; touchPingRequested = false; }
     if (gamepadState.ping) requested = true;
-    return requested;
+    return paused ? false : requested;
   }
 
   Game.Input = {
     init: setupTouchControls,
     update,
+    setPaused,
     readMovement,
     consumeAttackRequest,
     consumeAbility1Request,

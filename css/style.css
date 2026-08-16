@@ -190,6 +190,7 @@ html,body{
    cardíaco (mesma regra de Game.CONFIG.heartbeatRange) */
 #killer-compass{
   position:fixed; z-index:18; right:16px; bottom:110px;
+  right: calc(16px + env(safe-area-inset-right, 0px)); /* BUG-009 */
   width:52px; height:52px; border-radius:50%;
   background: rgba(10,8,14,.6); border:1px solid var(--wall);
   display:none; align-items:center; justify-content:center;
@@ -210,6 +211,7 @@ html,body{
    Sobrevivente enquanto sobrar algo pra fazer */
 #objective-compass{
   position:fixed; z-index:18; left:16px; bottom:110px;
+  left: calc(16px + env(safe-area-inset-left, 0px)); /* BUG-009 */
   width:52px; height:52px; border-radius:50%;
   background: rgba(10,8,14,.6); border:1px solid var(--wall);
   display:none; align-items:center; justify-content:center;
@@ -238,6 +240,12 @@ html,body{
 }
 #hud{
   position:fixed; z-index: 18; top:16px; left:16px; right:16px;
+  /* BUG-009: notch/barra de gestos em paisagem cortavam o HUD — soma o
+     safe-area por cima do respiro fixo de sempre, nunca substitui (em
+     aparelho sem notch, env() é 0 e o padding continua igual a antes) */
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: calc(16px + env(safe-area-inset-left, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
   display:flex; justify-content:space-between; align-items:flex-start;
   pointer-events:none;
   letter-spacing: 1px;
@@ -480,24 +488,34 @@ html,body{
   position:relative;
   image-rendering: pixelated;
   background-repeat: no-repeat;
+  /* cor por jogador (js/character.js setColorOverride, --survivor-hue) —
+     precisa estar dentro do MESMO filter que cada estado abaixo define,
+     senão um substitui o outro (ver comentário longo em setColorOverride,
+     BUG-005 do BUGS.md). 0deg = sem override = sem efeito nenhum aqui. */
+  filter: hue-rotate(var(--survivor-hue, 0deg));
 }
 .char.facing-left .body{ transform: scaleX(-1); }
-.char.hit-flash .torso{ filter: brightness(2.5) saturate(1.4); }
-.char.captured .torso{ filter: grayscale(.6) brightness(.7); }
+.char.hit-flash .torso{ filter: brightness(2.5) saturate(1.4) hue-rotate(var(--survivor-hue, 0deg)); }
+.char.captured .torso{ filter: grayscale(.6) brightness(.7) hue-rotate(var(--survivor-hue, 0deg)); }
 /* atordoado por pallet (js/pallet.js) — feedback visual simples, sem
-   sprite/animação própria pro stun ainda */
-.char.stunned .torso{ filter: brightness(.45) saturate(0) blur(1px); }
+   sprite/animação própria pro stun ainda (só Assassino, sem --survivor-hue,
+   mas mantém o padrão pra não ser um estado especial no CSS) */
+.char.stunned .torso{ filter: brightness(.45) saturate(0) blur(1px) hue-rotate(var(--survivor-hue, 0deg)); }
 /* pisou na Armadilha do Assassino (js/main.js, habilidade killerTrap) —
    mais lento por um tempo, mesmo esquema visual do stun mas sem apagar
    a cor do Sobrevivente (hue-rotate por jogador continua visível) */
-.char.snared .torso{ filter: brightness(.7) contrast(1.3); }
+.char.snared .torso{ filter: brightness(.7) contrast(1.3) hue-rotate(var(--survivor-hue, 0deg)); }
 .char.eliminated{ opacity:.35; filter: grayscale(1); }
 /* derrubado/carregado (js/capture.js): a própria animação "downed" da
    spritesheet já mostra a pose caída — não precisa mais girar o elemento
    feito na arte antiga (silhueta sem pose própria pra isso) */
-.char.downed .torso, .char.carried .torso{ filter: brightness(.75); }
-/* pendurado no gancho — balançando + cor de aviso, ninguém confunde com "só ferido" */
-.char.hooked .torso{ filter: sepia(.4) saturate(3.5) hue-rotate(-50deg) brightness(.8); }
+.char.downed .torso, .char.carried .torso{ filter: brightness(.75) hue-rotate(var(--survivor-hue, 0deg)); }
+/* pendurado no gancho — balançando + cor de aviso, ninguém confunde com
+   "só ferido". O hue-rotate(-50deg) fixo é o tom de aviso do estado em
+   si; o hue-rotate(var(--survivor-hue)) some depois dele, e os dois
+   SOMAM (CSS encadeia hue-rotate() aditivamente) — os dois convivem em
+   vez de um apagar o outro. */
+.char.hooked .torso{ filter: sepia(.4) saturate(3.5) hue-rotate(-50deg) brightness(.8) hue-rotate(var(--survivor-hue, 0deg)); }
 .char.hooked{ animation: hookedSway 1.8s ease-in-out infinite; }
 @keyframes hookedSway{
   0%,100%{ transform: translate(-50%,-50%) rotate(-4deg); }
@@ -506,7 +524,7 @@ html,body{
 /* ferido (1º golpe, js/health.js): mais lento e sangrando — some quando
    cura (parado por um tempo) ou volta pra saudável, some com o 2º golpe
    junto do estado "captured" acima (que sobrepõe visualmente) */
-.char.injured .torso{ filter: sepia(.5) saturate(2.5) hue-rotate(-40deg) brightness(.85); }
+.char.injured .torso{ filter: sepia(.5) saturate(2.5) hue-rotate(-40deg) brightness(.85) hue-rotate(var(--survivor-hue, 0deg)); }
 .char.escaped{ opacity:.25; filter: grayscale(.4) brightness(1.3); }
 .struggle-bar{
   display:none;
@@ -561,6 +579,11 @@ html,body{
   50%{ box-shadow: 0 0 22px rgba(201,162,75,.95); }
 }
 .objective.done{ background: var(--gold); border-color: var(--ink); }
+/* BUG-008: regressão de progresso abandonado — borda vermelha (mesma cor
+   do sangue/perigo do resto do jogo) pra distinguir de "active" (dourado,
+   alguém reparando agora) à primeira vista, sem precisar ler a barra */
+.objective.regressing{ border-color: var(--blood); }
+.objective.regressing .objective-fill{ background: var(--blood); }
 .objective .progress-bar{
   position:absolute; top:-20px; left:50%; transform:translateX(-50%);
   width:54px; height:9px; background:var(--ink-on-gold); border:1px solid var(--wall);
@@ -623,8 +646,11 @@ html,body{
   align-items: flex-end;
   padding: 20px;
   /* espaço extra pra não ficar embaixo da barra de gestos/notch quando
-     instalado como app (viewport-fit=cover no <meta viewport>) */
+     instalado como app (viewport-fit=cover no <meta viewport>) — BUG-009:
+     faltava o mesmo respiro nas laterais, onde o notch cai em paisagem */
   padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(20px + env(safe-area-inset-left, 0px));
+  padding-right: calc(20px + env(safe-area-inset-right, 0px));
   pointer-events: none;
   z-index: 20;
 }
@@ -698,38 +724,45 @@ html,body{
   #hint{ font-size: 10px; padding: 6px 10px; }
 }
 
-/* sugere girar o celular — a maioria dos jogos joga deitado, e o joystick
-   + botões cabem bem melhor com mais largura. Só um AVISO pequeno, nunca
-   bloqueia o jogo por baixo (o jogador pode simplesmente ignorar e
-   continuar jogando em pé) — igual ao #gamepad-toast. Só aparece DURANTE A
-   PARTIDA (body.in-match, ligado/desligado por beginMatchUi/hideMatchUi em
-   main.js), nunca no menu. pointer:coarse evita disparar em janela estreita
-   de desktop. */
+/* BUG-009 (BUGS.md): bloqueia a entrada na partida em portrait num
+   celular, em vez do aviso antigo (uma faixinha dispensável que nunca
+   travava nada por baixo — dava pra jogar torto o jogo inteiro sem
+   perceber que existia). Overlay de tela cheia, cobre #stage inteiro
+   (pointer-events:auto captura todo toque). Só aparece DURANTE A PARTIDA
+   (body.in-match, ligado/desligado por beginMatchUi/hideMatchUi em
+   main.js), nunca no menu. pointer:coarse evita disparar em janela
+   estreita de desktop.
+   Escape hatch (`#rotate-dismiss`, "Jogar mesmo assim"): mesmo com o
+   bloqueio sendo o padrão pedido no bug, o projeto tem uma regra própria
+   contra estado sem saída (ver BUG-006/convenção "todo estado tem saída"
+   no BUGS.md) — detecção de orientação por CSS pode falhar em
+   foldable/split-screen; sem escape hatch, um falso positivo travaria o
+   jogo de verdade. `body.rotate-override` (setada pelo botão) reseta
+   sozinha a cada partida nova (beginMatchUi), não é uma preferência
+   permanente. */
 #rotate-prompt{
-  position:fixed; z-index:90; top:16px; left:50%;
-  transform: translateX(-50%) translateY(-140%);
-  display:flex; align-items:center; gap:10px;
-  background: rgba(10,8,14,.92); border:1px solid var(--gold); color: var(--ink);
-  padding: 10px 14px; font-size:12px; max-width: 92vw;
-  pointer-events:none; opacity:0;
-  transition: transform .25s ease, opacity .25s ease;
+  position:fixed; inset:0; z-index:90;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  background: rgba(6,5,9,.97); color: var(--ink); text-align:center;
+  padding: 24px;
+  opacity:0; pointer-events:none;
+  transition: opacity .2s ease;
 }
 @media (orientation: portrait) and (pointer: coarse){
-  body.in-match:not(.rotate-dismissed) #rotate-prompt{
-    transform: translateX(-50%) translateY(0); opacity:1;
-    pointer-events:auto;
+  body.in-match:not(.rotate-override) #rotate-prompt{
+    opacity:1; pointer-events:auto;
   }
-  #rotate-icon{ font-size:20px; animation: rotateHint 1.6s ease-in-out infinite; flex-shrink:0; }
+  #rotate-icon{ font-size:40px; animation: rotateHint 1.6s ease-in-out infinite; }
   @keyframes rotateHint{
     0%,100%{ transform: rotate(0deg); }
     50%{ transform: rotate(90deg); }
   }
 }
-#rotate-prompt p{ margin:0; text-align:left; flex:1; white-space:nowrap; }
+#rotate-prompt p{ margin:0; max-width:280px; font-size:14px; }
 #rotate-dismiss{
   background: transparent; border: 1px solid var(--muted); color: var(--muted);
-  font-family: inherit; font-size: 11px; padding: 6px 10px;
-  border-radius: 4px; flex-shrink:0;
+  font-family: inherit; font-size: 12px; padding: 8px 14px;
+  border-radius: 4px; margin-top:6px;
 }
 #rotate-dismiss:active{ border-color: var(--gold); color: var(--ink); }
 
@@ -763,6 +796,32 @@ html,body{
   0%, 100% { transform: scale(1); opacity: calc(var(--danger) * 0.85); }
   50% { transform: scale(0.985); opacity: calc(var(--danger) * 0.4); }
 }
+
+/* botão de pausa (BUG-010): sempre visível durante a partida, canto
+   superior — precisa ficar acima de tudo (HUD, controles de toque) pra
+   nunca ficar inacessível, por isso o z-index mais alto da tela de jogo */
+#pause-btn{
+  position:fixed; z-index:95; top:10px; right:10px;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  right: calc(10px + env(safe-area-inset-right, 0px));
+  width:36px; height:36px; border-radius:50%;
+  background: rgba(10,8,14,.85); border:1px solid var(--muted); color: var(--ink);
+  font-size:15px; line-height:1; cursor:pointer;
+  display:none; /* main.js liga via body.in-match abaixo */
+}
+body.in-match #pause-btn{ display:flex; align-items:center; justify-content:center; }
+#pause-btn:active{ border-color: var(--gold); }
+
+/* menu de pausa: overlay cobrindo o jogo, reaproveita .menu-card pro
+   visual — confirmação em 1 passo antes de sair de verdade (toque
+   acidental no botão de pausa não encerra nada sozinho) */
+#pause-menu{
+  position:fixed; inset:0; z-index:94;
+  background: rgba(4,3,6,.85);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+}
+#pause-menu .menu-card{ width:100%; max-width:320px; }
 
 /* toast de conexão/desconexão de controle — some sozinho */
 #gamepad-toast{

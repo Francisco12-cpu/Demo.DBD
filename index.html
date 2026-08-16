@@ -173,6 +173,7 @@
     <button id="lobby-ready" type="button">Marcar como pronto</button>
     <button id="lobby-start" type="button" disabled>Iniciar partida</button>
     <p class="menu-hint">Mínimo 2 jogadores, sendo 1 Assassino. Até 4 Sobreviventes. Todo mundo precisa estar pronto.</p>
+    <button id="lobby-leave" type="button" class="secondary">Sair da sala</button>
   </div>
 
   <div class="menu-card" id="menu-result" style="display:none">
@@ -180,6 +181,7 @@
     <p id="result-detail"></p>
     <p id="result-progress" class="menu-hint"></p>
     <button id="result-again" type="button">Jogar de novo</button>
+    <button id="result-leave" type="button" class="secondary" style="display:none">Sair da sala</button>
   </div>
 </div>
 
@@ -222,12 +224,27 @@
   <div id="objective-compass"><div id="objective-compass-arrow"></div></div>
 
   <div id="gamepad-toast"></div>
+
+  <button id="pause-btn" type="button" aria-label="Pausar">⏸</button>
+  <div id="pause-menu" style="display:none">
+    <div class="menu-card" id="pause-menu-main">
+      <h2>Pausado</h2>
+      <button id="pause-resume" type="button">Continuar</button>
+      <button id="pause-exit" type="button" class="secondary">Sair da partida</button>
+    </div>
+    <div class="menu-card" id="pause-menu-confirm" style="display:none">
+      <h2>Tem certeza?</h2>
+      <p class="menu-hint">Isso encerra a partida agora (e a sala, se for online).</p>
+      <button id="pause-exit-confirm" type="button">Sim, sair</button>
+      <button id="pause-exit-cancel" type="button" class="secondary">Cancelar</button>
+    </div>
+  </div>
 </div>
 
 <div id="rotate-prompt">
   <div id="rotate-icon">📱</div>
-  <p>Fica melhor com o celular deitado</p>
-  <button id="rotate-dismiss" type="button">Entendi</button>
+  <p>Gire o celular — o jogo é feito pra jogar deitado (paisagem)</p>
+  <button id="rotate-dismiss" type="button">Jogar mesmo assim</button>
 </div>
 
 <div id="touch-controls">

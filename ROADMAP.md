@@ -15,17 +15,41 @@ janelas, esconderijo, geradores com skill check, captura em 3 fases
 áudio 3D sintetizado, sprites pixel art autorais, multiplayer LAN + P2P
 com reconexão automática, lobby com escolha de papel/habilidade/"pronto",
 host podendo kickar ou trocar o papel de alguém, marcador de comunicação
-pros Sobreviventes, remapeamento de tecla, histórico de partidas.
+pros Sobreviventes, remapeamento de tecla, histórico de partidas. Desde
+2026-08-16 (ver `BUGS.md`): dá pra sair da partida/sala a qualquer
+momento (botão de pausa), Sobrevivente caído sem resgate morre sozinho
+(sangramento + teto de 3 quedas — a partida sempre termina), e a partida
+colapsa sozinha (Assassino vence) se ninguém escapar 150s depois dos
+geradores prontos.
 
 Publicado em: https://francisco12-cpu.github.io/Demo.DBD/ (deploy
 automático a cada push na branch `main`).
 
-## Bugs relatados (pendente de análise)
+## Bugs relatados
 
-_Nenhum registrado ainda nesta seção — assim que você colocar seu arquivo
-de bugs na pasta do projeto, cada um entra aqui como um item marcado
-`[ ]` até ser corrigido e testado, depois vira `[x]` com uma linha
-explicando a causa e a correção._
+O rastreamento de verdade é `BUGS.md` (10 bugs + 7 débitos de design,
+triagem completa lendo o código feita em 2026-08-16 — vários sintomas
+relatados tinham causa raiz diferente da suposta, e a comparação com o
+gênero na Seção 3 estava desatualizada). Resumo do que já foi corrigido
+nesta rodada (ver `BUGS.md` pra causa raiz e teste de cada um):
+
+- [x] BUG-010 — Sair da partida/sala (botão de pausa + `net.close()` de
+      verdade, saída avisa os outros na hora em vez de esperar 25s)
+- [x] BUG-006 — Esconderijo não travava mais o jogador pro resto da partida
+- [x] BUG-001 — Sombra não aparece mais por cima de outro personagem
+- [x] BUG-007 — Reviver infinito (sangramento + teto de 3 quedas)
+- [x] DD-02 — Colapso de fim de partida (150s depois dos geradores prontos)
+- [x] BUG-008 — Gerador abandonado agora perde progresso aos poucos
+- [x] BUG-009 — Landscape trava/bloqueia de verdade + HUD respeita notch
+- [x] BUG-005 (parcial) — feedback visual (ferido/pendurado) agora aparece
+      certo pros Sobreviventes 2-4 no online
+
+Pendente: BUG-002 (bloqueado até você descrever o defeito visto — a
+arquitetura de luz que você pediu já existe, só falta o array de focos
+estáticos), BUG-003/004 (pipeline de arte, precisa da sua arte pronta),
+2 peças que sobraram do BUG-005 (estado "barricada" da porta, Assassino
+arrancar do esconderijo), DD-04/DD-05 (interrupção/feedback), controles
+de toque (zona morta, tamanho de alvo).
 
 ## Ideias pra próxima atualização
 

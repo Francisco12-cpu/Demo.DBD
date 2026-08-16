@@ -34,9 +34,10 @@ window.Game = window.Game || {};
      * @property {boolean} active - true quando engaged e ainda não done (só pra CSS)
      * @property {number} skillCheckLevel - sobe a cada acerto, aumenta a dificuldade
      * @property {boolean} engaged - true só depois do jogador apertar o botão de ação (engage())
+     * @property {boolean} regressing - true enquanto abandonado (não engaged) e perdendo progresso (BUG-008)
      */
     /** @type {ObjectiveState} */
-    const state = { pos, progress: 0, done: false, skillCheck: null, active: false, skillCheckLevel: 0, engaged: false };
+    const state = { pos, progress: 0, done: false, skillCheck: null, active: false, skillCheckLevel: 0, engaged: false, regressing: false };
     let nextCheckIn = randomCheckDelay();
 
     function randomCheckDelay(){
@@ -101,6 +102,14 @@ window.Game = window.Game || {};
 
     function engage(){
       state.engaged = true;
+      // se estava regredindo (abandonado), reengajar volta a progredir —
+      // sem isso a classe .regressing ficava presa ligada pra sempre,
+      // porque decayIfAbandoned() (o único lugar que a desliga) só roda
+      // pros objetivos QUE NÃO SÃO o engajado (ver js/main.js)
+      if (state.regressing){
+        state.regressing = false;
+        el.classList.remove('regressing');
+      }
     }
 
     // sai do modo de reparo — por escolha (botão X), sozinho se o jogador
@@ -170,12 +179,35 @@ window.Game = window.Game || {};
       return result;
     }
 
+    // BUG-008 (BUGS.md): objetivo abandonado (não engaged) perdia progresso
+    // NUNCA — só existia decaimento de verdade enquanto engaged (via
+    // update() acima), mas update() só é chamado pro objetivo atualmente
+    // engajado (ver js/main.js). Por isso essa função é separada: quem
+    // chama roda ela pra TODO objetivo que não é o engajado no momento,
+    // todo frame — regressão lenta até regressFloor, só quando há
+    // progresso de sobra pra perder (evita trabalho/CSS toggle à toa em
+    // gerador ainda intocado).
+    function decayIfAbandoned(delta){
+      if (state.done || state.engaged) return;
+      const cfg = Game.CONFIG.objective;
+      const floor = cfg.regressFloor;
+      if (state.progress > floor){
+        state.progress = Math.max(floor, state.progress - cfg.regressRate * delta);
+        fill.style.width = (state.progress * 100) + '%';
+      }
+      const regressing = state.progress > floor;
+      if (regressing !== state.regressing){
+        state.regressing = regressing;
+        el.classList.toggle('regressing', regressing);
+      }
+    }
+
     function render(){
       el.style.left = pos.x + 'px';
       el.style.top = pos.y + 'px';
     }
 
-    return { state, update, render, canEngage, engage, disengage };
+    return { state, update, render, canEngage, engage, disengage, decayIfAbandoned };
   }
 
   Game.createObjective = createObjective;

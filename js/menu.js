@@ -79,10 +79,12 @@ window.Game = window.Game || {};
   const lobbyError = document.getElementById('lobby-error');
   const lobbyReady = document.getElementById('lobby-ready');
   const lobbyStart = document.getElementById('lobby-start');
+  const lobbyLeave = document.getElementById('lobby-leave');
 
   const resultTitle = document.getElementById('result-title');
   const resultDetail = document.getElementById('result-detail');
   const resultAgain = document.getElementById('result-again');
+  const resultLeave = document.getElementById('result-leave');
 
   function playerName(){
     return (nameInput.value || '').trim().slice(0, 16) || 'Jogador';
@@ -400,6 +402,39 @@ window.Game = window.Game || {};
   let lastServerErrorAt = 0;
   let lastServerErrorMessage = '';
   let hostingRoomCode = null;
+  // true só durante a chamada de exitToStart() — o close() daí pra baixo
+  // (net.js/net-webrtc.js) dispara o mesmo evento 'close'/'disconnected'
+  // que uma queda de rede de verdade dispararia; sem essa flag, onClose()
+  // tentaria reconectar sozinho (attemptAutoReconnect) depois de uma saída
+  // VOLUNTÁRIA, que é o oposto do que o jogador pediu (BUG-010)
+  let intentionalClose = false;
+
+  // ---------- sair da partida/sala (BUG-010) ----------
+  // Chamada tanto pelo botão "Sair da sala" (lobby/resultado) quanto pelo
+  // menu de pausa durante a partida (ver Game.requestExitMatch em
+  // main.js, que faz a limpeza do lado do mundo de jogo antes de chamar
+  // isto pra fechar a rede e voltar pro menu). Segura de chamar mesmo sem
+  // net ativo (modo solo) — só não faz nada de rede nesse caso.
+  function exitToStart(){
+    intentionalClose = true;
+    if (net){ net.close(); }
+    // rede de segurança: se a conexão já estava morta (ex: clicou sair
+    // bem no meio de uma tentativa de reconexão automática que já tinha
+    // falhado silenciosamente), close() pode não disparar 'close' de novo
+    // (socket/peer já fechado não reemite o evento) — sem isso,
+    // intentionalClose ficava travado em true pra sempre, e a PRÓXIMA
+    // queda de rede de verdade (numa conexão totalmente nova) seria
+    // engolida silenciosamente por engano, sem tentar reconectar. Mesmo
+    // padrão de "nunca pode ficar preso" já usado no antigo
+    // rotateAutoHideTimer.
+    setTimeout(() => { intentionalClose = false; }, 1000);
+    net = null;
+    hostingRoomCode = null;
+    reconnectAttemptsLeft = 0;
+    lastConnectFn = null;
+    menu.style.display = 'flex';
+    showScreen('start');
+  }
 
   // reconexão automática: queda de rede (não senha errada/sala cheia — essas
   // vêm por onServerError/onError, guardadas por lastServerErrorAt, e não
@@ -490,6 +525,11 @@ window.Game = window.Game || {};
         errorTarget.textContent = message;
       },
       onClose(){
+        // saída VOLUNTÁRIA (exitToStart, BUG-010) — já navegou e limpou
+        // tudo sozinha, esse close() é só o eco esperado do socket/peer
+        // fechando; não é queda de rede, não tenta reconectar
+        if (intentionalClose){ intentionalClose = false; return; }
+
         // erro recente (senha errada, sala cheia, kick etc.) — rejeição
         // DELIBERADA do servidor, não adianta tentar reconectar sozinho
         // (cairia no mesmo motivo de novo). Se ainda estamos no formulário
@@ -512,6 +552,22 @@ window.Game = window.Game || {};
         } else {
           attemptAutoReconnect(errorTarget);
         }
+      },
+      // só o P2P manda isso (LAN nunca fecha a sala, o servidor é um
+      // processo à parte) — o host saiu, não tem failover de verdade
+      // (limitação documentada), então a sala acaba pra todo mundo.
+      // requestExitMatch() (main.js) para o loop da partida se tiver uma
+      // rolando agora (no-op se ainda estava só no lobby); as 2 linhas
+      // seguintes garantem a navegação certa mesmo se exitToStart (chamada
+      // por dentro dele) já tiver mandado pra 'start' — aqui é sempre
+      // pro formulário de conexão, com a mensagem específica.
+      onRoomClosed(){
+        if (Game.requestExitMatch) Game.requestExitMatch();
+        else Game.hideMatchUi();
+        net = null;
+        hostingRoomCode = null;
+        errorTarget.textContent = 'O host encerrou a sala.';
+        showScreen(errorTarget === p2pHostError || errorTarget === p2pJoinError ? 'p2pChoice' : 'join');
       },
       onMatchStart(players, mapLayoutIndex){
         menu.style.display = 'none';
@@ -714,6 +770,7 @@ window.Game = window.Game || {};
     lobbyError.textContent = '';
     net.toggleReady();
   });
+  lobbyLeave.addEventListener('click', () => { exitToStart(); });
   lobbyStart.addEventListener('click', () => {
     lobbyError.textContent = '';
     net.startMatch();
@@ -733,6 +790,11 @@ window.Game = window.Game || {};
     resultTitle.textContent = won ? 'Vitória!' : 'Derrota';
     resultTitle.className = won ? 'won' : 'lost';
     resultDetail.textContent = detail || '';
+    // "Sair da sala" só faz sentido em partida online (onPlayAgain nulo é
+    // como o online se identifica aqui, ver comentário na declaração de
+    // playAgainSolo) — no solo não tem sala nenhuma pra sair, "Jogar de
+    // novo" já cobre o único fluxo que existe
+    resultLeave.style.display = (!onPlayAgain && net) ? '' : 'none';
     recordMatchResult(won, role);
     recordMatchHistory(won, role, detail);
   }
@@ -754,6 +816,7 @@ window.Game = window.Game || {};
     }
     window.location.reload();
   });
+  resultLeave.addEventListener('click', () => { exitToStart(); });
 
-  Game.Menu = { showResult };
+  Game.Menu = { showResult, exitToStart };
 })();

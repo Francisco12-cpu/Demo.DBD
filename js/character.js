@@ -58,8 +58,20 @@ window.Game = window.Game || {};
     // Sobrescreve só a cor (usado pra diferenciar vários Sobreviventes na
     // mesma partida — não muda tipo/config, só o visual). hueDeg: graus de
     // hue-rotate (0 = cor original da arte).
+    //
+    // BUG-005 (BUGS.md): isso costumava ser `torso.style.filter = ...`
+    // direto — filtro inline SEMPRE vence qualquer `filter` definido por
+    // classe no CSS (.char.injured/.hooked/.hit-flash .torso etc.), então
+    // só o Sobrevivente 1 (hueDeg=0, filter inline vira '') mostrava
+    // qualquer feedback visual de ferido/pendurado/dano no online — os
+    // Sobreviventes 2-4 (hue != 0) tinham o inline sempre vencendo e
+    // NUNCA mostravam esses estados. Agora é uma custom property
+    // (--survivor-hue), que style.css lê via hue-rotate(var(--survivor-hue,
+    // 0deg)) dentro do PRÓPRIO filter de cada estado — os dois hue-rotate
+    // somam matematicamente (CSS já faz isso sozinho), então a cor do
+    // jogador e a cor do estado convivem em vez de uma apagar a outra.
     function setColorOverride(hueDeg){
-      torso.style.filter = hueDeg ? `hue-rotate(${hueDeg}deg)` : '';
+      el.style.setProperty('--survivor-hue', (hueDeg || 0) + 'deg');
     }
 
     function setFacing(right){
@@ -146,6 +158,12 @@ window.Game = window.Game || {};
     function render(){
       el.style.left = state.pos.x + 'px';
       el.style.top = state.pos.y + 'px';
+      // BUG-001 (BUGS.md): #arena empilhava só por ordem do DOM, então quem
+      // nasceu depois desenhava por cima de quem nasceu antes, não importa
+      // a posição — a sombra em si já era estática e correta (1º filho do
+      // .char), o problema era a falta disso aqui. Ordenar por Y (mais
+      // embaixo na tela = na frente) é o empilhamento 2.5D padrão.
+      el.style.zIndex = Math.round(state.pos.y);
       el.classList.toggle('stunned', performance.now() < state.stunnedUntil);
       el.classList.toggle('snared', performance.now() < state.snaredUntil);
       updateAnimationFrame(performance.now());
