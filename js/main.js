@@ -1776,7 +1776,7 @@ window.Game = window.Game || {};
             // (além de quem está preenchendo) acelera 50% o preenchimento
             const helpers = activeSurvivors().filter((e) => e !== localEntry &&
               Math.hypot(e.char.state.pos.x - engagedObjective.state.pos.x, e.char.state.pos.y - engagedObjective.state.pos.y) <= Game.CONFIG.objective.radius).length;
-            const result = engagedObjective.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested, 1 + helpers * 0.5);
+            const result = engagedObjective.update(delta, localEntry.char.state.pos, hadSkillCheck && attackRequested, 1 + helpers * Game.CONFIG.objective.cooperationBonusPerHelper);
             if (engagedObjective.state.done && !wasDone){
               net.sendEvent({ kind: 'objectiveDone', index });
               checkWinFromObjectives();

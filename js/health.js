@@ -45,7 +45,7 @@ window.Game = window.Game || {};
           return true; // acabou de curar agora
         }
       } else if (state.healProgress > 0){
-        state.healProgress = Math.max(0, state.healProgress - delta * 0.4);
+        state.healProgress = Math.max(0, state.healProgress - delta * cfg.healDecayRate);
       }
       return false;
     }

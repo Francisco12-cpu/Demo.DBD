@@ -37,7 +37,7 @@ window.Game = window.Game || {};
           return true;
         }
       } else if (state.progress > 0){
-        state.progress = Math.max(0, state.progress - delta * 0.3);
+        state.progress = Math.max(0, state.progress - delta * cfg.progressDecayRate);
       }
       render();
       return false;

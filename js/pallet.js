@@ -55,7 +55,7 @@ window.Game = window.Game || {};
           return true;
         }
       } else if (state.breakProgress > 0){
-        state.breakProgress = Math.max(0, state.breakProgress - delta * 0.6);
+        state.breakProgress = Math.max(0, state.breakProgress - delta * cfg.breakDecayRate);
       }
       render();
       return false;

@@ -53,6 +53,7 @@ window.Game = window.Game || {};
   const lobbyRoomCode = document.getElementById('lobby-room-code');
   const lobbyRoomCodeText = document.getElementById('lobby-room-code-text');
   const lobbyRoomQr = document.getElementById('lobby-room-qr');
+  const lobbyCounts = document.getElementById('lobby-counts');
   const lobbyPlayers = document.getElementById('lobby-players');
   const lobbyBeKiller = document.getElementById('lobby-be-killer');
   const lobbyBeSurvivor = document.getElementById('lobby-be-survivor');
@@ -393,6 +394,9 @@ window.Game = window.Game || {};
   // ---------- lobby (comum aos dois transportes online) ----------
   function renderLobby(msg){
     lobbyPlayers.innerHTML = '';
+    const killerCount = msg.players.filter((p) => p.role === 'killer').length;
+    const survivorCount = msg.players.filter((p) => p.role === 'survivor').length;
+    lobbyCounts.textContent = `${killerCount}/1 Assassino · ${survivorCount}/${Game.CONFIG.maxSurvivors} Sobreviventes`;
     // host = primeiro a entrar na sala ainda conectado (servidor decide,
     // ver hostId() em server.js/net-webrtc.js — aqui só lê o que já veio)
     const amIHost = !!msg.hostId && msg.hostId === localId;

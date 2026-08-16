@@ -87,6 +87,11 @@ Game.CONFIG = {
   objective: {
     radius: 70,   // px — distância máxima do centro do objetivo pra progredir
     duration: 35, // segundos parado por perto pra completar 0% -> 100% (era 4 — partida durava segundos)
+    // cooperação (só modo online, vários Sobreviventes no mesmo gerador):
+    // cada ajudante extra além de quem está preenchendo acelera o progresso
+    // nessa fração — com o máximo de 4 Sobreviventes por partida, o teto
+    // natural é 1 + 3*0.5 = 2.5x (3 ajudantes), sem precisar de clamp extra
+    cooperationBonusPerHelper: 0.5,
   },
 
   // skill check circular (estilo DBD): dispara de vez em quando enquanto o
@@ -145,6 +150,7 @@ Game.CONFIG = {
   health: {
     injuredSpeedMultiplier: 0.85,
     healDuration: 10, // segundos parado pra curar sozinho (ferido -> saudável)
+    healDecayRate: 0.4, // progresso de cura perdido por segundo ao sair do lugar antes de terminar
   },
 
   // portão de saída (js/gate.js): só pode ser aberto depois que todos os
@@ -154,6 +160,7 @@ Game.CONFIG = {
   gate: {
     radius: 130,
     openDuration: 15,
+    progressDecayRate: 0.3, // progresso perdido por segundo ao sair do alcance antes de terminar
   },
 
   // pallets (js/pallet.js): obstáculo solto que o Sobrevivente derruba na
@@ -174,6 +181,7 @@ Game.CONFIG = {
     stunRadius: 90,       // px — Assassino nesse raio do pallet NO INSTANTE em que ele cai fica atordoado
     stunDuration: 2.5,    // segundos travado (sem mover, sem atacar) depois de atordoado
     breakDuration: 3,     // segundos canalizando perto pra destruir de vez — mais lento que porta (2s) de propósito
+    breakDecayRate: 0.6,  // progresso de quebra perdido por segundo ao sair do alcance antes de terminar
   },
 
   // janelas (js/window.js): vão que NUNCA bloqueia ninguém (ao contrário de
@@ -195,6 +203,7 @@ Game.CONFIG = {
     lockDuration: 3,
     breakDuration: 2,
     radius: 80,
+    progressDecayRate: 0.6, // progresso de trancar/arrombar perdido por segundo ao sair do alcance antes de terminar
   },
 
   // raio de audição de ruído (px) — pra onde o Assassino (real ou IA) só

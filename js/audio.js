@@ -118,9 +118,14 @@ window.Game = window.Game || {};
   // ---------- batimento cardíaco ----------
   let heartbeatOn = false;
   let nextBeatAt = 0;
+  let secondThumpTimer = null;
 
   function stopHeartbeat(){
     heartbeatOn = false;
+    // sem isso, o 2º "thump" agendado (ver updateHeartbeat) continuava
+    // pendente até disparar sozinho — a checagem heartbeatOn lá dentro já
+    // evitava tocar som indevido, mas o timer em si ficava vivo à toa
+    clearTimeout(secondThumpTimer);
   }
 
   // listenerPos/killerPos: {x,y} no espaço do jogo. maxDistance: além
@@ -152,7 +157,8 @@ window.Game = window.Game || {};
       // subido de 68/52Hz — graves demais pra maioria dos alto-falantes de
       // celular reproduzirem de forma audível, principalmente como tom puro
       playThump(panX, panZ, volume, 110);
-      setTimeout(() => { if (heartbeatOn) playThump(panX, panZ, volume * 0.75, 85); }, 110);
+      clearTimeout(secondThumpTimer);
+      secondThumpTimer = setTimeout(() => { if (heartbeatOn) playThump(panX, panZ, volume * 0.75, 85); }, 110);
       nextBeatAt = c.currentTime * 1000 + intervalMs;
     }
   }

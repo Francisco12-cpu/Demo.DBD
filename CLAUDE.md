@@ -259,6 +259,108 @@ caso de uso), comparação de features com o jogo original. Se o usuário
 mencionar de novo, ele provavelmente já viu a análise anterior — perguntar
 se é pra continuar analisando ou já implementar algo específico.
 
+## Ideias futuras (auditoria de código, 2026-08-15)
+
+Depois de fechar o backlog pendente (estado pronto, controle de papel pelo
+host, 2ª habilidade do Sobrevivente, Armadilha/Invisibilidade do
+Assassino), foi pedido pra gerar pelo menos +30 ideias novas analisando o
+código existente e continuar implementando. Já implementadas nesta mesma
+sessão (pequenos ajustes de qualidade, todos testados):
+- Números mágicos de decaimento de progresso (`0.4`/`0.6`/`0.3`, antes
+  soltos em `health.js`/`door.js`/`pallet.js`/`gate.js`) movidos pra
+  `Game.CONFIG` (`healDecayRate`/`progressDecayRate`/`breakDecayRate`).
+- Bônus de cooperação em geradores (`+50% por ajudante`, antes hardcoded
+  em `main.js`) movido pra `Game.CONFIG.objective.cooperationBonusPerHelper`.
+- `js/audio.js`: `clearTimeout` do 2º "thump" do batimento em
+  `stopHeartbeat()` (o timer ficava pendente até disparar sozinho, mesmo
+  já neutralizado pela checagem `heartbeatOn`).
+- `css/style.css`: cor `#1a1420` (repetida 6x) virou variável
+  `--ink-on-gold` em `:root`.
+- Indicador de vagas no lobby (`#lobby-counts`, "X/1 Assassino · Y/4
+  Sobreviventes") em `menu.js`.
+- **Considerado e descartado**: decaimento de `wiggleProgress` (fase
+  *carried* de `capture.js`) pra simetria com o decaimento que
+  `hookProgress` (fase *hooked*) já tem — checado contra o jogo original:
+  lá o wiggle também é puramente cumulativo (só o timer de sacrifício no
+  gancho decai), então a "assimetria" já era fidelidade ao original, não
+  bug. Não mexer nisso sem pedido explícito.
+
+Resto da lista (não implementado, ordenado só por área, não por
+prioridade — usar julgamento na próxima sessão, cada item é pequeno e
+independente):
+
+**Jogabilidade**
+- Skill check "ótimo" (zona central menor dentro da zona de acerto em
+  `objective.js`, com bônus de progresso maior — o dado já existe,
+  `zoneStart`/`zoneEnd`, só falta a sub-zona).
+- Modo de dificuldade opcional em que errar skill check tira progresso do
+  gerador (hoje só custa tempo, `objective.js` → `resolveSkillCheck`).
+- Ação de reanimar aliado *downed* sem precisar carregar até o gancho —
+  o próprio comentário de `capture.js` já assume essa lacuna.
+- Cooldown de reentrada em `hideout.js` — hoje dá pra sair e entrar nele
+  de novo instantaneamente pra resetar o temporizador de ruído
+  (`noiseAfter`), o que é um exploit de camping real.
+- Regeneração/reset de pallets já quebrados depois de uma certa fase da
+  partida (ex.: só depois do portão abrir), pra não esgotar os loops de
+  perseguição em partidas longas.
+- Mais layouts de mapa além dos 2 atuais (`DOOR_SIDES_BY_LAYOUT`/
+  `PALLET_SPOTS_BY_LAYOUT`/`LOOSE_OBSTACLES_BY_LAYOUT` em `map.js`).
+- Spawn do Assassino variável por layout (hoje fixo em `{x:1500,y:1000}`
+  pros 2 layouts, enquanto objetivos/hooks/pallets variam).
+- Diferenciar `GAP_SIZE` (hoje 96px fixo pros dois) de porta vs janela em
+  `map.js`, pra telegraphing melhor de qual vão é qual à distância.
+- Sistema de ping/marcador no mapa pra Sobreviventes se comunicarem sem
+  voz (loop LAN/P2P não tem chat nem voz — só o ping falso da Distração).
+
+**Áudio**
+- SFX dedicados que hoje faltam em `audio.js`: porta trancando/
+  arrombando, pallet caindo/quebrando, portão abrindo, Sobrevivente
+  escapando pelo portão (hoje só existe swing de ataque, hit de captura,
+  passo, clique, erro e início de objetivo).
+- Sinalizar na UI quando `Game.Audio.ensureContext()` volta `null`
+  (navegador sem Web Audio) — hoje o jogador só fica sem batimento/SFX
+  sem nenhum aviso.
+- Volumes separados por categoria (SFX / batimento / ambiente) nas
+  configurações, hoje é um slider só.
+
+**Multiplayer / protocolo**
+- Persistir o loadout de habilidades (últimas escolhidas) no
+  `localStorage`, mesmo padrão já usado pro token de reconexão.
+- Botão "copiar código da sala" (clipboard) na tela de host P2P.
+- Validação/versionamento leve de protocolo em `protocol.js` — hoje só os
+  3 kinds "resumable" quebram cedo se tiverem um typo; os outros ~15
+  passam despercebidos até teste manual.
+- Assert de sanidade (dev-only) checando que `hookSpots`/
+  `objectiveSpots`/`gateSpots` não caem dentro de nenhuma sala de
+  `ROOM_DEF` em `map.js` — hoje é checagem manual só comentada no código.
+
+**UX/acessibilidade**
+- Seta/indicador apontando pro objetivo incompleto mais próximo (ajuda
+  quem tá jogando pela 1ª vez a não vagar sem rumo).
+- Indicador extra (não só cor) pros 4 Sobreviventes — o `hue-rotate` pode
+  ser difícil de distinguir pra jogador daltônico.
+- Configuração de remapeamento de tecla (hoje E/Q/R/WASD são fixos).
+- Histórico de partidas (não só o agregado que já existe em
+  `localStorage`/`dbd_stats`).
+
+**Técnico/arquitetura**
+- Estrutura espacial simples (grid) pra `nearbyWalls` em `lighting.js` —
+  hoje é `O(paredes)` por frame sem particionamento; só importa se o mapa
+  crescer bastante.
+- `shortcuts`/`screenshots` no `manifest.json` (atalho direto "Jogar
+  Solo"/"Online", prompt de instalação mais rico).
+- Restringir o `cache.put` de `sw.js` a extensões conhecidas em vez de
+  cachear qualquer GET same-origin — não é bug hoje (o jogo não tem
+  chamada dinâmica), mas é uma armadilha se isso mudar.
+- Formalizar os scripts de teste Playwright ad-hoc (só existem no
+  scratchpad de cada sessão) como uma pasta `tests/` versionada no repo,
+  já que o CI (`#34`) já roda smoke tests — hoje cada sessão reescreve os
+  scripts do zero.
+
+Itens de escopo grande já documentados em "Pendente/backlog real" acima
+(mapa em pixel art, tileset customizável, 2º estágio de gancho, failover
+de host P2P) continuam de fora dessa lista pra não duplicar.
+
 ## Onde cada coisa mora
 
 ```

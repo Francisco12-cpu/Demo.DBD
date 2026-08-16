@@ -48,7 +48,7 @@ window.Game = window.Game || {};
           return true;
         }
       } else if (state.lockProgress > 0){
-        state.lockProgress = Math.max(0, state.lockProgress - delta * 0.6);
+        state.lockProgress = Math.max(0, state.lockProgress - delta * cfg.progressDecayRate);
       }
       render();
       return false;
@@ -66,7 +66,7 @@ window.Game = window.Game || {};
           return true;
         }
       } else if (state.breakProgress > 0){
-        state.breakProgress = Math.max(0, state.breakProgress - delta * 0.6);
+        state.breakProgress = Math.max(0, state.breakProgress - delta * cfg.progressDecayRate);
       }
       render();
       return false;
