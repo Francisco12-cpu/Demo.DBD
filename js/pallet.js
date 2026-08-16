@@ -75,8 +75,27 @@ window.Game = window.Game || {};
       render();
     }
 
+    // pallet já quebrado ("broken") não tinha mais nenhum uso pro resto da
+    // partida — em partidas longas isso esgotava todos os loops de
+    // perseguição do mapa aos poucos. reset() volta ele pro estado inicial
+    // ("em pé"), chamado só quando os geradores terminam e os portões
+    // ficam ativos (ver checkWinFromObjectives em main.js — sem evento de
+    // rede próprio, todo cliente chega nesse ponto de forma sincronizada e
+    // determinística, então cada um reseta a própria cópia igual). Não
+    // mexe em pallets ainda "de pé" ou só "derrubados" (esses continuam
+    // bloqueando/quebráveis normalmente). Retorna true só se resetou de
+    // verdade, pra quem chama poder tocar um som/efeito se quiser.
+    function reset(){
+      if (!state.broken) return false;
+      state.dropped = false;
+      state.broken = false;
+      state.breakProgress = 0;
+      render();
+      return true;
+    }
+
     render();
-    return { state, center, drop, progressBreak, setDropped, setBroken, render };
+    return { state, center, drop, progressBreak, setDropped, setBroken, reset, render };
   }
 
   Game.createPallet = createPallet;

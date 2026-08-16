@@ -755,6 +755,7 @@ window.Game = window.Game || {};
             if (done >= objectives.length && !gatesActive){
               gatesActive = true;
               objectivesStatus.textContent = 'Geradores prontos! Ache um portão pra escapar.';
+              pallets.forEach((p) => p.reset()); // volta pallets já quebrados, pra não esgotar os loops na fase final
             }
           }
           if (result.great) Game.Audio.playSkillCheckGreat();
@@ -1095,6 +1096,7 @@ window.Game = window.Game || {};
             if (done >= objectives.length && !gatesActive){
               gatesActive = true;
               objectivesStatus.textContent = 'Geradores prontos! O Sobrevivente vai tentar escapar.';
+              pallets.forEach((p) => p.reset()); // volta pallets já quebrados, pra não esgotar os loops na fase final
             }
           }
         }
@@ -1346,6 +1348,13 @@ window.Game = window.Game || {};
       if (done >= objectives.length && !gatesActive){
         gatesActive = true;
         if (isSurvivor) objectivesStatus.textContent = 'Geradores prontos! Ache um portão pra escapar.';
+        // volta pallets já quebrados, pra não esgotar os loops de
+        // perseguição na fase final — sem evento de rede novo: todo
+        // cliente chega em gatesActive=true no mesmo instante lógico
+        // (objectiveDone já é sincronizado), então cada um reseta a
+        // própria cópia dos pallets de forma determinística e idêntica,
+        // igual ao cálculo de velocidade da janela já faz
+        pallets.forEach((p) => p.reset());
       }
     }
 

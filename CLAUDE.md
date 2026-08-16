@@ -344,9 +344,20 @@ independente):
   cooldown. Testado isolado (`Game.createHideout()` via
   `page.evaluate`): reentrada imediata bloqueada, libera depois do
   cooldown, barulho depois de tempo escondido continua funcionando.
-- Regeneração/reset de pallets já quebrados depois de uma certa fase da
-  partida (ex.: só depois do portão abrir), pra não esgotar os loops de
-  perseguição em partidas longas.
+- ~~Regeneração de pallets já quebrados~~ — **feito** (2026-08-15):
+  `pallet.js` ganha `reset()` — só mexe em pallets já `broken` (volta
+  `dropped`/`broken`/`breakProgress` pro estado inicial "em pé"); não
+  toca em pallets ainda de pé ou só derrubados. Chamado no exato instante
+  em que `gatesActive` vira `true` (geradores todos prontos) nos 3 modos.
+  **Sem evento de rede novo no online**: todo cliente chega em
+  `gatesActive=true` de forma sincronizada e determinística (a partir de
+  `objectiveDone`, que já é sincronizado) — cada um reseta a própria
+  cópia dos pallets de forma idêntica, mesmo truque que o multiplicador
+  de velocidade da janela já usa. Testado: unidade (`Game.createPallet()`
+  isolado — não mexe em pallet de pé/só derrubado, só reseta de verdade
+  um `broken`) + integração (partida solo real com objetivo/duração
+  encurtados via `page.evaluate`, completou um gerador de verdade,
+  `gatesActive` disparou e a chamada de reset rodou sem erro).
 - Mais layouts de mapa além dos 2 atuais (`DOOR_SIDES_BY_LAYOUT`/
   `PALLET_SPOTS_BY_LAYOUT`/`LOOSE_OBSTACLES_BY_LAYOUT` em `map.js`).
 - ~~Spawn do Assassino variável por layout~~ — **feito** (2026-08-15):
