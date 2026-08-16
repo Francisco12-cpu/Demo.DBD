@@ -645,6 +645,34 @@ independente):
   de menu/lobby, e atualizar `smoke-online.mjs` junto se esse fluxo
   mudar de novo.
 
+**Achado numa auditoria nova (2026-08-16), fora da lista original acima**
+- ~~Cooperação ao abrir o portão de saída~~ — **feito** (2026-08-16):
+  geradores já tinham bônus de cooperação
+  (`Game.CONFIG.objective.cooperationBonusPerHelper`) quando vários
+  Sobreviventes ajudam no mesmo — o portão de saída não tinha o
+  equivalente (`js/gate.js` não recebia nenhum multiplicador, só
+  `delta`), canalizar em grupo era igual de lento que sozinho, ao
+  contrário do jogo original. `progressOpen()` ganha `helperMultiplier`
+  opcional (padrão `1`, comportamento solo idêntico a antes);
+  `Game.CONFIG.gate.cooperationBonusPerHelper` (0.5, mesmo valor do
+  gerador); `main.js` calcula ajudantes perto do mesmo portão com o
+  mesmo padrão já usado pra gerador (`activeSurvivors().filter(...)`).
+  Só existe no online (só lá tem >1 Sobrevivente de verdade). Testado:
+  unidade isolada (`Game.createGate()` — 1 ajudante dá exatamente 1.5x
+  progresso no mesmo tempo) + `npm test` completo (a nova conta de
+  ajudantes roda em TODO frame de partida online, mesmo antes do portão
+  abrir — já é exercitada pelos testes de movimento existentes, zero
+  erro de console/página).
+
+Com essa rodada, uma auditoria rápida de `health.js`/`gate.js`
+(`capture.js`/`ability.js`/`character.js` não abertos de novo, sem
+motivo pra suspeitar de algo lá) não achou mais nada pequeno e genuíno —
+só esse item de cooperação. `lighting.js` (`nearbyWalls` sem
+particionamento espacial) continua de propósito fora da lista de "fazer
+agora": é otimização prematura pro tamanho de mapa atual (~38 paredes por
+layout), o próprio item já dizia isso ("só importa se o mapa crescer
+bastante") e nada mudou nisso.
+
 Itens de escopo grande já documentados em "Pendente/backlog real" acima
 (mapa em pixel art, tileset customizável, 2º estágio de gancho, failover
 de host P2P) continuam de fora dessa lista pra não duplicar.
