@@ -52,6 +52,10 @@ html,body{
 .menu-card h1{ font-size:18px; color:var(--gold); letter-spacing:1px; margin:0 0 4px; }
 .menu-card h2{ font-size:15px; color:var(--gold); letter-spacing:1px; margin:0 0 4px; }
 .menu-card label{ display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
+/* checkbox (ex: modo difícil) — linha ao invés de empilhado, diferente
+   dos outros campos do menu que são sempre label em cima/input embaixo */
+.menu-card label.menu-checkbox{ flex-direction:row; align-items:center; gap:8px; }
+.menu-card label.menu-checkbox input{ flex:none; width:16px; height:16px; }
 .menu-card input[type=text], .menu-card select{
   background: var(--bg-deep); color: var(--ink); border: 1px solid var(--wall);
   font-family: inherit; font-size: 13px; padding: 8px;

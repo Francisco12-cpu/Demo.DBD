@@ -65,18 +65,22 @@ window.Game = window.Game || {};
       scRing.style.display = 'block';
     }
 
-    // Errar (ou deixar o ponteiro dar a volta sem apertar) não tira
-    // progresso nem sobe o nível de dificuldade — só não ganha nada nesse
-    // skill check, o que já custa o tempo até ele aparecer de novo no
-    // mesmo nível. Só acertar avança a barra E sobe a dificuldade do
-    // próximo skill check desse gerador. `great` (acerto na sub-zona
-    // central) multiplica o ganho — ver spawnSkillCheck.
+    // Errar (ou deixar o ponteiro dar a volta sem apertar) não sobe o
+    // nível de dificuldade — só obriga repetir aquele mesmo skill check,
+    // o que já custa o tempo até ele aparecer de novo no mesmo nível. Por
+    // padrão também não tira progresso (cfg.failPenalty = 0); só tira se
+    // o jogador ligou o "modo difícil" nas Configurações (ver menu.js).
+    // Acertar sempre avança a barra E sobe a dificuldade do próximo skill
+    // check desse gerador. `great` (acerto na sub-zona central) multiplica
+    // o ganho — ver spawnSkillCheck.
     function resolveSkillCheck(hit, great){
       const cfg = Game.CONFIG.skillCheck;
       if (hit){
         const bonus = great ? cfg.successBonus * cfg.greatBonusMultiplier : cfg.successBonus;
         state.progress = Math.min(1, state.progress + bonus);
         state.skillCheckLevel += 1;
+      } else if (cfg.failPenalty > 0){
+        state.progress = Math.max(0, state.progress - cfg.failPenalty);
       }
       if (state.progress >= 1) state.done = true;
       state.skillCheck = null;

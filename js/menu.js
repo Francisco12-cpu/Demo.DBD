@@ -149,17 +149,24 @@ window.Game = window.Game || {};
   const settingsBackBtn = document.getElementById('settings-back');
   const settingsVolume = document.getElementById('settings-volume');
   const settingsJoystick = document.getElementById('settings-joystick');
+  const settingsHardSkillCheck = document.getElementById('settings-hard-skillcheck');
 
   function loadSettings(){
     const volume = parseInt(localStorage.getItem('dbd_volume'), 10);
     const joystick = parseInt(localStorage.getItem('dbd_joystick'), 10);
     settingsVolume.value = isNaN(volume) ? 100 : volume;
     settingsJoystick.value = isNaN(joystick) ? 100 : joystick;
+    settingsHardSkillCheck.checked = localStorage.getItem('dbd_hard_skillcheck') === '1';
     applySettings();
   }
   function applySettings(){
     Game.Audio.setMasterVolume(parseInt(settingsVolume.value, 10) / 100);
     Game.Input.setJoystickSensitivity(parseInt(settingsJoystick.value, 10) / 100);
+    // troca só entre os 2 valores já calibrados no config — nunca calcula
+    // penalidade na hora, evita gente configurando um número aleatório
+    Game.CONFIG.skillCheck.failPenalty = settingsHardSkillCheck.checked
+      ? Game.CONFIG.skillCheck.hardModeFailPenalty
+      : 0;
   }
   settingsVolume.addEventListener('input', () => {
     localStorage.setItem('dbd_volume', settingsVolume.value);
@@ -167,6 +174,10 @@ window.Game = window.Game || {};
   });
   settingsJoystick.addEventListener('input', () => {
     localStorage.setItem('dbd_joystick', settingsJoystick.value);
+    applySettings();
+  });
+  settingsHardSkillCheck.addEventListener('change', () => {
+    localStorage.setItem('dbd_hard_skillcheck', settingsHardSkillCheck.checked ? '1' : '0');
     applySettings();
   });
   settingsOpenBtn.addEventListener('click', () => showScreen('settings'));

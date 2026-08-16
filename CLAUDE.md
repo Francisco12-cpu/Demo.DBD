@@ -305,8 +305,16 @@ independente):
   `successBonus`, acerto na zona ótima dá exatamente `successBonus ×
   greatBonusMultiplier`, erro não dá progresso nenhum; zona ótima
   confirmada sempre dentro da zona normal ao spawnar de verdade.
-- Modo de dificuldade opcional em que errar skill check tira progresso do
-  gerador (hoje só custa tempo, `objective.js` → `resolveSkillCheck`).
+- ~~Modo de dificuldade opcional (errar tira progresso)~~ — **feito**
+  (2026-08-15): checkbox "Modo difícil" nas Configurações
+  (`dbd_hard_skillcheck` no `localStorage`, mesmo padrão de volume/
+  joystick). Liga/desliga `Game.CONFIG.skillCheck.failPenalty` entre `0`
+  (padrão, nunca tira progresso) e `hardModeFailPenalty` (0.08, menor que
+  `successBonus`=0.18 de propósito — machuca mas não anula um acerto
+  seguinte). `objective.js` → `resolveSkillCheck()` só desconta se
+  `failPenalty > 0`. Testado: desligado por padrão, liga/persiste/
+  recarrega certo, e a lógica de desconto aplicada de verdade (progresso
+  0.5 → 0.42 num miss forçado com o modo ligado).
 - ~~Reanimar aliado *downed* sem gancho~~ — **feito** (2026-08-15):
   `capture.js` ganha `revive()` — só funciona na fase *downed* (antes do
   Assassino pegar; uma vez `carried`/`hooked`, só resgate no gancho

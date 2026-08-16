@@ -135,6 +135,15 @@ Game.CONFIG = {
     // ainda dentro da zona normal continua valendo o successBonus de sempre.
     greatZoneFraction: 0.3,     // largura da zona ótima = fração da zona normal
     greatBonusMultiplier: 1.6, // successBonus × isso, só quando acerta na zona ótima
+
+    // modo difícil (opcional, configurável nas Configurações — ver
+    // dbd_hard_skillcheck no localStorage/menu.js): quando ligado, errar
+    // (ou deixar passar) tira progresso do gerador em vez de só custar
+    // tempo. failPenalty é o valor de verdade lido em objective.js —
+    // hardModeFailPenalty é só onde o toggle busca o número quando liga;
+    // 0 = comportamento padrão (nunca tira progresso), igual sempre foi.
+    failPenalty: 0,
+    hardModeFailPenalty: 0.08, // menor que successBonus (0.18) de propósito — machuca, mas não anula um acerto seguinte
   },
 
   // captura (js/capture.js) — igual ao jogo original: o 2º golpe DERRUBA
