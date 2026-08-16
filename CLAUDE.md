@@ -461,9 +461,15 @@ independente):
   código). Testado: os 2 modos abrem o jogo sozinhos com a query certa, e
   o prefill de código por QR do P2P (mesma área do arquivo) continua
   funcionando sem regressão.
-- Restringir o `cache.put` de `sw.js` a extensões conhecidas em vez de
-  cachear qualquer GET same-origin — não é bug hoje (o jogo não tem
-  chamada dinâmica), mas é uma armadilha se isso mudar.
+- ~~Restringir `cache.put` de `sw.js`~~ — **feito** (2026-08-15):
+  `CACHEABLE_EXT` (whitelist de extensão: html/js/css/json/imagens/fontes)
+  + raiz sem extensão (`/`) — `isCacheable(url)` decide antes do
+  `cache.put`. Não muda nada hoje (o jogo só serve arquivos estáticos com
+  extensão conhecida), só fecha a armadilha de cachear sem querer uma
+  chamada dinâmica same-origin futura. Testado via Playwright registrando
+  o SW de verdade: `js/config.js` (extensão conhecida) cacheia,
+  `/fake-api-endpoint` (sem extensão, simula um endpoint dinâmico
+  futuro) não cacheia.
 - Formalizar os scripts de teste Playwright ad-hoc (só existem no
   scratchpad de cada sessão) como uma pasta `tests/` versionada no repo,
   já que o CI (`#34`) já roda smoke tests — hoje cada sessão reescreve os
