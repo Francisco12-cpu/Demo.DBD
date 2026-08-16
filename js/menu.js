@@ -444,6 +444,21 @@ window.Game = window.Game || {};
     showScreen('p2pChoice');
   })();
 
+  // atalho do PWA instalado (manifest.json → shortcuts, link
+  // ?mode=solo-survivor|solo-killer) — pula direto pro modo solo sem
+  // passar pelo menu, mesmo padrão do QR code do P2P acima. Precisa
+  // esperar `DOMContentLoaded`: scripts com `defer` rodam na ordem do
+  // HTML, e js/main.js (que registra Game.startSolo/startSoloAsKiller)
+  // carrega DEPOIS de js/menu.js — clicar síncrono aqui achava a função
+  // ainda undefined. DOMContentLoaded só dispara depois de todo script
+  // defer já ter rodado, então por aí garante a ordem certa sem
+  // depender de qual script carrega primeiro.
+  document.addEventListener('DOMContentLoaded', () => {
+    const mode = new URLSearchParams(location.search).get('mode');
+    if (mode === 'solo-survivor') soloSurvivorBtn.click();
+    else if (mode === 'solo-killer') soloKillerBtn.click();
+  });
+
   // ---------- lobby (comum aos dois transportes online) ----------
   function renderLobby(msg){
     lobbyPlayers.innerHTML = '';

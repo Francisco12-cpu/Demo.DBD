@@ -407,8 +407,20 @@ independente):
 - Estrutura espacial simples (grid) pra `nearbyWalls` em `lighting.js` —
   hoje é `O(paredes)` por frame sem particionamento; só importa se o mapa
   crescer bastante.
-- `shortcuts`/`screenshots` no `manifest.json` (atalho direto "Jogar
-  Solo"/"Online", prompt de instalação mais rico).
+- ~~`shortcuts` no `manifest.json`~~ — **feito** (2026-08-15): 2 atalhos
+  ("Jogar de Sobrevivente"/"Jogar de Assassino", ambos solo — LAN/P2P
+  sempre exigem preencher IP/senha/código, um atalho não pouparia passo
+  nenhum ali) apontando pra `index.html?mode=solo-survivor`/
+  `solo-killer`. `menu.js` lê `?mode=` e clica no botão certo sozinho —
+  **precisa esperar `DOMContentLoaded`** (achado testando: clicar síncrono
+  na hora que o script roda dava `Game.startSolo is not a function`,
+  porque `js/menu.js` carrega antes de `js/main.js` no HTML — só depois
+  de `DOMContentLoaded`, que espera todo `<script defer>` terminar,
+  `Game.startSolo`/`startSoloAsKiller` já existem de verdade). `screenshots`
+  ficou de fora (exigiria gerar imagens reais da UI, fora do escopo de
+  código). Testado: os 2 modos abrem o jogo sozinhos com a query certa, e
+  o prefill de código por QR do P2P (mesma área do arquivo) continua
+  funcionando sem regressão.
 - Restringir o `cache.put` de `sw.js` a extensões conhecidas em vez de
   cachear qualquer GET same-origin — não é bug hoje (o jogo não tem
   chamada dinâmica), mas é uma armadilha se isso mudar.
