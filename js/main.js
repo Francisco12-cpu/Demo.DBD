@@ -855,7 +855,7 @@ window.Game = window.Game || {};
   // startSolo() com um parâmetro de papel — mantém a lógica já testada de
   // cada lado isolada, sem arriscar os dois caminhos numa refatoração só.
   // =====================================================================
-  function startSoloAsKiller(name){
+  function startSoloAsKiller(name, killerAbilityKey){
     panel.style.display = 'none';
     buildWorld(Game.CONFIG.generatorCount, randomLayoutIndex());
 
@@ -867,9 +867,18 @@ window.Game = window.Game || {};
     const aiHealth = Game.createHealth(survivorEl);
     let gatesActive = false;
 
+    // 3ª habilidade: escolha 1-de-2 (Armadilha ou Invisibilidade). A IA
+    // Sobrevivente não usa bússola/batimento (tem informação perfeita por
+    // outros meios), então Invisibilidade não muda o comportamento dela
+    // aqui — mesma limitação já documentada da Camuflagem no solo, só que
+    // do lado do Assassino. Fica disponível mesmo assim por consistência
+    // com o menu (e pro jogador treinar o timing da Armadilha).
+    const killerAbility3Key = killerAbilityKey === 'invisibility' ? 'invisibility' : 'trap';
+    const killerAbility3Cfg = killerAbility3Key === 'invisibility' ? Game.CONFIG.abilities.killerInvisibility : Game.CONFIG.abilities.killerTrap;
+
     const killerDash = Game.createAbility(Game.CONFIG.abilities.killerDash);
-    const killerTrap = Game.createAbility(Game.CONFIG.abilities.killerTrap);
-    let activeTrap = null; // { x, y, el }
+    const killerAbility3 = Game.createAbility(killerAbility3Cfg);
+    let activeTrap = null; // { x, y, el } — só usado quando killerAbility3Key === 'trap'
 
     killer.state.pos.x = MAP.killer.x; killer.state.pos.y = MAP.killer.y;
     survivor.state.pos.x = MAP.player.x; survivor.state.pos.y = MAP.player.y;
@@ -897,7 +906,7 @@ window.Game = window.Game || {};
       const elapsed = Math.round((performance.now() - matchStartAt) / 1000);
       const doneCount = updateObjectivesStatus();
       const fullDetail = `${detail} · Tempo: ${elapsed}s · Objetivos: ${doneCount}/${objectives.length}`;
-      Game.Menu.showResult(won, fullDetail, () => startSoloAsKiller(name), 'killer');
+      Game.Menu.showResult(won, fullDetail, () => startSoloAsKiller(name, killerAbilityKey), 'killer');
     }
 
     function attemptKillerHit(){
@@ -969,8 +978,8 @@ window.Game = window.Game || {};
           survivor.state.snaredUntil = performance.now() + Game.CONFIG.abilities.killerTrap.snareDuration * 1000;
           activeTrap.el.remove();
           activeTrap = null;
-          killerTrap.state.activeLeft = 0;
-          killerTrap.state.cooldownLeft = Game.CONFIG.abilities.killerTrap.cooldown;
+          killerAbility3.state.activeLeft = 0;
+          killerAbility3.state.cooldownLeft = Game.CONFIG.abilities.killerTrap.cooldown;
         }
       }
 
@@ -1100,14 +1109,14 @@ window.Game = window.Game || {};
       Game.Input.update();
       aiCapture.update(delta);
       killerDash.update(delta);
-      killerTrap.update(delta);
-      if (activeTrap && killerTrap.state.activeLeft <= 0 && killerTrap.state.cooldownLeft > 0){
+      killerAbility3.update(delta);
+      if (killerAbility3Key === 'trap' && activeTrap && killerAbility3.state.activeLeft <= 0 && killerAbility3.state.cooldownLeft > 0){
         activeTrap.el.remove();
         activeTrap = null;
       }
       updateAbilityHud([
         { label: Game.CONFIG.abilities.killerDash.label, ability: killerDash },
-        { label: Game.CONFIG.abilities.killerTrap.label, ability: killerTrap },
+        { label: killerAbility3Cfg.label, ability: killerAbility3 },
       ]);
       // saiu do gancho (fugiu, foi sacrificado) — libera pra outro corpo usar
       if (heldHook && !aiCapture.state.hooked){ setHookOccupied(heldHook, null); heldHook = null; }
@@ -1117,10 +1126,12 @@ window.Game = window.Game || {};
       const ability3Requested = Game.Input.consumeAbility3Request();
       const stunned = performance.now() < killer.state.stunnedUntil; // atordoado por pallet
       if (ability2Requested && !stunned) killerDash.trigger();
-      if (ability3Requested && !stunned && killerTrap.ready()){
-        killerTrap.trigger();
-        if (activeTrap) activeTrap.el.remove();
-        activeTrap = { x: killer.state.pos.x, y: killer.state.pos.y, el: spawnTrapMarker(killer.state.pos.x, killer.state.pos.y) };
+      if (ability3Requested && !stunned && killerAbility3.ready()){
+        killerAbility3.trigger();
+        if (killerAbility3Key === 'trap'){
+          if (activeTrap) activeTrap.el.remove();
+          activeTrap = { x: killer.state.pos.x, y: killer.state.pos.y, el: spawnTrapMarker(killer.state.pos.x, killer.state.pos.y) };
+        }
       }
 
       if (attackPressed && !stunned){
@@ -1209,7 +1220,7 @@ window.Game = window.Game || {};
       }
       char.render();
 
-      const entry = { info, char, el, eliminated: false, escaped: false, camouflaged: false };
+      const entry = { info, char, el, eliminated: false, escaped: false, camouflaged: false, invisible: false };
       if (info.role === 'survivor'){
         entry.capture = Game.createCapture(el);
         entry.hideout = Game.createHideout();
@@ -1241,10 +1252,16 @@ window.Game = window.Game || {};
     const localAbilityCfg2 = isSurvivor
       ? (Game.CONFIG.abilities.survivor[localEntry.info.ability2] || Game.CONFIG.abilities.survivor.camouflage)
       : null;
+    // 3ª habilidade do Assassino: escolha 1-de-2 (Armadilha ou
+    // Invisibilidade) — reaproveita o mesmo campo `ability` que o
+    // Sobrevivente usa pra 1ª habilidade dele (o Assassino nunca usava esse
+    // campo antes, então não colide). 'trap' é o padrão se não escolheu.
+    const killerAbility3Key = !isSurvivor && localEntry.info.ability === 'invisibility' ? 'invisibility' : 'trap';
+    const killerAbility3Cfg = killerAbility3Key === 'invisibility' ? Game.CONFIG.abilities.killerInvisibility : Game.CONFIG.abilities.killerTrap;
+
     const localAbility1 = isSurvivor ? Game.createAbility(localAbilityCfg) : Game.createAbility(Game.CONFIG.abilities.killerSense);
     const localAbility2 = isSurvivor ? null : Game.createAbility(Game.CONFIG.abilities.killerDash);
-    const localAbility3 = isSurvivor ? Game.createAbility(localAbilityCfg2) : null;
-    const killerTrap = isSurvivor ? null : Game.createAbility(Game.CONFIG.abilities.killerTrap);
+    const localAbility3 = isSurvivor ? Game.createAbility(localAbilityCfg2) : Game.createAbility(killerAbility3Cfg);
     const localAbilityKey = isSurvivor ? localEntry.info.ability : null;
     const localAbilityKey2 = isSurvivor ? localEntry.info.ability2 : null;
 
@@ -1254,7 +1271,7 @@ window.Game = window.Game || {};
     let lastStepAt = 0;
     let gatesActive = false; // vira true quando os 5 geradores terminam (todo mundo calcula igual, é só olhar objectives.state.done, já sincronizado)
     let carryingEntry = null; // só o Assassino usa: quem ele está carregando agora (null = ninguém)
-    let activeTrap = null; // { x, y, el } — Armadilha do Assassino (killerTrap), null = nenhuma armada agora
+    let activeTrap = null; // { x, y, el } — só usado quando killerAbility3Key === 'trap', null = nenhuma armada agora
 
     // enquanto alguém está "carried" (js/capture.js), a posição dele segue
     // a do Assassino em todo cliente — o Assassino já transmite a própria
@@ -1336,6 +1353,7 @@ window.Game = window.Game || {};
       entry.char.setSprinting(!!data.sprinting);
       entry.char.render();
       entry.camouflaged = !!data.camouflaged;
+      entry.invisible = !!data.invisible; // só o Assassino manda isso (habilidade Invisibilidade)
       entry.el.classList.toggle('injured', !!data.injured);
       entry.el.classList.toggle('snared', !!data.snared);
     };
@@ -1547,9 +1565,9 @@ window.Game = window.Game || {};
         // que a armadilha acabou — força o cooldown local dela, senão a
         // habilidade ficaria "armada pra sempre" do ponto de vista do
         // próprio Assassino (só ele tem a instância do createAbility)
-        if (!isSurvivor && killerTrap){
-          killerTrap.state.activeLeft = 0;
-          killerTrap.state.cooldownLeft = Game.CONFIG.abilities.killerTrap.cooldown;
+        if (!isSurvivor && killerAbility3Key === 'trap'){
+          localAbility3.state.activeLeft = 0;
+          localAbility3.state.cooldownLeft = Game.CONFIG.abilities.killerTrap.cooldown;
         }
         if (data.targetId === localId && localEntry.char.state){
           localEntry.char.state.snaredUntil = performance.now() + Game.CONFIG.abilities.killerTrap.snareDuration * 1000;
@@ -1643,12 +1661,12 @@ window.Game = window.Game || {};
       if (isSurvivor) localEntry.capture.update(delta);
       localAbility1.update(delta);
       if (localAbility2) localAbility2.update(delta);
-      if (localAbility3) localAbility3.update(delta);
-      if (killerTrap) killerTrap.update(delta);
+      localAbility3.update(delta);
       // armadilha expirou sozinha (ninguém pisou nela) — remove o marcador;
       // se ela disparou antes disso, o evento 'trapSprung' já cuidou (ver
-      // onlineEventHandler acima)
-      if (killerTrap && activeTrap && killerTrap.state.activeLeft <= 0 && killerTrap.state.cooldownLeft > 0){
+      // onlineEventHandler acima). Só se aplica quando a 3ª habilidade
+      // escolhida é a Armadilha — Invisibilidade não usa marcador nenhum.
+      if (!isSurvivor && killerAbility3Key === 'trap' && activeTrap && localAbility3.state.activeLeft <= 0 && localAbility3.state.cooldownLeft > 0){
         activeTrap.el.remove();
         activeTrap = null;
       }
@@ -1659,7 +1677,11 @@ window.Game = window.Game || {};
           { label: localAbilityCfg.label, ability: localAbility1 },
           { label: localAbilityCfg2.label, ability: localAbility3 },
         ]);
-        const killerPos = killerEntry && !killerEntry.eliminated ? killerEntry.char.state.pos : null;
+        // Invisibilidade (killerAbility3Key do Assassino, espelhada aqui via
+        // killerEntry.invisible) esconde ele da bússola/batimento/vinheta —
+        // mesmo tratamento que "eliminado"/"fora de alcance" já recebiam
+        const killerVisible = killerEntry && !killerEntry.eliminated && !killerEntry.invisible;
+        const killerPos = killerVisible ? killerEntry.char.state.pos : null;
         Game.Audio.updateHeartbeat(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
         updateKillerCompass(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
         updateDangerVignette(localEntry.char.state.pos, killerPos, Game.CONFIG.heartbeatRange);
@@ -1667,7 +1689,7 @@ window.Game = window.Game || {};
         updateAbilityHud([
           { label: Game.CONFIG.abilities.killerSense.label, ability: localAbility1 },
           { label: Game.CONFIG.abilities.killerDash.label, ability: localAbility2 },
-          { label: Game.CONFIG.abilities.killerTrap.label, ability: killerTrap },
+          { label: killerAbility3Cfg.label, ability: localAbility3 },
         ]);
         updateKillerVision();
       }
@@ -1811,12 +1833,16 @@ window.Game = window.Game || {};
         } else if (!stunned){
           if (ability1Requested) localAbility1.trigger();
           if (ability2Requested) localAbility2.trigger();
-          if (ability3Requested && killerTrap.ready()){
-            killerTrap.trigger();
-            if (activeTrap) activeTrap.el.remove();
-            const pos = { x: localEntry.char.state.pos.x, y: localEntry.char.state.pos.y };
-            activeTrap = { x: pos.x, y: pos.y, el: spawnTrapMarker(pos.x, pos.y) };
-            net.sendEvent({ kind: 'trapPlaced', x: pos.x, y: pos.y });
+          if (ability3Requested && localAbility3.ready()){
+            localAbility3.trigger();
+            if (killerAbility3Key === 'trap'){
+              if (activeTrap) activeTrap.el.remove();
+              const pos = { x: localEntry.char.state.pos.x, y: localEntry.char.state.pos.y };
+              activeTrap = { x: pos.x, y: pos.y, el: spawnTrapMarker(pos.x, pos.y) };
+              net.sendEvent({ kind: 'trapPlaced', x: pos.x, y: pos.y });
+            }
+            // Invisibilidade não precisa de evento próprio — o estado
+            // "ativa" já viaja no sendState de sempre (campo `invisible`)
           }
           if (attackRequested){
             const cCfg = Game.CONFIG.capture;
@@ -1933,6 +1959,7 @@ window.Game = window.Game || {};
           ),
           injured: isSurvivor && localEntry.health.state.injured,
           snared: isSurvivor && performance.now() < localEntry.char.state.snaredUntil,
+          invisible: !isSurvivor && killerAbility3Key === 'invisibility' && localAbility3.state.activeLeft > 0,
         });
       }
 

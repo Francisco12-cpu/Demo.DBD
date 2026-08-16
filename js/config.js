@@ -275,6 +275,18 @@ Game.CONFIG = {
       snareDuration: 3,       // segundos preso/lento depois de pisar
       snareSpeedMultiplier: 0.32,
     },
+    // outra opção pro mesmo slot 3 (escolha 1-de-2 no lobby/menu solo,
+    // igual ao Sobrevivente escolhe 2-de-4) — some da bússola/batimento/
+    // vinheta de perigo do Sobrevivente, mas continua visível a olho nu
+    // (não é invisibilidade de verdade, só remove o "aviso à distância").
+    // Só tem efeito real no modo online — no solo-como-Assassino a IA
+    // Sobrevivente sempre sabe a posição exata dele por outros meios
+    // (mesma limitação já documentada da Camuflagem no sentido contrário).
+    killerInvisibility: {
+      label: 'Invisibilidade',
+      duration: 10,
+      cooldown: 20,
+    },
     survivor: {
       sprint: {
         label: 'Sprint',

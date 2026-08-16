@@ -217,11 +217,28 @@ sem sistema de jogo que os use.
   em `startSolo` (Assassino IA não usa a 3ª habilidade, mesma decisão já
   tomada pro Sentido). Ainda **fixa** (não há escolha 1-de-2 ainda — isso é
   o próximo item, Invisibilidade).
-- Habilidade nova do Assassino: Invisibilidade (esconde o Assassino da
-  bússola/batimento/HUD do Sobrevivente, oposto da Camuflagem) — não
-  existe ainda. Depois dela existir, o slot 3 do Assassino vira uma escolha
-  1-de-2 (Armadilha ou Invisibilidade) no lobby/menu solo, mesmo padrão
-  que o Sobrevivente já usa pra escolher entre as 4 dele.
+- ~~Invisibilidade do Assassino + escolha 1-de-2~~ — **feito**
+  (2026-08-15): `Game.CONFIG.abilities.killerInvisibility` — enquanto
+  ativa, o Assassino some da bússola (`killer-compass`), batimento
+  (`Game.Audio.updateHeartbeat`) e vinheta de perigo do(s) Sobrevivente(s)
+  online (`entry.invisible`, sincronizado por `sendState`/
+  `onlineStateHandler` igual a `camouflaged`) — **não** esconde ele
+  visualmente nem muda a visão/fog dele, só remove os avisos de proximidade
+  à distância (igual ao "Undetectable" do jogo original). Sem evento de
+  rede próprio (o estado "ativa" já viaja no `sendState` de sempre). O
+  slot 3 do Assassino agora é uma escolha 1-de-2 (Armadilha ou
+  Invisibilidade, campo `ability` reaproveitado — o Assassino nunca usava
+  esse campo antes) no `#menu-killer-ability` (solo) e
+  `#lobby-killer-ability` (online, só visível pro jogador com papel
+  Assassino). `main.js` renomeou a variável antes fixa `killerTrap` pra
+  `localAbility3`/`killerAbility3` (startOnline/startSoloAsKiller,
+  respectivamente) com um `killerAbility3Key` guardando qual das duas foi
+  escolhida — toda a lógica específica de Armadilha (marcador, evento de
+  rede, checagem de proximidade) ficou atrás de `if (killerAbility3Key ===
+  'trap')`. **Mesma limitação da Camuflagem, só que espelhada**: no
+  `startSoloAsKiller` a IA Sobrevivente tem informação perfeita da posição
+  do Assassino por outros meios, então Invisibilidade não muda o
+  comportamento dela lá — só tem efeito real no modo online.
 - 2º estágio de gancho antes da morte definitiva — continua só 1 estágio,
   **simplificação consciente**, não necessariamente um bug a corrigir.
 - Mapa em pixel art de verdade (hoje é `div`/CSS gerado a partir de

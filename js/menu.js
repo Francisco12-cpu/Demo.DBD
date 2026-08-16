@@ -28,6 +28,7 @@ window.Game = window.Game || {};
   const nameInput = document.getElementById('menu-name');
   const abilitySelect = document.getElementById('menu-ability');
   const abilitySelect2 = document.getElementById('menu-ability2');
+  const menuKillerAbility = document.getElementById('menu-killer-ability');
   const soloSurvivorBtn = document.getElementById('menu-solo-survivor');
   const soloKillerBtn = document.getElementById('menu-solo-killer');
   const lanBtn = document.getElementById('menu-lan');
@@ -58,6 +59,8 @@ window.Game = window.Game || {};
   const lobbyAbilityRow = document.getElementById('lobby-ability-row');
   const lobbyAbility = document.getElementById('lobby-ability');
   const lobbyAbility2 = document.getElementById('lobby-ability2');
+  const lobbyKillerAbilityRow = document.getElementById('lobby-killer-ability-row');
+  const lobbyKillerAbility = document.getElementById('lobby-killer-ability');
   const lobbyError = document.getElementById('lobby-error');
   const lobbyReady = document.getElementById('lobby-ready');
   const lobbyStart = document.getElementById('lobby-start');
@@ -191,7 +194,7 @@ window.Game = window.Game || {};
 
   soloKillerBtn.addEventListener('click', () => {
     menu.style.display = 'none';
-    Game.startSoloAsKiller(playerName());
+    Game.startSoloAsKiller(playerName(), menuKillerAbility.value);
   });
 
   lanBtn.addEventListener('click', () => {
@@ -438,6 +441,8 @@ window.Game = window.Game || {};
     lobbyBeKiller.classList.toggle('active', !!me && me.role === 'killer');
     lobbyBeSurvivor.classList.toggle('active', !!me && me.role === 'survivor');
     lobbyAbilityRow.style.display = !!me && me.role === 'survivor' ? 'flex' : 'none';
+    lobbyKillerAbilityRow.style.display = !!me && me.role === 'killer' ? 'flex' : 'none';
+    if (me && me.role === 'killer') lobbyKillerAbility.value = me.ability === 'invisibility' ? 'invisibility' : 'trap';
 
     lobbyReady.disabled = !me || !me.role;
     lobbyReady.classList.toggle('active', !!me && me.ready);
@@ -464,7 +469,11 @@ window.Game = window.Game || {};
   lobbyBeKiller.addEventListener('click', () => {
     lobbyError.textContent = '';
     const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
-    net.chooseRole(me && me.role === 'killer' ? null : 'killer');
+    net.chooseRole(me && me.role === 'killer' ? null : 'killer', lobbyKillerAbility.value);
+  });
+  lobbyKillerAbility.addEventListener('change', () => {
+    const me = lastLobby && lastLobby.players.find((p) => p.id === localId);
+    if (me && me.role === 'killer') net.chooseRole('killer', lobbyKillerAbility.value);
   });
   lobbyBeSurvivor.addEventListener('click', () => {
     lobbyError.textContent = '';
