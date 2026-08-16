@@ -29,6 +29,7 @@ window.Game = window.Game || {};
   let gates = [];
   let hooks = [];
   let currentLayoutWalls = [];
+  let currentKillerSpawn = MAP.killer; // atualizado em buildWorld() — varia por layout (ver map.js)
 
   // incrementado a cada startOnline/resumeOnline — cada loop guarda o valor
   // que estava vigente quando ele nasceu e para sozinho se um mais novo
@@ -48,6 +49,7 @@ window.Game = window.Game || {};
 
     const layout = MAP.layouts[layoutIndex % MAP.layouts.length];
     currentLayoutWalls = layout.walls;
+    currentKillerSpawn = layout.killerSpawn || MAP.killer;
     currentLayoutWalls.forEach((wall) => {
       const div = document.createElement('div');
       div.className = 'wall';
@@ -452,7 +454,7 @@ window.Game = window.Game || {};
     const killerDash = Game.createAbility(Game.CONFIG.abilities.killerDash);
 
     player.state.pos.x = MAP.player.x; player.state.pos.y = MAP.player.y;
-    killer.state.pos.x = MAP.killer.x; killer.state.pos.y = MAP.killer.y;
+    killer.state.pos.x = currentKillerSpawn.x; killer.state.pos.y = currentKillerSpawn.y;
     player.applyVisuals();
     killer.applyVisuals();
     playerEl.querySelector('.label').textContent = name || 'Sobrevivente';
@@ -889,7 +891,7 @@ window.Game = window.Game || {};
     const killerAbility3 = Game.createAbility(killerAbility3Cfg);
     let activeTrap = null; // { x, y, el } — só usado quando killerAbility3Key === 'trap'
 
-    killer.state.pos.x = MAP.killer.x; killer.state.pos.y = MAP.killer.y;
+    killer.state.pos.x = currentKillerSpawn.x; killer.state.pos.y = currentKillerSpawn.y;
     survivor.state.pos.x = MAP.player.x; survivor.state.pos.y = MAP.player.y;
     killer.applyVisuals();
     survivor.applyVisuals();
@@ -1221,8 +1223,8 @@ window.Game = window.Game || {};
       el.querySelector('.label').textContent = info.name + (info.id === localId ? ' (você)' : '');
 
       if (info.role === 'killer'){
-        char.state.pos.x = MAP.killer.x;
-        char.state.pos.y = MAP.killer.y;
+        char.state.pos.x = currentKillerSpawn.x;
+        char.state.pos.y = currentKillerSpawn.y;
       } else {
         const spawn = MAP.survivorSpawns[survivorIndex % MAP.survivorSpawns.length];
         char.setColorOverride(Game.CONFIG.survivorHues[survivorIndex % Game.CONFIG.survivorHues.length]);

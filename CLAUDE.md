@@ -349,8 +349,20 @@ independente):
   perseguição em partidas longas.
 - Mais layouts de mapa além dos 2 atuais (`DOOR_SIDES_BY_LAYOUT`/
   `PALLET_SPOTS_BY_LAYOUT`/`LOOSE_OBSTACLES_BY_LAYOUT` em `map.js`).
-- Spawn do Assassino variável por layout (hoje fixo em `{x:1500,y:1000}`
-  pros 2 layouts, enquanto objetivos/hooks/pallets variam).
+- ~~Spawn do Assassino variável por layout~~ — **feito** (2026-08-15):
+  `KILLER_SPAWN_BY_LAYOUT` em `map.js` (layout 0 mantém `{1500,1000}`,
+  layout 1 ganha `{2100,1000}` — os dois no corredor aberto central,
+  fora de qualquer sala, só deslocados lateralmente). `buildRoomLayout()`
+  agora recebe o spawn como parâmetro extra; `buildWorld()` em `main.js`
+  guarda o valor resolvido em `currentKillerSpawn` (mesmo padrão de
+  `currentLayoutWalls`), substituindo as 3 leituras diretas de
+  `MAP.killer` (`startSolo`/`startSoloAsKiller`/`startOnline`).
+  `MAP.killer` continua existindo só como fallback. Entra também na
+  checagem de sanidade (`assertPointsOutsideRooms`). Testado: 10
+  partidas solo-como-Assassino seguidas mostraram os 2 pontos
+  diferentes, e um teste online com 2 clientes LAN confirmou que os dois
+  concordam na mesma posição (prova que o `mapLayoutIndex` sincronizado
+  continua funcionando).
 - Diferenciar `GAP_SIZE` (hoje 96px fixo pros dois) de porta vs janela em
   `map.js`, pra telegraphing melhor de qual vão é qual à distância.
 - Sistema de ping/marcador no mapa pra Sobreviventes se comunicarem sem

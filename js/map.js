@@ -109,7 +109,7 @@ window.Game = window.Game || {};
     ],
   ];
 
-  function buildRoomLayout(doorSides, looseObstacles, palletSpots){
+  function buildRoomLayout(doorSides, looseObstacles, palletSpots, killerSpawn){
     // cada sala ganha 1 porta (lado sorteado por layout) + 1 janela no lado
     // OPOSTO — o "shack" clássico do jogo original (porta de um lado,
     // janela do outro), que é o que cria um loop de perseguição de verdade
@@ -121,14 +121,25 @@ window.Game = window.Game || {};
       ],
     }));
     const { walls, doors, windows } = roomsToWalls(rooms);
-    return { walls: walls.concat(looseObstacles), doors, windows, pallets: palletSpots };
+    return { walls: walls.concat(looseObstacles), doors, windows, pallets: palletSpots, killerSpawn };
   }
+
+  // spawn do Assassino varia por layout (antes era sempre o mesmo ponto
+  // fixo pros 2 layouts, enquanto objetivos/hooks/pallets já variavam) —
+  // os dois ficam no corredor aberto central (fora de qualquer sala,
+  // mesma faixa vertical y:620-1140 entre as 2 fileiras de sala), só
+  // deslocados lateralmente pra dar uma proximidade inicial diferente
+  // com os spawns de Sobrevivente a cada partida
+  const KILLER_SPAWN_BY_LAYOUT = [
+    { x: 1500, y: 1000 }, // centro do mapa — era o único spawn antes disso existir
+    { x: 2100, y: 1000 }, // deslocado pro lado direito
+  ];
 
   const MAP = {
     width: 3000,
     height: 2000,
     player: { x: 140, y: 140 },
-    killer: { x: 1500, y: 1000 },
+    killer: { x: 1500, y: 1000 }, // fallback/valor padrão — o spawn real por partida vem de layout.killerSpawn (ver buildWorld em main.js)
     // pontos de spawn pra até 4 sobreviventes no modo online (índice = ordem de entrada)
     survivorSpawns: [
       { x: 140, y: 140 },
@@ -175,8 +186,8 @@ window.Game = window.Game || {};
     // js/door.js), `windows` (vão que nunca bloqueia, ver js/window.js) e
     // `pallets` (obstáculo solto derrubável, ver js/pallet.js).
     layouts: [
-      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[0], LOOSE_OBSTACLES_BY_LAYOUT[0], PALLET_SPOTS_BY_LAYOUT[0]),
-      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[1], LOOSE_OBSTACLES_BY_LAYOUT[1], PALLET_SPOTS_BY_LAYOUT[1]),
+      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[0], LOOSE_OBSTACLES_BY_LAYOUT[0], PALLET_SPOTS_BY_LAYOUT[0], KILLER_SPAWN_BY_LAYOUT[0]),
+      buildRoomLayout(DOOR_SIDES_BY_LAYOUT[1], LOOSE_OBSTACLES_BY_LAYOUT[1], PALLET_SPOTS_BY_LAYOUT[1], KILLER_SPAWN_BY_LAYOUT[1]),
     ],
   };
 
@@ -241,6 +252,7 @@ window.Game = window.Game || {};
   }
   assertPointsOutsideRooms('hookSpots', MAP.hookSpots);
   assertPointsOutsideRooms('gateSpots', MAP.gateSpots);
+  assertPointsOutsideRooms('killerSpawnByLayout', KILLER_SPAWN_BY_LAYOUT);
 
   Game.MAP = MAP;
   Game.mapCollision = { resolvePosition };
