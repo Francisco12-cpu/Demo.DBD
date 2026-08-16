@@ -98,6 +98,13 @@ html,body{
 .menu-card .row{ display:flex; gap:8px; }
 .menu-card .row button{ flex:1; }
 .menu-error{ color: var(--blood); font-size:12px; min-height:14px; }
+/* remapeamento de tecla (js/input.js, Game.Input.setKeybind) — cada linha
+   é "nome da ação" + botão mostrando a tecla atual; clicar entra em modo
+   "escutando", ver .listening abaixo */
+.settings-keybinds-label{ color:var(--muted); font-size:11px; margin: 4px 0 -2px; }
+.keybind-row{ display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; }
+.keybind-row button{ min-width:64px; padding:4px 10px; }
+.keybind-row button.listening{ border-color: var(--gold); color: var(--gold); animation: trapPulse 1s ease-in-out infinite; }
 .menu-hint{ color:var(--muted); font-size:11px; margin:0; }
 #lobby-players{ display:flex; flex-direction:column; gap:4px; font-size:13px; }
 .lobby-player{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 8px; background:var(--bg-deep); border:1px solid var(--wall); }

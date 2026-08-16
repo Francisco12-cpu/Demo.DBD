@@ -6,10 +6,52 @@ window.Game = window.Game || {};
   // ---------- teclado ----------
   const keys = {};
   let spaceRequested = false;
-  let ability1Requested = false; // KeyE
-  let ability2Requested = false; // KeyQ (Investida do Assassino; pro Sobrevivente só faz algo enquanto engajado num gerador)
-  let ability3Requested = false; // KeyR (3º slot — 2ª habilidade do Sobrevivente / 3ª do Assassino)
-  let pingRequested = false; // KeyV (marcador de comunicação, só Sobrevivente online)
+  let ability1Requested = false;
+  let ability2Requested = false; // Investida do Assassino; pro Sobrevivente só faz algo enquanto engajado num gerador
+  let ability3Requested = false; // 2ª habilidade do Sobrevivente / 3ª do Assassino
+  let pingRequested = false; // marcador de comunicação, só Sobrevivente online
+
+  // remapeamento de tecla (acessibilidade — ver Configurações no menu):
+  // só as 4 ações de "botão" abaixo são remapeáveis, WASD/setas (movimento)
+  // e Space (ataque/interação) continuam fixos de propósito — são usados
+  // em todo teclado/idioma sem ambiguidade, e liberar remapeá-los abriria
+  // espaço pra travar o próprio movimento sem querer.
+  const DEFAULT_KEYBINDS = { ability1: 'KeyE', ability2: 'KeyQ', ability3: 'KeyR', ping: 'KeyV' };
+  const RESERVED_CODES = new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space']);
+  let keybinds = { ...DEFAULT_KEYBINDS };
+  (function loadKeybinds(){
+    try {
+      const saved = JSON.parse(localStorage.getItem('dbd_keybinds') || '{}');
+      // só aceita valores que ainda são ações válidas E não colidem com
+      // reservado/duplicado — protege contra localStorage editado à mão
+      // ou uma versão futura que remova uma ação
+      const next = { ...DEFAULT_KEYBINDS };
+      const used = new Set();
+      Object.keys(DEFAULT_KEYBINDS).forEach((action) => {
+        const code = saved[action];
+        if (typeof code === 'string' && !RESERVED_CODES.has(code) && !used.has(code)){
+          next[action] = code;
+          used.add(code);
+        }
+      });
+      keybinds = next;
+    } catch { keybinds = { ...DEFAULT_KEYBINDS }; }
+  })();
+
+  function setKeybind(action, code){
+    if (!(action in keybinds)) return { ok: false, reason: 'ação desconhecida' };
+    if (RESERVED_CODES.has(code)) return { ok: false, reason: 'essa tecla é reservada pro movimento/ataque' };
+    const conflict = Object.keys(keybinds).find((a) => a !== action && keybinds[a] === code);
+    if (conflict) return { ok: false, reason: 'essa tecla já está em uso por outra ação' };
+    keybinds[action] = code;
+    localStorage.setItem('dbd_keybinds', JSON.stringify(keybinds));
+    return { ok: true };
+  }
+  function resetKeybinds(){
+    keybinds = { ...DEFAULT_KEYBINDS };
+    localStorage.setItem('dbd_keybinds', JSON.stringify(keybinds));
+  }
+  function getKeybinds(){ return { ...keybinds }; }
 
   window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
@@ -17,10 +59,10 @@ window.Game = window.Game || {};
       e.preventDefault();
       spaceRequested = true;
     }
-    if (e.code === 'KeyE') ability1Requested = true;
-    if (e.code === 'KeyQ') ability2Requested = true;
-    if (e.code === 'KeyR') ability3Requested = true;
-    if (e.code === 'KeyV') pingRequested = true;
+    if (e.code === keybinds.ability1) ability1Requested = true;
+    if (e.code === keybinds.ability2) ability2Requested = true;
+    if (e.code === keybinds.ability3) ability3Requested = true;
+    if (e.code === keybinds.ping) pingRequested = true;
   });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
@@ -308,6 +350,9 @@ window.Game = window.Game || {};
     consumePingRequest,
     setAbilityButtonsVisible,
     setPingButtonVisible,
+    setKeybind,
+    resetKeybinds,
+    getKeybinds,
     setJoystickSensitivity,
     isTouchDevice,
     vibrate,

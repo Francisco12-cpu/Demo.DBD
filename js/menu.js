@@ -208,6 +208,69 @@ window.Game = window.Game || {};
   settingsBackBtn.addEventListener('click', () => showScreen('start'));
   loadSettings();
 
+  // ---------- remapeamento de tecla (acessibilidade, ver Game.Input.setKeybind) ----------
+  const keybindError = document.getElementById('keybind-error');
+  const keybindResetBtn = document.getElementById('keybind-reset');
+  const KEYBIND_BUTTONS = {
+    ability1: document.getElementById('keybind-ability1'),
+    ability2: document.getElementById('keybind-ability2'),
+    ability3: document.getElementById('keybind-ability3'),
+    ping: document.getElementById('keybind-ping'),
+  };
+  // 'KeyE' -> 'E', 'Digit1' -> '1' — as únicas 2 famílias de código que
+  // sobrevivem à checagem de RESERVED_CODES pra teclado padrão; qualquer
+  // outra (ShiftLeft, Tab, F1...) mostra o próprio `code`, ainda legível
+  function codeToLabel(code){
+    if (code.startsWith('Key')) return code.slice(3);
+    if (code.startsWith('Digit')) return code.slice(5);
+    return code;
+  }
+  function renderKeybinds(){
+    if (!Game.Input) return;
+    const binds = Game.Input.getKeybinds();
+    Object.keys(KEYBIND_BUTTONS).forEach((action) => {
+      const btn = KEYBIND_BUTTONS[action];
+      if (btn) btn.textContent = codeToLabel(binds[action]);
+    });
+  }
+  let listeningAction = null;
+  let listeningCleanup = null;
+  function stopListening(){
+    if (listeningAction && KEYBIND_BUTTONS[listeningAction]) KEYBIND_BUTTONS[listeningAction].classList.remove('listening');
+    if (listeningCleanup) window.removeEventListener('keydown', listeningCleanup);
+    listeningAction = null;
+    listeningCleanup = null;
+  }
+  Object.keys(KEYBIND_BUTTONS).forEach((action) => {
+    const btn = KEYBIND_BUTTONS[action];
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      stopListening();
+      keybindError.textContent = '';
+      listeningAction = action;
+      btn.classList.add('listening');
+      listeningCleanup = (e) => {
+        e.preventDefault();
+        const result = Game.Input.setKeybind(action, e.code);
+        if (!result.ok) keybindError.textContent = result.reason;
+        stopListening();
+        renderKeybinds();
+      };
+      window.addEventListener('keydown', listeningCleanup);
+    });
+  });
+  if (keybindResetBtn){
+    keybindResetBtn.addEventListener('click', () => {
+      stopListening();
+      keybindError.textContent = '';
+      Game.Input.resetKeybinds();
+      renderKeybinds();
+    });
+  }
+  // Game.Input já existe nessa altura (js/input.js carrega antes de
+  // js/menu.js, ver ordem de <script defer> em index.html)
+  renderKeybinds();
+
   const settingsTestSound = document.getElementById('settings-test-sound');
   if (settingsTestSound) settingsTestSound.addEventListener('click', () => Game.Audio.playTestSound());
 
