@@ -673,6 +673,41 @@ agora": é otimização prematura pro tamanho de mapa atual (~38 paredes por
 layout), o próprio item já dizia isso ("só importa se o mapa crescer
 bastante") e nada mudou nisso.
 
+**2ª auditoria fresca, mais a fundo (2026-08-16)** — depois de esgotar a
+lista acima, li por completo (não só grep) todo arquivo que ainda não
+tinha sido reaberto nesta sessão: `character.js`, `ability.js`,
+`objective.js`, `capture.js`, `net.js`, `server.js` (o resto que faltava),
+`sw.js`, `manifest.json`, `lighting.js`, e `menu.js` inteiro (só tinha
+lido a seção de Configurações antes). A maioria está limpa — mas achei 2
+bugs reais, os dois em código de UI que essa própria sessão escreveu
+antes, então não são regressão de longa data:
+- ~~Botão "Iniciar partida" habilitava sem Assassino ou sozinho~~ —
+  **corrigido** (2026-08-16): `lobbyStart.disabled` em `menu.js` só
+  checava "todo mundo pronto", não as outras 3 condições que
+  `server.js`/`net-webrtc.js` já exigem em `startMatch` (≥2 jogadores,
+  exatamente 1 Assassino). Dava pra ver o botão habilitado numa sala só
+  de Sobreviventes (ou sozinho) com todo mundo "pronto", e clicar
+  devolvia erro do servidor em vez do botão já vir desabilitado. Agora
+  `lobbyStart.disabled = !everyoneReady || killerCount !== 1 ||
+  msg.players.length < 2`. Testado via Playwright/LAN: reproduzido antes
+  da correção (3 cenários — sozinho, sem Assassino, com Assassino+
+  Sobrevivente — os 2 primeiros ficavam habilitados errado) e confirmado
+  corrigido depois.
+- ~~Remapeamento de tecla grudava o listener ao trocar de tela~~ —
+  **corrigido** (2026-08-16): clicar num botão de tecla (ver item
+  "Configuração de remapeamento de tecla" acima) entra em modo
+  "escutando" (1 `keydown` na `window`); sair da tela de Configurações
+  SEM apertar nenhuma tecla (ex: botão Voltar) deixava esse listener
+  grudado pra sempre — a PRÓXIMA tecla apertada em qualquer lugar do
+  jogo, inclusive durante uma partida de verdade, rebindava a ação
+  silenciosamente pra essa tecla. `showScreen()` agora chama
+  `stopListening()` em toda troca de tela. Reproduzido antes da correção
+  (soltar `KeyZ` na `window` depois de sair da tela sem apertar nada
+  rebindava habilidade 1 pra Z) e confirmado corrigido depois.
+
+Depois dessas 2 correções, não sobrou mais nada pequeno e genuíno — o
+resto do que falta é só os itens de escopo grande já listados abaixo.
+
 Itens de escopo grande já documentados em "Pendente/backlog real" acima
 (mapa em pixel art, tileset customizável, 2º estágio de gancho, failover
 de host P2P) continuam de fora dessa lista pra não duplicar.
