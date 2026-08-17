@@ -890,6 +890,21 @@ Itens de escopo grande já documentados em "Pendente/backlog real" acima
 (mapa em pixel art, tileset customizável, 2º estágio de gancho, failover
 de host P2P) continuam de fora dessa lista pra não duplicar.
 
+**Organização de pasta (2026-08-16):** `sprites_organizados/` e
+`contact_sheet_preview.png` estavam soltos na raiz do projeto (o
+Francisco tinha colado ali direto) — movidos pra dentro de
+`assets/tiles/sprites_organizados/` e `assets/tiles/contact_sheet_preview.png`,
+junto do resto da arte de tileset (`dungeon-tileset.png` já morava lá).
+`js/config.js` (`Game.CONFIG.tiles`, os 9 `src` de floor/wallFront/
+wallTop/door/crate/torch) atualizado pros caminhos novos — se procurar
+por `sprites_organizados/` esperando achar na raiz, não vai achar mais.
+`npm test` (3 suites) confirmando sem regressão. Raiz do projeto agora só
+tem: docs (`BUGS.md`/`CLAUDE.md`/`README.md`/`ROADMAP.md`), os 3 arquivos
+que precisam ficar na raiz por exigência de PWA/GitHub Pages
+(`index.html`/`manifest.json`/`sw.js`), config de projeto (`package.json`/
+`package-lock.json`/`.gitignore`) e as pastas já estabelecidas
+(`assets/`, `css/`, `js/`, `server/`, `test/`, `vendor/`, `node_modules/`).
+
 ## Onde cada coisa mora
 
 ```
@@ -908,6 +923,11 @@ js/pallet.js, window.js  loops de perseguição — pallet derruba/atordoa/quebr
 js/audio.js             tudo sintetizado, sem arquivo de som
 js/input.js             teclado/touch/gamepad, unificado
 server/server.js        servidor LAN (Node + ws)
+assets/killer-sheet.png, survivor-sheet.png   spritesheets dos personagens (arte autoral)
+assets/icon-*.png        ícones do PWA
+assets/tiles/            arte do mapa: dungeon-tileset.png (folha crua, referência),
+                         sprites_organizados/ (peças recortadas por categoria, é o que
+                         js/config.js → Game.CONFIG.tiles usa de fato)
 ```
 
 ## Ao terminar uma tarefa

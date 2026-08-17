@@ -46,7 +46,7 @@ Game.CONFIG = {
   // de verdade, só os personagens. 1ª rodada (2026-08-16) usou 4 recortes
   // manuais de `assets/tiles/dungeon-tileset.png` — ainda existem no disco
   // (histórico, não usados mais aqui). 2ª rodada (mesma data, mais tarde):
-  // Francisco organizou a folha inteira em `sprites_organizados/`, já
+  // Francisco organizou a folha inteira em `assets/tiles/sprites_organizados/`, já
   // recortada por categoria com nome descritivo — muito melhor que garimpar
   // a folha crua à mão. Cada peça abaixo tem `src` + `w`/`h` PRÓPRIOS
   // (tamanhos variam: 16×16, 16×32, 64×16, 64×32, 64×48 — não é uma grade
@@ -68,26 +68,26 @@ Game.CONFIG = {
   //     e `coluna_simples`/`coluna_ornamentada_*` estão com recorte
   //     quebrado, avisado ao Francisco, não usados).
   tiles: {
-    floor: { src: 'sprites_organizados/08_chao_piso/piso_pedra_liso.png', w: 64, h: 48 },
+    floor: { src: 'assets/tiles/sprites_organizados/08_chao_piso/piso_pedra_liso.png', w: 64, h: 48 },
     // variação de chão (item 4 do pedido): decalques espalhados por cima do
     // chão base, não um tile de fundo — ver spawnFloorDecals() em main.js
     floorVariants: [
-      { src: 'sprites_organizados/08_chao_piso/piso_pedra_rachado_A.png', w: 48, h: 48 },
-      { src: 'sprites_organizados/08_chao_piso/piso_pedra_rachado_B.png', w: 64, h: 48 },
+      { src: 'assets/tiles/sprites_organizados/08_chao_piso/piso_pedra_rachado_A.png', w: 48, h: 48 },
+      { src: 'assets/tiles/sprites_organizados/08_chao_piso/piso_pedra_rachado_B.png', w: 64, h: 48 },
     ],
-    wallFront: { src: 'sprites_organizados/01_paredes/faixa_tijolo_A.png', w: 64, h: 16 },
-    wallTop: { src: 'sprites_organizados/01_paredes/parede_topo_clara_04.png', w: 16, h: 16 },
+    wallFront: { src: 'assets/tiles/sprites_organizados/01_paredes/faixa_tijolo_A.png', w: 64, h: 16 },
+    wallTop: { src: 'assets/tiles/sprites_organizados/01_paredes/parede_topo_clara_04.png', w: 16, h: 16 },
     // item 3 do pedido: porta grande redimensionada pro tamanho de sempre
     // (ver DOOR_GAP_SIZE em map.js) — a original é 16×32, bem menor que os
     // 96×~35px de uma porta no mapa; escalada em múltiplo inteiro (6x) via
     // image-rendering:pixelated, sem esticar fora de proporção
-    door: { src: 'sprites_organizados/02_portas_janelas_grades/porta_arco_escura.png', w: 16, h: 32 },
-    crate: { src: 'sprites_organizados/07_baus_madeira/parede_caixotes_A.png', w: 64, h: 32 },
+    door: { src: 'assets/tiles/sprites_organizados/02_portas_janelas_grades/porta_arco_escura.png', w: 16, h: 32 },
+    crate: { src: 'assets/tiles/sprites_organizados/07_baus_madeira/parede_caixotes_A.png', w: 64, h: 32 },
     // focos de luz estáticos (BUG-002/DD-05) — tocha na parede, 2 quadros
     // pra animar o fogo (ver .torch-flame em style.css)
     torch: {
-      frame1: 'sprites_organizados/04_iluminacao/tocha_parede_acesa_1.png',
-      frame2: 'sprites_organizados/04_iluminacao/tocha_parede_acesa_2.png',
+      frame1: 'assets/tiles/sprites_organizados/04_iluminacao/tocha_parede_acesa_1.png',
+      frame2: 'assets/tiles/sprites_organizados/04_iluminacao/tocha_parede_acesa_2.png',
       w: 16, h: 16,
       fps: 3,
       radius: 180, // px (mundo) — alcance do foco de luz estático, ver js/lighting.js
