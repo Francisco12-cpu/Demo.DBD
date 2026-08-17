@@ -113,6 +113,18 @@ Seção 3 foi corrigida na tabela em si.
 
 ---
 
+### BUG-015 · Bug de luz/visual ainda presente no GitHub Pages depois de 2 correções · 🔴 P2 `[VIS]` — reaberto 2026-08-16, INVESTIGAÇÃO BLOQUEADA
+- **Sintoma:** Francisco testou no GitHub Pages depois da correção do BUG-002 (2 rodadas — piso mínimo de visibilidade + focos de tocha; depois zoom/pixel-snap pro aliasing) e relatou "ainda tá com bug". Sem descrição do que exatamente aparece errado agora.
+- **Por que ficou sem resolver:** Claude Code não tem acesso ao navegador nesta máquina (extensão claude-in-chrome não conecta) — não dá pra abrir o GitHub Pages e ver o problema com os próprios olhos. As 2 correções anteriores foram feitas **sem conseguir reproduzir o bug relatado original diretamente no ambiente do Francisco** — só localmente, a partir da descrição dele. Corrigiram problemas REAIS e confirmados (parede 100% preta; depois moiré/aliasing de câmera), mas aparentemente não é (ou não é só) o que o Francisco está vendo agora.
+- **Pra próxima sessão resolver isso rápido, preciso de UM destes (idealmente os 3):**
+  1. **Print de tela** mostrando o problema — de longe o mais útil, elimina toda ambiguidade de descrição.
+  2. **Celular ou PC?** — o jogo usa zoom diferente em cada um (`CAMERA_ZOOM_MOBILE`/`CAMERA_ZOOM_DESKTOP`, `js/lighting.js`), então o bug pode existir só num dos dois caminhos de código.
+  3. **Descrição precisa do que aparece** — ainda fica preto/escuro sem mostrar a parede? É outra cor errada? A luz aparece no lugar errado? Pisca? Trava a tela? Cada uma dessas aponta pra uma causa bem diferente no código.
+- **Não repetir:** não ficar tentando adivinhar uma 3ª vez sem essa informação — as 2 tentativas anteriores já mostraram que "chutar a partir de 'bug de luz'" gasta uma sessão inteira e pode não acertar o alvo certo. Pedir o print ANTES de mexer em qualquer código de novo.
+- **Critério de aceite:** com o print/descrição em mãos, reproduzir o problema localmente (Playwright/`http-server`) antes de propor qualquer correção nova — mesmo padrão que funcionou nas 2 rodadas anteriores (só que dessa vez confirmando que é o MESMO bug que o Francisco está vendo, não outra coisa parecida).
+
+---
+
 ### BUG-004 · Face/skin personalizada sem sistema de suporte · 🔴 P2 `[ARQ]`
 - **Sintoma:** Existe a ideia de colocar faces próprias nos personagens, mas o sistema não está preparado — é manual e frágil.
 - **Esperado:** Camada de "face" separada do corpo do personagem, trocável por ID, igual troca de skin.
